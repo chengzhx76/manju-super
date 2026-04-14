@@ -63,6 +63,6 @@ export const mapAspectRatioToOpenAiImageSize = (aspectRatio: AspectRatio): strin
       return '1024x1024';
     case '16:9':
     default:
-      return '1536x1024';
+      return '2560x1440';
   }
 };

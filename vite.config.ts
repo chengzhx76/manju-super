@@ -6,7 +6,7 @@ import { createNewApiProxyHandler } from './server/newApiProxyCore.mjs';
 const createDevMediaProxyPlugin = (): Plugin => ({
   name: 'dev-media-proxy',
   configureServer(server) {
-    const handler = async (req: any, res: any) => {
+    const mediaGetHandler = async (req: any, res: any) => {
       try {
         const requestUrl = new URL(req.url || '', 'http://localhost');
         const target = requestUrl.searchParams.get('url');
@@ -74,7 +74,93 @@ const createDevMediaProxyPlugin = (): Plugin => ({
       }
     };
 
-    server.middlewares.use('/api/media-proxy', handler);
+    const imagePostHandler = async (req: any, res: any) => {
+      try {
+        const requestUrl = new URL(req.url || '', 'http://localhost');
+        const target = requestUrl.searchParams.get('url');
+
+        if (!target) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Missing url query parameter.' }));
+          return;
+        }
+
+        let targetUrl: URL;
+        try {
+          targetUrl = new URL(target);
+        } catch {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Invalid url value.' }));
+          return;
+        }
+
+        if (!['http:', 'https:'].includes(targetUrl.protocol)) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Only http/https URLs are allowed.' }));
+          return;
+        }
+
+        const method = String(req.method || 'POST').toUpperCase();
+        if (!['POST', 'PUT', 'PATCH', 'DELETE', 'GET'].includes(method)) {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Method not allowed.' }));
+          return;
+        }
+
+        const passHeaders: Record<string, string> = {};
+        const headerAllowList = ['authorization', 'content-type', 'accept'];
+        headerAllowList.forEach((headerName) => {
+          const value = req.headers?.[headerName];
+          if (!value) return;
+          passHeaders[headerName] = Array.isArray(value) ? value.join(', ') : String(value);
+        });
+
+        const upstream = await fetch(targetUrl.toString(), {
+          method,
+          headers: passHeaders,
+          body: ['GET', 'HEAD'].includes(method) ? undefined : req,
+          // Required when using Node stream as request body.
+          duplex: ['GET', 'HEAD'].includes(method) ? undefined : ('half' as any),
+          redirect: 'follow',
+        } as any);
+
+        res.statusCode = upstream.status;
+        const passthroughHeaders = [
+          'content-type',
+          'content-length',
+          'cache-control',
+          'etag',
+          'last-modified',
+          'expires',
+        ];
+
+        passthroughHeaders.forEach((key) => {
+          const value = upstream.headers.get(key);
+          if (value) {
+            res.setHeader(key, value);
+          }
+        });
+
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        res.end(buffer);
+      } catch (error: any) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(
+          JSON.stringify({
+            error: 'Image proxy failed.',
+            detail: error?.message || String(error),
+          })
+        );
+      }
+    };
+
+    server.middlewares.use('/api/media-proxy', mediaGetHandler);
+    server.middlewares.use('/api/image-proxy', imagePostHandler);
   },
 });
 

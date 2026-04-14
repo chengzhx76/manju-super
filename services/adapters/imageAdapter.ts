@@ -117,6 +117,21 @@ const dataUrlToImageFile = (dataUrl: string, filename: string): File | null => {
   }
 };
 
+const resolveBrowserProxiedImageRequestUrl = (apiBase: string, endpoint: string): string => {
+  const absolute = `${apiBase}${endpoint}`;
+  if (typeof window === 'undefined') return absolute;
+
+  try {
+    const target = new URL(absolute, window.location.origin);
+    if (target.origin === window.location.origin) {
+      return target.toString();
+    }
+    return `/api/image-proxy?url=${encodeURIComponent(target.toString())}`;
+  } catch {
+    return absolute;
+  }
+};
+
 const extractImageFromOpenAiResponse = (response: any): string | null => {
   const first = response?.data?.[0];
   if (!first) return null;
@@ -211,7 +226,7 @@ export const callImageApi = async (
           .filter((file): file is File => Boolean(file));
 
         if (files.length === 0) {
-          throw new Error('图片生成失败：参考图格式无效，请上传图片后重试。');
+          throw new Error('图片生成失败：参考图格式无效，请上传图片后重试。1');
         }
 
         const formData = new FormData();
@@ -224,7 +239,8 @@ export const callImageApi = async (
         formData.append('n', '1');
         files.forEach(file => formData.append('image[]', file));
 
-        res = await fetch(`${apiBase}${resolvedEndpoint}`, {
+        const requestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, resolvedEndpoint);
+        res = await fetch(requestUrl, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
@@ -243,7 +259,8 @@ export const callImageApi = async (
           n: 1,
         };
 
-        res = await fetch(`${apiBase}${resolvedEndpoint}`, {
+        const requestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, resolvedEndpoint);
+        res = await fetch(requestUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -300,7 +317,8 @@ export const callImageApi = async (
   };
 
   const response = await retryOperation(async () => {
-    const res = await fetch(`${apiBase}${endpoint}`, {
+    const requestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, endpoint);
+    const res = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

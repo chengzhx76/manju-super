@@ -31,8 +31,8 @@ const passThroughResponseHeaders = new Set([
 
 const setCorsHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Range');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Range,Authorization,Accept');
 };
 
 const writeJson = (res, statusCode, payload) => {
@@ -146,6 +146,85 @@ const handleProxyRequest = async (req, res, requestUrl) => {
   }
 };
 
+const buildImageProxyHeaders = (req) => {
+  const headers = {};
+  if (req.headers.authorization) headers.authorization = String(req.headers.authorization);
+  if (req.headers['content-type']) headers['content-type'] = String(req.headers['content-type']);
+  if (req.headers.accept) headers.accept = String(req.headers.accept);
+  return headers;
+};
+
+const handleImageProxyRequest = async (req, res, requestUrl) => {
+  const rawTarget = requestUrl.searchParams.get('url');
+  if (!rawTarget) {
+    writeJson(res, 400, { error: 'Missing url query parameter.' });
+    return;
+  }
+
+  if (rawTarget.length > MAX_URL_LENGTH) {
+    writeJson(res, 400, { error: 'Target URL is too long.' });
+    return;
+  }
+
+  const decodedTarget = decodeTargetUrl(rawTarget);
+  let target;
+  try {
+    target = new URL(decodedTarget);
+  } catch {
+    writeJson(res, 400, { error: 'Invalid target URL.' });
+    return;
+  }
+
+  if (!isAllowedTarget(target)) {
+    writeJson(res, 403, { error: 'Target URL is not allowed.' });
+    return;
+  }
+
+  const method = String(req.method || 'POST').toUpperCase();
+  if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    writeJson(res, 405, { error: 'Method not allowed.' });
+    return;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const upstream = await fetch(target.toString(), {
+      method,
+      headers: buildImageProxyHeaders(req),
+      body: ['GET', 'HEAD'].includes(method) ? undefined : req,
+      duplex: ['GET', 'HEAD'].includes(method) ? undefined : 'half',
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    setCorsHeaders(res);
+    res.statusCode = upstream.status;
+    passThroughResponseHeaders.forEach((headerName) => {
+      const headerValue = upstream.headers.get(headerName);
+      if (headerValue) {
+        res.setHeader(headerName, headerValue);
+      }
+    });
+
+    if (!upstream.body) {
+      res.end();
+      return;
+    }
+
+    await pipeline(Readable.fromWeb(upstream.body), res);
+  } catch (error) {
+    const message =
+      error && typeof error === 'object' && 'name' in error && error.name === 'AbortError'
+        ? `Upstream request timed out (${REQUEST_TIMEOUT_MS}ms).`
+        : 'Image proxy request failed.';
+    writeJson(res, 502, { error: message });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 const server = http.createServer(async (req, res) => {
   try {
     const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
@@ -170,6 +249,11 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/media-proxy') {
       await handleProxyRequest(req, res, requestUrl);
+      return;
+    }
+
+    if (pathname === '/api/image-proxy') {
+      await handleImageProxyRequest(req, res, requestUrl);
       return;
     }
 

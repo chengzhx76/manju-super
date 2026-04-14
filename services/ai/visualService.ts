@@ -798,6 +798,108 @@ const dataUrlToImageFile = (dataUrl: string, filename: string): File | null => {
   }
 };
 
+const normalizeReferenceImageSource = (input: string): string => {
+  let value = String(input || '').trim();
+  if (!value) return '';
+  // Strip common wrappers from markdown/copy-paste sources.
+  value = value
+    .replace(/^`+|`+$/g, '')
+    .replace(/^"+|"+$/g, '')
+    .replace(/^'+|'+$/g, '')
+    .trim();
+  return value;
+};
+
+type ReferenceImageFileResult = {
+  file: File | null;
+  normalizedSource: string;
+  reason?: string;
+  host?: string;
+};
+
+const sourceToImageFile = async (source: string, filenameBase: string): Promise<ReferenceImageFileResult> => {
+  const normalized = normalizeReferenceImageSource(source);
+  if (!normalized) {
+    return { file: null, normalizedSource: '', reason: 'empty_source' };
+  }
+
+  const fromDataUrl = dataUrlToImageFile(normalized, `${filenameBase}.png`);
+  if (fromDataUrl) {
+    return { file: fromDataUrl, normalizedSource: normalized, host: 'data-url' };
+  }
+
+  try {
+    let requestUrl = normalized;
+    let host = 'unknown';
+    // Browser cannot directly fetch many signed object-storage URLs due to CORS.
+    // Route them through same-origin media proxy.
+    try {
+      const parsed = new URL(normalized);
+      host = parsed.host || 'unknown';
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        requestUrl = `/api/media-proxy?url=${encodeURIComponent(normalized)}`;
+      }
+    } catch {
+      // Keep original value for non-URL schemes such as blob:
+      if (normalized.startsWith('blob:')) {
+        host = 'blob-url';
+      } else {
+        host = 'non-url';
+      }
+    }
+
+    const response = await fetch(requestUrl);
+    if (!response.ok) {
+      return {
+        file: null,
+        normalizedSource: normalized,
+        reason: `http_${response.status}`,
+        host,
+      };
+    }
+
+    const blob = await response.blob();
+    const mimeType = String(blob.type || '').trim().toLowerCase();
+    if (!mimeType.startsWith('image/')) {
+      return {
+        file: null,
+        normalizedSource: normalized,
+        reason: `non_image_mime:${mimeType || 'unknown'}`,
+        host,
+      };
+    }
+
+    const extension = mimeType.split('/')[1]?.split(';')[0] || 'png';
+    return {
+      file: new File([blob], `${filenameBase}.${extension}`, { type: mimeType || 'image/png' }),
+      normalizedSource: normalized,
+      host,
+    };
+  } catch (error: any) {
+    return {
+      file: null,
+      normalizedSource: normalized,
+      reason: error?.name === 'TypeError' ? 'fetch_type_error_cors_or_network' : 'fetch_failed',
+      host: 'unknown',
+    };
+  }
+};
+
+const resolveBrowserProxiedImageRequestUrl = (apiBase: string, endpoint: string): string => {
+  const absolute = `${apiBase}${endpoint}`;
+  if (typeof window === 'undefined') return absolute;
+
+  try {
+    const target = new URL(absolute, window.location.origin);
+    if (target.origin === window.location.origin) {
+      return target.toString();
+    }
+    return `/api/image-proxy?url=${encodeURIComponent(target.toString())}`;
+  } catch {
+    return absolute;
+  }
+};
+
 const extractImageFromOpenAiResponse = (response: any): string | null => {
   const first = response?.data?.[0];
   if (!first) return null;
@@ -1019,20 +1121,49 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
     const openAiReferenceSources = [...effectiveReferenceImages];
 
     if (imageApiFormat === 'openai') {
-      const hasOpenAiReferences = openAiReferenceSources.length > 0;
-      const openAiEndpoint = resolveOpenAiImageEndpoint(imageModelEndpoint, hasOpenAiReferences);
+      const hasRequestedOpenAiReferences = openAiReferenceSources.length > 0;
       const openAiSize = mapAspectRatioToOpenAiImageSize(aspectRatio);
 
       const response = await retryOperation(async () => {
-        let res: Response;
-        if (hasOpenAiReferences) {
-          const files = openAiReferenceSources
-            .map((img, index) => dataUrlToImageFile(img, `reference-${index + 1}.png`))
-            .filter((file): file is File => Boolean(file));
-          if (files.length === 0) {
-            throw new Error('图片生成失败：参考图格式无效，请重新上传后重试。');
-          }
+        let usableReferenceFiles: File[] = [];
+        if (hasRequestedOpenAiReferences) {
+          const conversionResults = await Promise.all(
+            openAiReferenceSources.map((img, index) => sourceToImageFile(img, `reference-${index + 1}`))
+          );
+          usableReferenceFiles = conversionResults
+            .filter((item): item is ReferenceImageFileResult & { file: File } => Boolean(item.file))
+            .map((item) => item.file);
 
+          const invalidCount = openAiReferenceSources.length - usableReferenceFiles.length;
+          if (invalidCount > 0) {
+            const failed = conversionResults.filter((item) => !item.file);
+            const reasonCount = new Map<string, number>();
+            failed.forEach((item) => {
+              const key = item.reason || 'unknown';
+              reasonCount.set(key, (reasonCount.get(key) || 0) + 1);
+            });
+            const reasonSummary = Array.from(reasonCount.entries())
+              .map(([reason, count]) => `${reason} x${count}`)
+              .join(', ');
+            const sampleDetails = failed
+              .slice(0, 3)
+              .map((item) => `${item.host || 'unknown'} -> ${item.reason || 'unknown'}`)
+              .join(' | ');
+            console.warn(
+              `[Image] Ignored ${invalidCount}/${openAiReferenceSources.length} invalid OpenAI reference image(s). ` +
+              `Reasons: ${reasonSummary}. Samples: ${sampleDetails}`
+            );
+          }
+        }
+
+        const useOpenAiReferences = usableReferenceFiles.length > 0;
+        if (hasRequestedOpenAiReferences && !useOpenAiReferences) {
+          console.warn('[Image] All OpenAI reference images are unavailable, fallback to text-only image generation.');
+        }
+
+        const openAiEndpoint = resolveOpenAiImageEndpoint(imageModelEndpoint, useOpenAiReferences);
+        let res: Response;
+        if (useOpenAiReferences) {
           const formData = new FormData();
           formData.append('model', imageModelId);
           formData.append('prompt', finalPrompt);
@@ -1041,9 +1172,10 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
           formData.append('output_format', OPENAI_IMAGE_OUTPUT_FORMAT);
           formData.append('output_compression', String(OPENAI_IMAGE_OUTPUT_COMPRESSION));
           formData.append('n', '1');
-          files.forEach(file => formData.append('image[]', file));
+          usableReferenceFiles.forEach(file => formData.append('image[]', file));
 
-          res = await fetch(`${apiBase}${openAiEndpoint}`, {
+          const openAiRequestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, openAiEndpoint);
+          res = await fetch(openAiRequestUrl, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -1062,7 +1194,8 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
             n: 1,
           };
 
-          res = await fetch(`${apiBase}${openAiEndpoint}`, {
+          const openAiRequestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, openAiEndpoint);
+          res = await fetch(openAiRequestUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1128,7 +1261,8 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`;
     };
 
     const response = await retryOperation(async () => {
-      const res = await fetch(`${apiBase}${imageModelEndpoint}`, {
+      const geminiRequestUrl = resolveBrowserProxiedImageRequestUrl(apiBase, imageModelEndpoint);
+      const res = await fetch(geminiRequestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

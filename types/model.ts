@@ -332,27 +332,6 @@ export const DEFAULT_AUDIO_PARAMS: AudioModelParams = {
  * 内置对话模型列表
  */
 export const BUILTIN_CHAT_MODELS: ChatModelDefinition[] = [
-   {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    type: 'chat',
-    providerId: 'antsk',
-    description: 'GPT-5 系列前沿模型：推理、编码与智能体任务表现更强，适合复杂工作流与高难度任务',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_CHAT_PARAMS },
-  },
-  {
-    id: 'gpt-5.1',
-    name: 'GPT-5.1',
-    type: 'chat',
-    providerId: 'antsk',
-    description: '旗舰通用推理：指令遵循与工具调用稳定，适合长文本分析、结构化提取与日常生产任务',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_CHAT_PARAMS },
-  },
- 
   {
     id: 'gpt-5.4',
     name: 'GPT-5.4',
@@ -379,16 +358,6 @@ export const BUILTIN_CHAT_MODELS: ChatModelDefinition[] = [
     type: 'chat',
     providerId: 'antsk',
     description: 'Claude 顶级智能：复杂推理、长流程 agent 与高难编码任务表现更强，适合高质量优先场景',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_CHAT_PARAMS },
-  },
-  {
-    id: 'claude-sonnet-4-5-20250929',
-    name: 'Claude Sonnet 4.5',
-    type: 'chat',
-    providerId: 'antsk',
-    description: '均衡长文模型：日常编码、分析与内容整理稳定，适合高频生产与成本敏感任务',
     isBuiltIn: true,
     isEnabled: true,
     params: { ...DEFAULT_CHAT_PARAMS },
