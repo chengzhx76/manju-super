@@ -1,18 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, Loader2, Folder, ChevronRight, Calendar, AlertTriangle, X, HelpCircle, Cpu, Archive, Search, Users, MapPin, Package, Database, Settings, Sun, Moon, Film, ExternalLink, User } from 'lucide-react';
+import { Plus, Trash2, Loader2, Folder, ChevronRight, Calendar, AlertTriangle, X, HelpCircle, Cpu, Archive, Search, Users, MapPin, Package, Database, Settings, Sun, Moon, Film, User } from 'lucide-react';
 import { SeriesProject, AssetLibraryItem, Character, Scene, Prop, ProjectState } from '../types';
 import { getAllSeriesProjects, createNewSeriesProject, saveSeriesProject, deleteSeriesProject, createNewSeries, saveSeries, createNewEpisode, saveEpisode, getAllAssetLibraryItems, deleteAssetFromLibrary, exportIndexedDBData } from '../services/storageService';
 import { useAlert } from './GlobalAlert';
 import { useTheme } from '../contexts/ThemeContext';
 import { useNavigate } from 'react-router-dom';
-import qrCodeImg from '../images/qrcode.jpg';
-import wxQrImg from '../images/wx.jpg';
 import {
   useBackupTransfer,
   DEFAULT_BACKUP_TRANSFER_MESSAGES,
   globalBackupFileName,
 } from '../hooks/useBackupTransfer';
-import { DIRECTOR_HUB_URL } from '../constants/links';
 
 interface Props {
   onOpenProject: (project: ProjectState) => void;
@@ -27,7 +24,6 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
   const [projects, setProjects] = useState<SeriesProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [showGroupQr, setShowGroupQr] = useState(false);
   const [libraryItems, setLibraryItems] = useState<AssetLibraryItem[]>([]);
   const [isLibraryLoading, setIsLibraryLoading] = useState(true);
   const [libraryQuery, setLibraryQuery] = useState('');
@@ -186,13 +182,6 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => setShowGroupQr(true)}
-                className="group flex items-center gap-2 px-4 py-3 border border-[var(--border-primary)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)] transition-colors"
-                title="加入交流群"
-              >
-                <span className="font-medium text-xs tracking-widest uppercase">交流群</span>
-              </button>
               {onShowOnboarding && (
                 <button 
                   onClick={onShowOnboarding}
@@ -239,26 +228,6 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
             </div>
           </div>
         </header>
-
-        <section className="mb-8 border border-[var(--border-primary)] bg-[var(--bg-primary)] p-5 md:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-2">
-              <h2 className="text-sm md:text-base font-bold text-[var(--text-primary)] tracking-wide">DirectorHub 资源共创平台</h2>
-              <p className="text-xs text-[var(--text-tertiary)] leading-relaxed max-w-3xl">
-                DirectorHub 是一个面向创作者的资源共创平台。在这里你可以上传、下载并分享优质资源，与更多创作者协作成长。我们鼓励原创与高质量内容，对优秀作品提供平台额度补助。
-              </p>
-            </div>
-            <a
-              href={DIRECTOR_HUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 border border-[var(--border-secondary)] text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors text-xs font-medium tracking-wide whitespace-nowrap"
-            >
-              访问 DirectorHub
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </div>
-        </section>
 
         {isLoading ? (
           <div className="flex justify-center py-20">
@@ -334,37 +303,6 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
           </div>
         )}
       </div>
-
-      {/* Group QR Modal */}
-      {showGroupQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-base)]/70 p-6" onClick={() => setShowGroupQr(false)}>
-          <div
-            className="relative w-full max-w-xl bg-[var(--bg-primary)] border border-[var(--border-primary)] p-6 md:p-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowGroupQr(false)}
-              className="absolute right-4 top-4 p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
-              title="关闭"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className="space-y-4 text-center">
-              <div className="text-[var(--text-primary)] text-sm font-bold tracking-widest uppercase">加入交流群</div>
-              <div className="text-[10px] text-[var(--text-tertiary)] font-mono">扫码进入产品体验群</div>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <div>
-                  <img src={qrCodeImg} alt="交流群二维码" className="w-56 h-56 object-contain" />
-                </div>
-                <div>
-                  <img src={wxQrImg} alt="备用微信群二维码" className="w-56 h-56 object-contain" />
-                </div>
-              </div>
-              <div className="text-[10px] text-[var(--text-muted)] font-mono">二维码有效期请以实际为准</div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
