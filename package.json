@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "check:utf8": "node scripts/check-utf8.mjs",
-    "build": "npm run check:utf8 && vite build",
+    "build": "pnpm run check:utf8 && vite build",
     "preview": "vite preview",
     "media-proxy": "node server/mediaProxyServer.mjs"
   },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X } from 'lucide-react';
+import { MapPin, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles } from 'lucide-react';
 import PromptEditor from './PromptEditor';
 import ImageUploadButton from './ImageUploadButton';
 import InlineEditableText from './InlineEditableText';
@@ -50,7 +50,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl overflow-hidden flex flex-col group hover:border-[var(--border-secondary)] transition-all hover:shadow-lg">
-      <div 
+      <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() => scene.referenceImage && onImageClick(scene.referenceImage)}
       >
@@ -99,7 +99,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
           </div>
         )}
       </div>
-      
+
       <div className="p-3 border-t border-[var(--border-primary)] bg-[var(--bg-base)]">
         <div className="flex justify-between items-center mb-1 gap-2">
           <InlineEditableText
@@ -160,15 +160,31 @@ const SceneCard: React.FC<SceneCardProps> = ({
 
         {/* Regenerate and Upload Buttons */}
         {scene.referenceImage && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-            <ImageUploadButton
-              variant="separate"
-              hasImage={true}
-              onUpload={onUpload}
-              onGenerate={onGenerate}
-              isGenerating={isGenerating}
-              uploadLabel="上传图片"
-            />
+          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex gap-2">
+            <button
+              onClick={onAddToLibrary}
+              disabled={isGenerating}
+              className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <FolderPlus className="w-3 h-3" />
+              加入资产库
+            </button>
+            <label className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+              <Upload className="w-3 h-3" />
+              上传图片
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onUpload(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
           </div>
         )}
 
@@ -211,18 +227,25 @@ const SceneCard: React.FC<SceneCardProps> = ({
         </div>
 
         <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <button
-            onClick={onAddToLibrary}
-            disabled={isGenerating}
-            className="w-full py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <FolderPlus className="w-3 h-3" />
-            加入资产库
-          </button>
-        </div>
-
-        {/* Delete Button */}
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+          {scene.referenceImage && (
+            <button
+              onClick={onGenerate}
+              disabled={isGenerating}
+              className="w-full py-2 mb-3 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3 h-3" />
+                  重新生成
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={onDelete}
             disabled={isGenerating}

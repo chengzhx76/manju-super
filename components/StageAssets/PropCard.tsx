@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X } from 'lucide-react';
+import { Package, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles } from 'lucide-react';
 import { Prop } from '../../types';
 import { PROP_CATEGORIES } from './constants';
 import PromptEditor from './PromptEditor';
@@ -155,15 +155,31 @@ const PropCard: React.FC<PropCardProps> = ({
         </div>
 
         {prop.referenceImage && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-            <ImageUploadButton
-              variant="separate"
-              hasImage={true}
-              onUpload={onUpload}
-              onGenerate={onGenerate}
-              isGenerating={isGenerating}
-              uploadLabel="上传图片"
-            />
+          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex gap-2">
+            <button
+              onClick={onAddToLibrary}
+              disabled={isGenerating}
+              className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <FolderPlus className="w-3 h-3" />
+              加入资产库
+            </button>
+            <label className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+              <Upload className="w-3 h-3" />
+              上传图片
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onUpload(file);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
           </div>
         )}
 
@@ -205,16 +221,27 @@ const PropCard: React.FC<PropCardProps> = ({
           )}
         </div>
 
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <button
-            onClick={onAddToLibrary}
-            disabled={isGenerating}
-            className="w-full py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <FolderPlus className="w-3 h-3" />
-            加入资产库
-          </button>
-        </div>
+        {prop.referenceImage && (
+          <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+            <button
+              onClick={onGenerate}
+              disabled={isGenerating}
+              className="w-full py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3 h-3" />
+                  重新生成
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
           <button

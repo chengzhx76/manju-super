@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Check, Shirt, Trash2, Edit2, AlertCircle, FolderPlus, Grid3x3, Link2, Upload, X } from 'lucide-react';
+import { User, Check, Shirt, Trash2, Edit2, AlertCircle, FolderPlus, Grid3x3, Link2, Upload, X, Loader2, Sparkles } from 'lucide-react';
 import { Character } from '../../types';
 import PromptEditor from './PromptEditor';
 import ImageUploadButton from './ImageUploadButton';
@@ -59,7 +59,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
       <div className="flex gap-4 p-4 pb-0">
         {/* Character Image */}
         <div className="w-48 flex-shrink-0">
-          <div 
+          <div
             className="aspect-video bg-[var(--bg-elevated)] relative rounded-lg overflow-hidden cursor-pointer"
             onClick={() => character.referenceImage && onImageClick(character.referenceImage)}
           >
@@ -160,57 +160,76 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
             </div>
           </div>
 
-          {/* Actions Row */}
-          <div className="flex flex-col gap-2 mt-2">
-            {/* Manage Wardrobe Button */}
-            <button 
-              onClick={onOpenWardrobe}
-              className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors"
-            >
-              <Shirt className="w-3 h-3" />
-              服装变体
-            </button>
-
-            {/* Turnaround Sheet Button */}
-            <button 
-              onClick={onOpenTurnaround}
-              className={`w-full py-1.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-colors ${
-                character.turnaround?.status === 'completed'
-                  ? 'bg-[var(--accent-bg)] hover:bg-[var(--accent-hover-bg)] text-[var(--accent-text)] border-[var(--accent-border)]'
-                  : 'bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border-[var(--border-primary)]'
-              }`}
-            >
-              <Grid3x3 className="w-3 h-3" />
-              造型九宫格
-              {character.turnaround?.status === 'completed' && (
-                <Check className="w-2.5 h-2.5" />
-              )}
-            </button>
-
-            {/* Upload Button */}
-            {character.referenceImage && (
-              <div className="w-full">
-                <ImageUploadButton
-                  variant="separate"
-                  hasImage={true}
-                  onUpload={onUpload}
-                  onGenerate={onGenerate}
-                  isGenerating={isGenerating}
-                  uploadLabel="上传"
-                />
-              </div>
-            )}
-
-            <button
-              onClick={onReplaceFromLibrary}
-              disabled={isGenerating}
-              className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <FolderPlus className="w-3 h-3" />
-              从资产库替换
-            </button>
-          </div>
         </div>
+      </div>
+
+      {/* Action Buttons Row - Moved below image */}
+      <div className="px-4 mt-4 grid grid-cols-2 gap-2">
+        <button
+          onClick={onOpenWardrobe}
+          className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors"
+        >
+          <Shirt className="w-3 h-3" />
+          服装变体
+        </button>
+
+        <button
+          onClick={onOpenTurnaround}
+          className={`w-full py-1.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-colors ${
+            character.turnaround?.status === 'completed'
+              ? 'bg-[var(--accent-bg)] hover:bg-[var(--accent-hover-bg)] text-[var(--accent-text)] border-[var(--accent-border)]'
+              : 'bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border-[var(--border-primary)]'
+          }`}
+        >
+          <Grid3x3 className="w-3 h-3" />
+          造型九宫格
+          {character.turnaround?.status === 'completed' && (
+            <Check className="w-2.5 h-2.5" />
+          )}
+        </button>
+
+        <button
+          onClick={onReplaceFromLibrary}
+          disabled={isGenerating}
+          className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <FolderPlus className="w-3 h-3" />
+          资产库替换
+        </button>
+
+        <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+          <Upload className="w-3 h-3" />
+          上传
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                onUpload(file);
+                e.target.value = '';
+              }
+            }}
+          />
+        </label>
+
+        <button
+          onClick={onAddToLibrary}
+          disabled={isGenerating}
+          className="col-span-2 w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <FolderPlus className="w-3 h-3" />
+          加入资产库
+        </button>
+        <button
+          onClick={onAddToLibrary}
+          disabled={isGenerating}
+          className="col-span-2 w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <FolderPlus className="w-3 h-3" />
+          加入本剧角色库
+        </button>
       </div>
 
       {/* Prompt Section & Generate Button */}
@@ -263,14 +282,25 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
           )}
         </div>
 
-        <button
-          onClick={onAddToLibrary}
-          disabled={isGenerating}
-          className="w-full py-2 mt-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <FolderPlus className="w-3 h-3" />
-          加入资产库
-        </button>
+        {character.referenceImage && (
+          <button
+            onClick={onGenerate}
+            disabled={isGenerating}
+            className="w-full py-2 mt-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                生成中...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-3 h-3" />
+                重新生成
+              </>
+            )}
+          </button>
+        )}
 
         {/* Delete Button */}
         <button

@@ -5,6 +5,40 @@ import InlineEditor from './InlineEditor';
 import { STYLES } from './constants';
 import { getShotDisplayLabel } from '../../services/storyboardIdUtils';
 
+const SHOT_SIZE_LABELS: Record<string, string> = {
+  'Extreme Close-up': '大特写',
+  'Close-up': '特写',
+  'Medium Close-up': '近景',
+  'Medium Shot': '中景',
+  'Medium Long Shot': '中远景',
+  'Long Shot': '远景',
+  'Wide Shot': '全景',
+  'Wide Shot to Medium Shot': '全景推中景',
+  'Medium Wide Shot': '中全景',
+  'Over the Shoulder Shot': '过肩镜头',
+};
+
+const CAMERA_MOVEMENT_LABELS: Record<string, string> = {
+  'Static Shot': '固定镜头',
+  'Push In Shot': '推进',
+  'Pull Out Shot': '拉远',
+  'Pan Left Shot': '向左摇摄',
+  'Pan Right Shot': '向右摇摄',
+  'Tilt Up Shot': '向上俯仰',
+  'Tilt Down Shot': '向下俯仰',
+  'Horizontal Left Shot': '向左平移',
+  'Horizontal Right Shot': '向右平移',
+  'Vertical Up Shot': '向上升降',
+  'Vertical Down Shot': '向下升降',
+  'Arc Shot': '环绕运镜',
+  'Tracking Shot': '跟拍',
+  'Slow Dolly Shot': '缓慢推拉',
+  'Dolly Shot (in)': '推镜',
+  'Dolly Shot (out)': '拉镜',
+  'Zoom In Shot': '推镜',
+  'Zoom Out Shot': '拉镜',
+};
+
 interface Props {
   shot: Shot;
   shotNumber: number;
@@ -55,43 +89,47 @@ const ShotRow: React.FC<Props> = ({
   // 从shot.id中提取显示编号
   // 例如：shot-1 → "SHOT 001", shot-1-1 → "SHOT 001-1"
   const getShotDisplayNumber = () => getShotDisplayLabel(shot.id, shotNumber - 1);
+  const shotSizeLabel = SHOT_SIZE_LABELS[String(shot.shotSize || '').trim()] || shot.shotSize || '中景';
+  const cameraMovementLabel = CAMERA_MOVEMENT_LABELS[String(shot.cameraMovement || '').trim()] || shot.cameraMovement || '平移';
 
   return (
-    <div className="group bg-[var(--bg-base)] hover:bg-[var(--bg-primary)] transition-colors p-8 flex gap-8">
-      {/* Shot ID & Tech Data */}
-      <div className="w-32 flex-shrink-0 flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2 text-xs font-mono text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)] transition-colors">
-          <span>{getShotDisplayNumber()}</span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onAddSubShot(shot.id)}
-              className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all opacity-0 group-hover:opacity-100"
-              title="新增子分镜"
-            >
-              <Plus className="w-3 h-3" />
-            </button>
-            <button
-              onClick={() => onDeleteShot(shot.id)}
-              className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-all opacity-0 group-hover:opacity-100"
-              title="删除分镜"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+    <div className="group bg-[var(--bg-base)] hover:bg-[var(--bg-primary)] transition-colors p-6 flex flex-col gap-4">
+      {/* Header: Shot ID, Tech Data & Actions */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <span className="text-xs font-mono text-[var(--text-tertiary)] group-hover:text-[var(--text-primary)] transition-colors">
+            {getShotDisplayNumber()}
+          </span>
+          <div className="flex items-center gap-2">
+            <div className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-tertiary)] uppercase text-center rounded">
+              {shotSizeLabel}
+            </div>
+            <div className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-tertiary)] uppercase text-center rounded">
+              {cameraMovementLabel}
+            </div>
           </div>
         </div>
-        
-        <div className="flex flex-col gap-2">
-          <div className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-tertiary)] uppercase text-center rounded">
-            {shot.shotSize || 'MED'}
-          </div>
-          <div className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[10px] font-mono text-[var(--text-tertiary)] uppercase text-center rounded">
-            {shot.cameraMovement}
-          </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onAddSubShot(shot.id)}
+            className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-all"
+            title="新增子分镜"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => onDeleteShot(shot.id)}
+            className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-all"
+            title="删除分镜"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Main Action */}
-      <div className="flex-1 space-y-4">
+      {/* Main Action & Characters */}
+      <div className="space-y-4">
+        {/* Action Editor/Display */}
         {editingShotActionId === shot.id ? (
           <div className="space-y-3 p-4 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg">
             <div className="space-y-2">
@@ -104,7 +142,7 @@ const ShotRow: React.FC<Props> = ({
                 placeholder="输入动作描述..."
               />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest">台词（可选）</label>
               <textarea
@@ -115,7 +153,7 @@ const ShotRow: React.FC<Props> = ({
                 placeholder="输入台词（留空表示无台词）..."
               />
             </div>
-            
+
             <div className="flex gap-2 pt-2 border-t border-[var(--border-primary)]">
               <button onClick={onSaveAction} className="px-3 py-1.5 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] text-xs font-bold rounded flex items-center gap-1 hover:bg-[var(--btn-primary-hover)] transition-colors">
                 <Check className="w-3 h-3" />
@@ -130,7 +168,7 @@ const ShotRow: React.FC<Props> = ({
         ) : (
           <div className="relative group/action">
             <div className="flex items-start gap-2">
-              <p className="text-[var(--text-secondary)] text-sm leading-7 font-medium max-w-2xl flex-1">
+              <p className="text-[var(--text-secondary)] text-sm leading-relaxed font-medium flex-1">
                 {shot.actionSummary}
               </p>
               <button
@@ -141,7 +179,7 @@ const ShotRow: React.FC<Props> = ({
                 <Edit2 className="w-3.5 h-3.5 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
               </button>
             </div>
-            
+
             {shot.dialogue && (
               <div className="pl-6 border-l-2 border-[var(--border-primary)] group-hover:border-[var(--border-secondary)] transition-colors py-1 mt-3">
                 <p className="text-[var(--text-tertiary)] font-serif italic text-sm">"{shot.dialogue}"</p>
@@ -149,9 +187,9 @@ const ShotRow: React.FC<Props> = ({
             )}
           </div>
         )}
-        
+
         {/* Characters */}
-        <div className="pt-2">
+        <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest">角色</span>
             <button
@@ -162,7 +200,7 @@ const ShotRow: React.FC<Props> = ({
               <Edit2 className="w-3 h-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
             </button>
           </div>
-          
+
           {editingShotCharactersId === shot.id ? (
             <div className="space-y-3 p-3 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg">
               <div className="space-y-2">
@@ -189,7 +227,7 @@ const ShotRow: React.FC<Props> = ({
                   )}
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <div className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">添加角色</div>
                 <div className="flex flex-wrap gap-2">
@@ -211,7 +249,7 @@ const ShotRow: React.FC<Props> = ({
                   )}
                 </div>
               </div>
-              
+
               <div className="pt-2 border-t border-[var(--border-primary)]">
                 <button
                   onClick={onCloseCharactersEdit}
@@ -239,23 +277,25 @@ const ShotRow: React.FC<Props> = ({
             </div>
           )}
         </div>
+      </div>
 
-        {/* Mobile Prompt Editor */}
-        <div className="xl:hidden pt-4 border-t border-[var(--border-subtle)]">
-          <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2 flex items-center gap-2 justify-between">
-            <span className="flex items-center gap-2">
-              <Aperture className="w-3 h-3" /> 画面提示词
-            </span>
-            {editingShotId !== shot.id && (
-              <button
-                onClick={() => onEditPrompt(shot.id, shot.keyframes[0]?.visualPrompt || '')}
-                className="p-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] rounded transition-colors"
-                title="编辑提示词"
-              >
-                <Edit2 className="w-3 h-3 text-[var(--text-tertiary)]" />
-              </button>
-            )}
-          </div>
+      {/* Unified Prompt Editor (Full width) */}
+      <div className="pt-4 border-t border-[var(--border-subtle)]">
+        <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3 flex items-center gap-2 justify-between">
+          <span className="flex items-center gap-2">
+            <Aperture className="w-3 h-3" /> 画面提示词
+          </span>
+          {editingShotId !== shot.id && (
+            <button
+              onClick={() => onEditPrompt(shot.id, shot.keyframes[0]?.visualPrompt || '')}
+              className="p-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] rounded transition-colors opacity-0 group-hover:opacity-100"
+              title="编辑提示词"
+            >
+              <Edit2 className="w-3 h-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
+            </button>
+          )}
+        </div>
+        <div className="w-full">
           <InlineEditor
             isEditing={editingShotId === shot.id}
             value={editingShotId === shot.id ? editingShotPrompt : shot.keyframes[0]?.visualPrompt || ''}
@@ -269,36 +309,6 @@ const ShotRow: React.FC<Props> = ({
             showEditButton={false}
           />
         </div>
-      </div>
-
-      {/* Prompt Preview (Desktop) */}
-      <div className="w-64 hidden xl:block pl-6 border-l border-[var(--border-subtle)]">
-        <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-2 flex items-center gap-2 justify-between">
-          <span className="flex items-center gap-2">
-            <Aperture className="w-3 h-3" /> 画面提示词
-          </span>
-          {editingShotId !== shot.id && (
-            <button
-              onClick={() => onEditPrompt(shot.id, shot.keyframes[0]?.visualPrompt || '')}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--bg-hover)] rounded"
-              title="编辑提示词"
-            >
-              <Edit2 className="w-3 h-3 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
-            </button>
-          )}
-        </div>
-        <InlineEditor
-          isEditing={editingShotId === shot.id}
-          value={editingShotId === shot.id ? editingShotPrompt : shot.keyframes[0]?.visualPrompt || ''}
-          onEdit={() => onEditPrompt(shot.id, shot.keyframes[0]?.visualPrompt || '')}
-          onChange={(val) => onEditPrompt(shot.id, val)}
-          onSave={onSavePrompt}
-          onCancel={onCancelPrompt}
-          placeholder="输入画面提示词..."
-          rows={8}
-          mono={true}
-          showEditButton={false}
-        />
       </div>
     </div>
   );

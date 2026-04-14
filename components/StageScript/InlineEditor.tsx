@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Edit2, Check, X } from 'lucide-react';
 import { STYLES } from './constants';
 
@@ -33,13 +33,32 @@ const InlineEditor: React.FC<Props> = ({
   showEditButton = true,
   emptyText = '暂无内容'
 }) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, rows * 20)}px`;
+    }
+  };
+
+  useEffect(() => {
+    if (isEditing) {
+      adjustHeight();
+    }
+  }, [isEditing, value]);
+
   if (isEditing) {
     return (
       <div className="space-y-2">
         <textarea
+          ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`${STYLES.editor.textarea} ${mono ? STYLES.editor.mono : ''} ${italic ? STYLES.editor.serif : ''}`}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setTimeout(adjustHeight, 0);
+          }}
+          className={`${STYLES.editor.textarea} ${mono ? STYLES.editor.mono : ''} ${italic ? STYLES.editor.serif : ''} overflow-hidden resize-none`}
           rows={rows}
           placeholder={placeholder}
           autoFocus
@@ -66,7 +85,7 @@ const InlineEditor: React.FC<Props> = ({
 
   return (
     <div className="flex items-start gap-2 group">
-      <p className={`flex-1 text-[10px] text-[var(--text-tertiary)] leading-relaxed ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}>
+      <p className={`flex-1 text-xs text-[var(--text-tertiary)] leading-relaxed ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}>
         {displayValue || value || emptyText}
       </p>
       {showEditButton && (

@@ -77,7 +77,7 @@ const SceneBreakdown: React.FC<Props> = ({
             <span className="text-xs text-[var(--text-muted)] font-mono uppercase tracking-wider ml-1">Script Manifest</span>
           </h2>
           <div className="h-6 w-px bg-[var(--border-primary)]"></div>
-          
+
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
               <span className="text-[10px] text-[var(--text-muted)] uppercase tracking-widest">项目</span>
@@ -89,8 +89,8 @@ const SceneBreakdown: React.FC<Props> = ({
             </div>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={onBackToStory}
           className="text-xs font-bold text-[var(--text-tertiary)] hover:text-[var(--text-primary)] flex items-center gap-2 px-4 py-2 hover:bg-[var(--bg-hover)] rounded-lg transition-all"
         >
@@ -107,7 +107,7 @@ const SceneBreakdown: React.FC<Props> = ({
             <h3 className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-4 flex items-center gap-2">
               <TextQuote className="w-3 h-3" /> 故事梗概
             </h3>
-            <p className="text-xs text-[var(--text-tertiary)] italic leading-relaxed font-serif">"{project.scriptData?.logline}"</p>
+            <p className="text-xs text-[var(--text-tertiary)] leading-relaxed font-serif">"{project.scriptData?.logline}"</p>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-8">
@@ -133,14 +133,14 @@ const SceneBreakdown: React.FC<Props> = ({
               return (
                 <div key={scene.id} className="border-b border-[var(--border-primary)]">
                   {/* Scene Header */}
-                  <div className="sticky top-0 z-10 bg-[var(--bg-sunken)]/95 backdrop-blur border-y border-[var(--border-primary)] px-8 py-5 flex items-center justify-between shadow-lg shadow-black/20">
+                  <div className="sticky top-0 z-10 bg-[var(--bg-sunken)]/95 backdrop-blur border-y border-[var(--border-primary)] px-8 py-5 flex items-center justify-between">
                     <div className="flex items-baseline gap-4">
                       <span className="text-3xl font-bold text-[var(--text-primary)]/10 font-mono">{(index + 1).toString().padStart(2, '0')}</span>
                       <h3 className="text-lg font-bold text-[var(--text-primary)] uppercase tracking-wider">
                         {scene.location}
                       </h3>
                     </div>
-                    <div className="flex items-center gap-4 text-[10px] font-mono uppercase tracking-widest text-[var(--text-tertiary)]">
+                    <div className="flex items-center gap-4 text-xs font-mono uppercase tracking-widest text-[var(--text-tertiary)]">
                       <span className="flex items-center gap-1.5"><Clock className="w-3 h-3"/> {scene.time}</span>
                       <span className="text-[var(--text-muted)]">|</span>
                       <span>{scene.atmosphere}</span>
