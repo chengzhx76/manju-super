@@ -1,4 +1,5 @@
-const DEFAULT_NEW_API_ENDPOINT = String(import.meta.env.VITE_NEW_API_ENDPOINT ?? 'https://api.antsk.cn').trim() || 'https://api.antsk.cn';
+// const DEFAULT_NEW_API_ENDPOINT = String(import.meta.env.VITE_NEW_API_ENDPOINT ?? 'https://api.antsk.cn').trim() || 'https://api.antsk.cn';
+const DEFAULT_NEW_API_ENDPOINT = "";
 
 const NEW_API_ENDPOINT_STORAGE_KEY = 'bigbanana_new_api_endpoint';
 const NEW_API_SESSION_STORAGE_KEY = 'bigbanana_new_api_session';
