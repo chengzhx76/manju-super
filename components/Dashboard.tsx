@@ -183,7 +183,7 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
           <div className="flex flex-wrap items-center justify-end gap-3">
             <div className="flex flex-wrap items-center gap-3">
               {onShowOnboarding && (
-                <button 
+                <button
                   onClick={onShowOnboarding}
                   className="group flex items-center gap-2 px-4 py-3 border border-[var(--border-primary)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)] transition-colors"
                   title="查看新手引导"
@@ -210,7 +210,7 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
             </div>
 
             <div className="flex items-center gap-3 border-l border-[var(--border-primary)] pl-3 md:pl-4">
-              <button 
+              <button
                 onClick={handleCreate}
                 className="group flex items-center gap-3 px-6 py-3 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] transition-colors"
               >
@@ -235,9 +235,9 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            
+
             {/* Create New Card */}
-            <div 
+            <div
               onClick={handleCreate}
               className="group cursor-pointer border border-[var(--border-primary)] hover:border-[var(--border-secondary)] bg-[var(--bg-primary)] flex flex-col items-center justify-center min-h-[280px] transition-all"
             >
@@ -249,7 +249,7 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
 
             {/* Project List */}
             {projects.map((proj) => (
-              <div 
+              <div
                 key={proj.id}
                 onClick={() => navigate(`/project/${proj.id}`)}
                 className="group bg-[var(--bg-primary)] border border-[var(--border-primary)] hover:border-[var(--border-secondary)] p-0 flex flex-col cursor-pointer transition-all relative overflow-hidden h-[280px]"
@@ -410,7 +410,7 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
                   <span className="text-[var(--text-muted)] text-xs font-mono uppercase tracking-widest">Asset Library</span>
                 </h2>
                 <p className="text-xs text-[var(--text-tertiary)] mt-2">
-                  在项目里将角色与场景加入资产库，跨项目复用
+                  在项目里将角色与场景加入全局资产库，跨项目复用
                 </p>
               </div>
               <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">
@@ -465,7 +465,7 @@ const Dashboard: React.FC<Props> = ({ onOpenProject, onShowOnboarding, onShowMod
               </div>
             ) : filteredLibraryItems.length === 0 ? (
               <div className="border border-dashed border-[var(--border-primary)] rounded-xl p-10 text-center text-[var(--text-muted)] text-sm">
-                暂无资产。可在项目的“角色与场景”中加入资产库。
+                暂无资产。可在项目的“角色与场景”中加入全局资产库。
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

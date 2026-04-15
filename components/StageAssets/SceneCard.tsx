@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles } from 'lucide-react';
+import { MapPin, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles, Link2 } from 'lucide-react';
 import PromptEditor from './PromptEditor';
 import ImageUploadButton from './ImageUploadButton';
 import InlineEditableText from './InlineEditableText';
@@ -13,6 +13,7 @@ interface SceneCardProps {
     visualPrompt?: string;
     referenceImage?: string;
     status?: 'pending' | 'generating' | 'completed' | 'failed';
+    libraryId?: string;
   };
   isGenerating: boolean;
   shapeReferenceImage?: string;
@@ -25,6 +26,7 @@ interface SceneCardProps {
   onDelete: () => void;
   onUpdateInfo: (updates: { location?: string; time?: string; atmosphere?: string }) => void;
   onAddToLibrary: () => void;
+  onAddToProjectLibrary?: () => void;
 }
 
 const SceneCard: React.FC<SceneCardProps> = ({
@@ -40,6 +42,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
   onDelete,
   onUpdateInfo,
   onAddToLibrary,
+  onAddToProjectLibrary,
 }) => {
   const handleShapeReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,8 +51,16 @@ const SceneCard: React.FC<SceneCardProps> = ({
     e.target.value = '';
   };
 
+  const isLinked = !!scene.libraryId;
+
   return (
-    <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl overflow-hidden flex flex-col group hover:border-[var(--border-secondary)] transition-all hover:shadow-lg">
+    <div className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}>
+      {isLinked && (
+        <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
+          <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
+          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">项目场景</span>
+        </div>
+      )}
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() => scene.referenceImage && onImageClick(scene.referenceImage)}
@@ -147,29 +158,28 @@ const SceneCard: React.FC<SceneCardProps> = ({
           )}
         />
 
-        {/* Scene Prompt Section */}
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <PromptEditor
-            prompt={scene.visualPrompt || ''}
-            onSave={onPromptSave}
-            label="场景提示词"
-            placeholder="输入场景视觉描述..."
-            maxHeight="max-h-[160px]"
-          />
-        </div>
-
-        {/* Regenerate and Upload Buttons */}
+        {/* Actions Above Prompt */}
         {scene.referenceImage && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex gap-2">
-            <button
-              onClick={onAddToLibrary}
-              disabled={isGenerating}
-              className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <FolderPlus className="w-3 h-3" />
-              加入资产库
-            </button>
-            <label className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={onAddToLibrary}
+                disabled={isGenerating}
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <FolderPlus className="w-3 h-3" />
+                加入全局资产库
+              </button>
+              <button
+                onClick={onAddToProjectLibrary}
+                disabled={isGenerating}
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <FolderPlus className="w-3 h-3" />
+                加入项目场景库
+              </button>
+            </div>
+            <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
               <Upload className="w-3 h-3" />
               上传图片
               <input
@@ -188,6 +198,18 @@ const SceneCard: React.FC<SceneCardProps> = ({
           </div>
         )}
 
+        {/* Scene Prompt Section */}
+        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+          <PromptEditor
+            prompt={scene.visualPrompt || ''}
+            onSave={onPromptSave}
+            label="场景提示词"
+            placeholder="输入场景视觉描述..."
+            maxHeight="max-h-[160px]"
+          />
+        </div>
+
+        {/* Scene Prompt Section */}
         <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">场景参考图</span>

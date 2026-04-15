@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles } from 'lucide-react';
+import { Package, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles, Link2 } from 'lucide-react';
 import { Prop } from '../../types';
 import { PROP_CATEGORIES } from './constants';
 import PromptEditor from './PromptEditor';
@@ -19,6 +19,7 @@ interface PropCardProps {
   onDelete: () => void;
   onUpdateInfo: (updates: { name?: string; category?: string; description?: string }) => void;
   onAddToLibrary: () => void;
+  onAddToProjectLibrary: () => void;
 }
 
 const PropCard: React.FC<PropCardProps> = ({
@@ -34,6 +35,7 @@ const PropCard: React.FC<PropCardProps> = ({
   onDelete,
   onUpdateInfo,
   onAddToLibrary,
+  onAddToProjectLibrary,
 }) => {
   const handleShapeReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,8 +44,16 @@ const PropCard: React.FC<PropCardProps> = ({
     e.target.value = '';
   };
 
+  const isLinked = !!prop.libraryId;
+
   return (
-    <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl overflow-hidden flex flex-col group hover:border-[var(--border-secondary)] transition-all hover:shadow-lg">
+    <div className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}>
+      {isLinked && (
+        <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
+          <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
+          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">项目道具</span>
+        </div>
+      )}
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() => prop.referenceImage && onImageClick(prop.referenceImage)}
@@ -144,27 +154,28 @@ const PropCard: React.FC<PropCardProps> = ({
           )}
         />
 
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <PromptEditor
-            prompt={prop.visualPrompt || ''}
-            onSave={onPromptSave}
-            label="道具提示词"
-            placeholder="输入道具的视觉描述..."
-            maxHeight="max-h-[160px]"
-          />
-        </div>
-
+        {/* Actions Above Prompt */}
         {prop.referenceImage && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex gap-2">
-            <button
-              onClick={onAddToLibrary}
-              disabled={isGenerating}
-              className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <FolderPlus className="w-3 h-3" />
-              加入资产库
-            </button>
-            <label className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+          <div className="mt-3 pt-3 border-t border-[var(--border-primary)] flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                onClick={onAddToLibrary}
+                disabled={isGenerating}
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <FolderPlus className="w-3 h-3" />
+                加入全局资产库
+              </button>
+              <button
+                onClick={onAddToProjectLibrary}
+                disabled={isGenerating}
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <FolderPlus className="w-3 h-3" />
+                加入项目道具库
+              </button>
+            </div>
+            <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
               <Upload className="w-3 h-3" />
               上传图片
               <input
@@ -182,6 +193,16 @@ const PropCard: React.FC<PropCardProps> = ({
             </label>
           </div>
         )}
+
+        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+          <PromptEditor
+            prompt={prop.visualPrompt || ''}
+            onSave={onPromptSave}
+            label="道具提示词"
+            placeholder="输入道具的视觉描述..."
+            maxHeight="max-h-[160px]"
+          />
+        </div>
 
         <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
           <div className="flex items-center justify-between mb-2">

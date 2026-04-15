@@ -20,6 +20,7 @@ interface CharacterCardProps {
   onDelete: () => void;
   onUpdateInfo: (updates: { name?: string; gender?: string; age?: string; personality?: string }) => void;
   onAddToLibrary: () => void;
+  onAddToProjectLibrary?: () => void;
   onReplaceFromLibrary: () => void;
 }
 
@@ -38,6 +39,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
   onDelete,
   onUpdateInfo,
   onAddToLibrary,
+  onAddToProjectLibrary,
   onReplaceFromLibrary,
 }) => {
   const isLinked = !!character.libraryId;
@@ -217,18 +219,18 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         <button
           onClick={onAddToLibrary}
           disabled={isGenerating}
-          className="col-span-2 w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <FolderPlus className="w-3 h-3" />
-          加入资产库
+          加入全局资产库
         </button>
         <button
-          onClick={onAddToLibrary}
+          onClick={onAddToProjectLibrary}
           disabled={isGenerating}
-          className="col-span-2 w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <FolderPlus className="w-3 h-3" />
-          加入本剧角色库
+          加入项目角色库
         </button>
       </div>
 

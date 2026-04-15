@@ -1,12 +1,12 @@
 import React from 'react';
-import { FileText, Users, Clapperboard, Film, ChevronLeft, ListTree, HelpCircle, Cpu, Sun, Moon, Loader2, FolderOpen, BookOpen, Globe, Palette, User } from 'lucide-react';
+import { FileText, Users, Clapperboard, Film, ChevronLeft, ChevronRight, ListTree, HelpCircle, Cpu, Sun, Moon, Loader2, FolderOpen, BookOpen, Globe, Palette, User, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import logoImg from '../logo.png';
 import { useTheme } from '../contexts/ThemeContext';
 import { USER_MANUAL_URL, OFFICIAL_WEBSITE_URL, CREATIVE_HOME_URL, COPYRIGHT_TEXT } from '../constants/links';
 
 interface SidebarProps {
   currentStage: string;
-  setStage: (stage: 'script' | 'assets' | 'director' | 'export' | 'prompts') => void;
+  setStage: (stage: 'script' | 'assets' | 'director' | 'lark-director' | 'export' | 'prompts') => void;
   onExit: () => void;
   projectName?: string;
   onShowOnboarding?: () => void;
@@ -14,21 +14,25 @@ interface SidebarProps {
   isNavigationLocked?: boolean;
   episodeInfo?: { projectId: string; projectTitle: string; episodeTitle: string };
   onGoToProject?: () => void;
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentStage, setStage, onExit, projectName, onShowOnboarding, onShowModelConfig, isNavigationLocked, episodeInfo, onGoToProject }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentStage, setStage, onExit, projectName, onShowOnboarding, onShowModelConfig, isNavigationLocked, episodeInfo, onGoToProject, isOpen = true, onToggle }) => {
   const { theme, toggleTheme } = useTheme();
   const navItems = [
     { id: 'script', label: '剧本与故事', icon: FileText, sub: '阶段 01' },
     { id: 'assets', label: '角色与场景', icon: Users, sub: '阶段 02' },
     { id: 'director', label: '导演工作台', icon: Clapperboard, sub: '阶段 03' },
+    { id: 'lark-director', label: '导演工作台(小云雀)', icon: Clapperboard, sub: '阶段 03' },
     { id: 'export', label: '成片与导出', icon: Film, sub: '阶段 04' },
     { id: 'prompts', label: '提示词管理', icon: ListTree, sub: '高级' },
   ];
 
   return (
-    <aside className="w-72 bg-[var(--bg-base)] border-r border-[var(--border-primary)] h-screen fixed left-0 top-0 flex flex-col z-50 select-none">
-      <div className="p-6 border-b border-[var(--border-subtle)]">
+    <div className="fixed top-0 left-0 h-screen z-50 group pointer-events-none">
+      <aside className={`pointer-events-auto w-72 bg-[var(--bg-base)] border-r border-[var(--border-primary)] h-full absolute left-0 top-0 flex flex-col select-none transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-[var(--border-subtle)]">
         <a href="https://tree456.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 mb-6 group cursor-pointer">
           <img src={logoImg} alt="Logo" className="w-8 h-8 flex-shrink-0 transition-transform group-hover:scale-110" />
           <div className="overflow-hidden">
@@ -152,6 +156,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentStage, setStage, onExit, proje
         </div>
       </div>
     </aside>
+    {!isOpen && (
+      <div className="pointer-events-auto absolute left-0 top-0 w-6 h-full" />
+    )}
+    {onToggle && (
+      <button
+        onClick={onToggle}
+        className={`pointer-events-auto absolute top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-12 bg-[var(--bg-elevated)] border border-[var(--border-primary)] shadow-md hover:bg-[var(--bg-hover)] transition-all duration-300 opacity-0 group-hover:opacity-100 ${isOpen ? 'left-[288px] rounded-r-xl border-l-0' : 'left-0 rounded-r-xl'}`}
+        title={isOpen ? '收起侧边栏' : '展开侧边栏'}
+      >
+        {isOpen ? <ChevronLeft className="w-4 h-4 text-[var(--text-secondary)]" /> : <ChevronRight className="w-4 h-4 text-[var(--text-secondary)]" />}
+      </button>
+    )}
+    </div>
   );
 };
 

@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Users, Sparkles, RefreshCw, Loader2, MapPin, Archive, X, Search, Trash2, Package, Link2 } from 'lucide-react';
 import { ProjectState, CharacterVariation, Character, Scene, Prop, AspectRatio, AssetLibraryItem, CharacterTurnaroundPanel } from '../../types';
 import { generateImage, generateVisualPrompts, generateCharacterTurnaroundPanels, generateCharacterTurnaroundImage } from '../../services/aiService';
-import { 
-  getRegionalPrefix, 
-  handleImageUpload, 
-  getProjectLanguage, 
+import {
+  getRegionalPrefix,
+  handleImageUpload,
+  getProjectLanguage,
   getProjectVisualStyle,
   delay,
   generateId,
-  compareIds 
+  compareIds
 } from './utils';
 import { DEFAULTS, STYLES, GRID_LAYOUTS } from './constants';
 import ImagePreviewModal from './ImagePreviewModal';
@@ -26,8 +26,9 @@ import { getUserAspectRatio, setUserAspectRatio, getActiveImageModel } from '../
 import { updatePromptWithVersion } from '../../services/promptVersionService';
 import CharacterLibraryPickerModal from './CharacterLibraryPicker';
 import ProjectAssetPicker from './ProjectAssetPicker';
+import { useProjectContext } from '../../contexts/ProjectContext';
 import { loadSeriesProject } from '../../services/storageService';
-import { SeriesProject } from '../../types';
+import { SeriesProject, EpisodeCharacterRef, EpisodeSceneRef, EpisodePropRef } from '../../types';
 
 interface Props {
   project: ProjectState;
@@ -168,13 +169,13 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
 
   // 横竖屏选择状态（从持久化配置读取）
   const [aspectRatio, setAspectRatioState] = useState<AspectRatio>(() => getUserAspectRatio());
-  
+
   // 包装 setAspectRatio，同时持久化到模型配置
   const setAspectRatio = (ratio: AspectRatio) => {
     setAspectRatioState(ratio);
     setUserAspectRatio(ratio);
   };
-  
+
 
   // 获取项目配置
   const language = getProjectLanguage(project.language, project.scriptData?.language);
@@ -197,7 +198,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
       return isCharStuck || hasStuckVariations;
     });
 
-    const hasStuckScenes = project.scriptData.scenes.some(scene => 
+    const hasStuckScenes = project.scriptData.scenes.some(scene =>
       scene.status === 'generating' && !scene.referenceImage
     );
 
@@ -208,7 +209,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
     if (hasStuckCharacters || hasStuckScenes || hasStuckProps) {
       console.log('🔧 检测到卡住的生成状态，正在重置...');
       const newData = cloneScriptData(project.scriptData);
-      
+
       // 重置角色状态
       newData.characters = newData.characters.map(char => ({
         ...char,
@@ -218,7 +219,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
           status: v.status === 'generating' ? 'failed' as const : v.status
         }))
       }));
-      
+
       // 重置场景状态
       newData.scenes = newData.scenes.map(scene => ({
         ...scene,
@@ -232,7 +233,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
           status: prop.status === 'generating' ? 'failed' as const : prop.status
         }));
       }
-      
+
       updateProject({ scriptData: newData });
     }
   }, []); // 进入资产页时执行一次，清理离开页面后遗留的 generating 状态
@@ -248,7 +249,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
       return isCharGenerating || hasGeneratingVariations;
     }) ?? false;
 
-    const hasGeneratingScenes = project.scriptData?.scenes.some(scene => 
+    const hasGeneratingScenes = project.scriptData?.scenes.some(scene =>
       scene.status === 'generating'
     ) ?? false;
 
@@ -496,10 +497,10 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
     }
   };
   const handleBatchGenerate = async (type: 'character' | 'scene') => {
-    const items = type === 'character' 
-      ? project.scriptData?.characters 
+    const items = type === 'character'
+      ? project.scriptData?.characters
       : project.scriptData?.scenes;
-    
+
     if (!items) return;
 
     const itemsToGen = items.filter(i => !i.referenceImage);
@@ -524,7 +525,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
 
     for (let i = 0; i < targetItems.length; i++) {
       if (i > 0) await delay(DEFAULTS.batchGenerateDelay);
-      
+
       await handleGenerateAsset(type, targetItems[i].id);
       setBatchProgress({ current: i + 1, total: targetItems.length });
     }
@@ -609,52 +610,258 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
     });
   };
 
-  const handleAddCharacterToLibrary = (char: Character) => {
-    const saveItem = async () => {
+  const {
+    project: seriesProject,
+    addCharacterToLibrary,
+    updateCharacterInLibrary,
+    addSceneToLibrary,
+    updateSceneInLibrary,
+    addPropToLibrary,
+    updatePropInLibrary
+  } = useProjectContext();
+
+  const handleAddCharacterToLibrary = async (char: Character) => {
+    const processSave = async (existingItem?: AssetLibraryItem) => {
       try {
         const item = createLibraryItemFromCharacter(char, project);
+        if (existingItem) {
+          item.id = existingItem.id;
+          item.createdAt = existingItem.createdAt;
+        }
         await saveAssetToLibrary(item);
-        showAlert(`已加入资产库：${char.name}`, { type: 'success' });
+        showAlert(`已${existingItem ? '更新' : '加入'}全局资产库：${char.name}`, { type: 'success' });
         refreshLibrary();
       } catch (e: any) {
-        showAlert(e?.message || '加入资产库失败', { type: 'error' });
+        showAlert(e?.message || '加入全局资产库失败', { type: 'error' });
       }
     };
 
-    if (!char.referenceImage) {
-      showAlert('该角色暂无参考图，仍要加入资产库吗？', {
-        type: 'warning',
-        showCancel: true,
-        onConfirm: saveItem
-      });
-      return;
-    }
+    const confirmAndSave = (existingItem?: AssetLibraryItem) => {
+      if (!char.referenceImage) {
+        showAlert('该角色暂无参考图，仍要加入全局资产库吗？', {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => processSave(existingItem)
+        });
+        return;
+      }
+      void processSave(existingItem);
+    };
 
-    void saveItem();
+    try {
+      const items = await getAllAssetLibraryItems();
+      const existing = items.find(i => i.type === 'character' && i.name === char.name);
+
+      if (existing) {
+        showAlert(`全局资产库中已存在名为“${existing.name}”的角色，是否覆盖更新？`, {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => confirmAndSave(existing)
+        });
+      } else {
+        confirmAndSave();
+      }
+    } catch (e) {
+      confirmAndSave();
+    }
   };
 
-  const handleAddSceneToLibrary = (scene: Scene) => {
-    const saveItem = async () => {
-      try {
-        const item = createLibraryItemFromScene(scene, project);
-        await saveAssetToLibrary(item);
-        showAlert(`已加入资产库：${scene.location}`, { type: 'success' });
-        refreshLibrary();
-      } catch (e: any) {
-        showAlert(e?.message || '加入资产库失败', { type: 'error' });
-      }
-    };
-
-    if (!scene.referenceImage) {
-      showAlert('该场景暂无参考图，仍要加入资产库吗？', {
-        type: 'warning',
-        showCancel: true,
-        onConfirm: saveItem
-      });
+  const handleAddToProjectLibrary = (char: Character) => {
+    if (!seriesProject) {
+      showAlert('无法获取项目信息，请刷新重试', { type: 'error' });
       return;
     }
 
-    void saveItem();
+    const existingById = seriesProject.characterLibrary.find(c => c.id === char.libraryId);
+    const existingByName = seriesProject.characterLibrary.find(c => c.name === char.name);
+    const existing = existingById || existingByName;
+
+    const saveToLibrary = () => {
+      try {
+        let libraryCharacterId = existing?.id;
+
+        if (existing) {
+          updateCharacterInLibrary({ ...char, id: existing.id, libraryId: undefined, libraryVersion: undefined });
+        } else {
+          const libChar: Character = {
+            ...char,
+            id: 'char_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+            libraryId: undefined,
+            libraryVersion: undefined,
+            version: 1,
+          };
+          addCharacterToLibrary(libChar);
+          libraryCharacterId = libChar.id;
+        }
+
+        updateProject(prev => {
+          if (!prev.scriptData) return prev;
+
+          const newChars = prev.scriptData.characters.map(c => {
+            if (c.id === char.id && libraryCharacterId) {
+              return {
+                ...c,
+                libraryId: libraryCharacterId,
+                libraryVersion: existing ? (existing.version || 0) + 1 : 1
+              };
+            }
+            return c;
+          });
+
+          if (!libraryCharacterId) return { ...prev, scriptData: { ...prev.scriptData, characters: newChars } };
+
+          const nextRef: EpisodeCharacterRef = {
+            characterId: libraryCharacterId,
+            syncedVersion: existing ? (existing.version || 0) + 1 : 1,
+            syncStatus: 'synced',
+          };
+
+          const newRefs = upsertEpisodeRef(prev.characterRefs, libraryCharacterId, r => r.characterId, nextRef);
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, characters: newChars },
+            characterRefs: newRefs
+          };
+        });
+
+        showAlert(`已${existing ? '更新' : '加入'}项目角色库：${char.name}`, { type: 'success' });
+      } catch (e: any) {
+        showAlert(e?.message || '加入项目角色库失败', { type: 'error' });
+      }
+    };
+
+    if (existing) {
+      showAlert(`项目角色库中已存在名为“${existing.name}”的角色，是否覆盖更新？`, {
+        type: 'warning',
+        showCancel: true,
+        onConfirm: saveToLibrary
+      });
+    } else {
+      saveToLibrary();
+    }
+  };
+
+  const handleAddSceneToProjectLibrary = (scene: Scene) => {
+    if (!seriesProject) {
+      showAlert('无法获取项目信息，请刷新重试', { type: 'error' });
+      return;
+    }
+
+    const existingById = seriesProject.sceneLibrary.find(s => s.id === scene.libraryId);
+    const existingByName = seriesProject.sceneLibrary.find(s => s.location === scene.location);
+    const existing = existingById || existingByName;
+
+    const saveToLibrary = () => {
+      try {
+        let librarySceneId = existing?.id;
+
+        if (existing) {
+          updateSceneInLibrary({ ...scene, id: existing.id, libraryId: undefined, libraryVersion: undefined });
+        } else {
+          const libScene: Scene = {
+            ...scene,
+            id: 'scene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+            libraryId: undefined,
+            libraryVersion: undefined,
+            version: 1,
+          };
+          addSceneToLibrary(libScene);
+          librarySceneId = libScene.id;
+        }
+
+        updateProject(prev => {
+          if (!prev.scriptData) return prev;
+
+          const newScenes = prev.scriptData.scenes.map(s => {
+            if (s.id === scene.id && librarySceneId) {
+              return {
+                ...s,
+                libraryId: librarySceneId,
+                libraryVersion: existing ? (existing.version || 0) + 1 : 1
+              };
+            }
+            return s;
+          });
+
+          if (!librarySceneId) return { ...prev, scriptData: { ...prev.scriptData, scenes: newScenes } };
+
+          const nextRef: EpisodeSceneRef = {
+            sceneId: librarySceneId,
+            syncedVersion: existing ? (existing.version || 0) + 1 : 1,
+            syncStatus: 'synced',
+          };
+
+          const newRefs = upsertEpisodeRef(prev.sceneRefs, librarySceneId, r => r.sceneId, nextRef);
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, scenes: newScenes },
+            sceneRefs: newRefs
+          };
+        });
+
+        showAlert(`已${existing ? '更新' : '加入'}项目场景库：${scene.location}`, { type: 'success' });
+      } catch (e: any) {
+        showAlert(e?.message || '加入项目场景库失败', { type: 'error' });
+      }
+    };
+
+    if (existing) {
+      showAlert(`项目场景库中已存在名为“${existing.location}”的场景，是否覆盖更新？`, {
+        type: 'warning',
+        showCancel: true,
+        onConfirm: saveToLibrary
+      });
+    } else {
+      saveToLibrary();
+    }
+  };
+
+  const handleAddSceneToLibrary = async (scene: Scene) => {
+    const processSave = async (existingItem?: AssetLibraryItem) => {
+      try {
+        const item = createLibraryItemFromScene(scene, project);
+        if (existingItem) {
+          item.id = existingItem.id;
+          item.createdAt = existingItem.createdAt;
+        }
+        await saveAssetToLibrary(item);
+        showAlert(`已${existingItem ? '更新' : '加入'}全局资产库：${scene.location}`, { type: 'success' });
+        refreshLibrary();
+      } catch (e: any) {
+        showAlert(e?.message || '加入全局资产库失败', { type: 'error' });
+      }
+    };
+
+    const confirmAndSave = (existingItem?: AssetLibraryItem) => {
+      if (!scene.referenceImage) {
+        showAlert('该场景暂无参考图，仍要加入全局资产库吗？', {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => processSave(existingItem)
+        });
+        return;
+      }
+      void processSave(existingItem);
+    };
+
+    try {
+      const items = await getAllAssetLibraryItems();
+      const existing = items.find(i => i.type === 'scene' && i.name === scene.location);
+
+      if (existing) {
+        showAlert(`全局资产库中已存在名为“${existing.name}”的场景，是否覆盖更新？`, {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => confirmAndSave(existing)
+        });
+      } else {
+        confirmAndSave();
+      }
+    } catch (e) {
+      confirmAndSave();
+    }
   };
 
   const handleImportFromLibrary = (item: AssetLibraryItem) => {
@@ -799,7 +1006,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
    */
   const handleAddCharacter = () => {
     if (!project.scriptData) return;
-    
+
     const newChar: Character = {
       id: generateId('char'),
       name: '新角色',
@@ -883,7 +1090,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
    */
   const handleAddScene = () => {
     if (!project.scriptData) return;
-    
+
     const newScene: Scene = {
       id: generateId('scene'),
       location: '新场景',
@@ -946,7 +1153,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
    */
   const handleAddProp = () => {
     if (!project.scriptData) return;
-    
+
     const newProp: Prop = {
       id: generateId('prop'),
       name: '新道具',
@@ -1172,30 +1379,128 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
   };
 
   /**
-   * 加入资产库（道具）
+   * 加入全局资产库（道具）
    */
-  const handleAddPropToLibrary = (prop: Prop) => {
-    const saveItem = async () => {
-      try {
-        const item = createLibraryItemFromProp(prop, project);
-        await saveAssetToLibrary(item);
-        showAlert(`已加入资产库：${prop.name}`, { type: 'success' });
-        refreshLibrary();
-      } catch (e: any) {
-        showAlert(e?.message || '加入资产库失败', { type: 'error' });
-      }
-    };
-
-    if (!prop.referenceImage) {
-      showAlert('该道具暂无参考图，仍要加入资产库吗？', {
-        type: 'warning',
-        showCancel: true,
-        onConfirm: saveItem
-      });
+  const handleAddPropToProjectLibrary = (prop: Prop) => {
+    if (!seriesProject) {
+      showAlert('无法获取项目信息，请刷新重试', { type: 'error' });
       return;
     }
 
-    void saveItem();
+    const existingById = seriesProject.propLibrary.find(p => p.id === prop.libraryId);
+    const existingByName = seriesProject.propLibrary.find(p => p.name === prop.name);
+    const existing = existingById || existingByName;
+
+    const saveToLibrary = () => {
+      try {
+        let libraryPropId = existing?.id;
+
+        if (existing) {
+          updatePropInLibrary({ ...prop, id: existing.id, libraryId: undefined, libraryVersion: undefined });
+        } else {
+          const libProp: Prop = {
+            ...prop,
+            id: 'prop_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6),
+            libraryId: undefined,
+            libraryVersion: undefined,
+            version: 1,
+          };
+          addPropToLibrary(libProp);
+          libraryPropId = libProp.id;
+        }
+
+        updateProject(prev => {
+          if (!prev.scriptData) return prev;
+
+          const newProps = prev.scriptData.props.map(p => {
+            if (p.id === prop.id && libraryPropId) {
+              return {
+                ...p,
+                libraryId: libraryPropId,
+                libraryVersion: existing ? (existing.version || 0) + 1 : 1
+              };
+            }
+            return p;
+          });
+
+          if (!libraryPropId) return { ...prev, scriptData: { ...prev.scriptData, props: newProps } };
+
+          const nextRef: EpisodePropRef = {
+            propId: libraryPropId,
+            syncedVersion: existing ? (existing.version || 0) + 1 : 1,
+            syncStatus: 'synced',
+          };
+
+          const newRefs = upsertEpisodeRef(prev.propRefs, libraryPropId, r => r.propId, nextRef);
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, props: newProps },
+            propRefs: newRefs
+          };
+        });
+
+        showAlert(`已${existing ? '更新' : '加入'}项目道具库：${prop.name}`, { type: 'success' });
+      } catch (e: any) {
+        showAlert(e?.message || '加入项目道具库失败', { type: 'error' });
+      }
+    };
+
+    if (existing) {
+      showAlert(`项目道具库中已存在名为“${existing.name}”的道具，是否覆盖更新？`, {
+        type: 'warning',
+        showCancel: true,
+        onConfirm: saveToLibrary
+      });
+    } else {
+      saveToLibrary();
+    }
+  };
+
+  const handleAddPropToLibrary = async (prop: Prop) => {
+    const processSave = async (existingItem?: AssetLibraryItem) => {
+      try {
+        const item = createLibraryItemFromProp(prop, project);
+        if (existingItem) {
+          item.id = existingItem.id;
+          item.createdAt = existingItem.createdAt;
+        }
+        await saveAssetToLibrary(item);
+        showAlert(`已${existingItem ? '更新' : '加入'}全局资产库：${prop.name}`, { type: 'success' });
+        refreshLibrary();
+      } catch (e: any) {
+        showAlert(e?.message || '加入全局资产库失败', { type: 'error' });
+      }
+    };
+
+    const confirmAndSave = (existingItem?: AssetLibraryItem) => {
+      if (!prop.referenceImage) {
+        showAlert('该道具暂无参考图，仍要加入全局资产库吗？', {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => processSave(existingItem)
+        });
+        return;
+      }
+      void processSave(existingItem);
+    };
+
+    try {
+      const items = await getAllAssetLibraryItems();
+      const existing = items.find(i => i.type === 'prop' && i.name === prop.name);
+
+      if (existing) {
+        showAlert(`全局资产库中已存在名为“${existing.name}”的道具，是否覆盖更新？`, {
+          type: 'warning',
+          showCancel: true,
+          onConfirm: () => confirmAndSave(existing)
+        });
+      } else {
+        confirmAndSave();
+      }
+    } catch (e) {
+      confirmAndSave();
+    }
   };
 
   /**
@@ -1252,7 +1557,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
 
     if (!char.variations) char.variations = [];
     char.variations.push(newVar);
-    
+
     updateProject({ scriptData: newData });
   };
 
@@ -1264,7 +1569,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
     const newData = cloneScriptData(project.scriptData);
     const char = newData.characters.find(c => compareIds(c.id, charId));
     if (!char) return;
-    
+
     char.variations = char.variations?.filter(v => !compareIds(v.id, varId));
     updateProject({ scriptData: newData });
   };
@@ -1291,7 +1596,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
       // 构建变体专用提示词：强调服装变化
       const enhancedPrompt = `${regionalPrefix}Character "${char.name}" wearing NEW OUTFIT: ${variation.visualPrompt}. This is a costume/outfit change - the character's face and identity must remain identical to the reference, but they should be wearing the described new outfit.`;
       const negativePrompt = variation.negativePrompt || char.negativePrompt || '';
-      
+
       // 使用选择的横竖屏比例，启用变体模式
       const imageUrl = await generateImage(
         enhancedPrompt,
@@ -1499,7 +1804,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
   const handleRegenerateTurnaroundImage = (charId: string) => {
     const char = project.scriptData?.characters.find(c => compareIds(c.id, charId));
     if (!char || !char.turnaround?.panels || char.turnaround.panels.length !== 9) return;
-    
+
     // 直接使用已有的面板描述重新生成图片
     handleConfirmTurnaroundPanels(charId, char.turnaround.panels);
   };
@@ -1512,7 +1817,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
       </div>
     );
   }
-  
+
   const allCharactersReady = project.scriptData.characters.every(c => c.referenceImage);
   const allScenesReady = project.scriptData.scenes.every(s => s.referenceImage);
   const allPropsReady = (project.scriptData.props || []).length > 0 && (project.scriptData.props || []).every(p => p.referenceImage);
@@ -1540,11 +1845,11 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
 
   return (
     <div className={STYLES.mainContainer}>
-      
+
       {/* Image Preview Modal */}
-      <ImagePreviewModal 
-        imageUrl={previewImage} 
-        onClose={() => setPreviewImage(null)} 
+      <ImagePreviewModal
+        imageUrl={previewImage}
+        onClose={() => setPreviewImage(null)}
       />
 
       {/* Global Progress Overlay */}
@@ -1553,8 +1858,8 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
           <Loader2 className="w-12 h-12 text-[var(--accent)] animate-spin mb-6" />
           <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">正在批量生成资源...</h3>
           <div className="w-64 h-1.5 bg-[var(--bg-hover)] rounded-full overflow-hidden mb-2">
-            <div 
-              className="h-full bg-[var(--accent)] transition-all duration-300" 
+            <div
+              className="h-full bg-[var(--accent)] transition-all duration-300"
               style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
             />
           </div>
@@ -1670,7 +1975,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 </div>
               ) : filteredLibraryItems.length === 0 ? (
                 <div className="border border-dashed border-[var(--border-primary)] rounded-xl p-10 text-center text-[var(--text-muted)] text-sm">
-                  暂无资产。可在角色或场景卡片中选择“加入资产库”。
+                  暂无资产。可在角色或场景卡片中选择“加入全局资产库”。
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -1808,7 +2113,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
               <p className="text-xs text-[var(--text-tertiary)] mt-1 pl-3.5">为剧本中的角色生成一致的参考形象</p>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handleAddCharacter}
                 disabled={!!batchProgress}
                 className="px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1830,7 +2135,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                   从角色库添加
                 </button>
               )}
-              <button 
+              <button
                 onClick={() => openLibrary('character')}
                 disabled={!!batchProgress}
                 className={STYLES.secondaryButton}
@@ -1838,7 +2143,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 <Archive className="w-3 h-3" />
                 从资产库选择
               </button>
-              <button 
+              <button
                 onClick={() => handleBatchGenerate('character')}
                 disabled={!!batchProgress}
                 className={allCharactersReady ? STYLES.secondaryButton : STYLES.primaryButton}
@@ -1867,6 +2172,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 onDelete={() => handleDeleteCharacter(char.id)}
                 onUpdateInfo={(updates) => handleUpdateCharacterInfo(char.id, updates)}
                 onAddToLibrary={() => handleAddCharacterToLibrary(char)}
+                onAddToProjectLibrary={() => handleAddToProjectLibrary(char)}
                 onReplaceFromLibrary={() => openLibrary('character', char.id)}
               />
             ))}
@@ -1884,7 +2190,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
               <p className="text-xs text-[var(--text-tertiary)] mt-1 pl-3.5">为剧本场景生成环境参考图</p>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handleAddScene}
                 disabled={!!batchProgress}
                 className="px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1902,7 +2208,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                   从场景库添加
                 </button>
               )}
-              <button 
+              <button
                 onClick={() => openLibrary('scene')}
                 disabled={!!batchProgress}
                 className={STYLES.secondaryButton}
@@ -1910,7 +2216,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 <Archive className="w-3 h-3" />
                 从资产库选择
               </button>
-              <button 
+              <button
                 onClick={() => handleBatchGenerate('scene')}
                 disabled={!!batchProgress}
                 className={allScenesReady ? STYLES.secondaryButton : STYLES.primaryButton}
@@ -1937,6 +2243,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 onDelete={() => handleDeleteScene(scene.id)}
                 onUpdateInfo={(updates) => handleUpdateSceneInfo(scene.id, updates)}
                 onAddToLibrary={() => handleAddSceneToLibrary(scene)}
+                onAddToProjectLibrary={() => handleAddSceneToProjectLibrary(scene)}
               />
             ))}
           </div>
@@ -1953,7 +2260,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
               <p className="text-xs text-[var(--text-tertiary)] mt-1 pl-3.5">管理分镜中需要保持一致性的道具/物品</p>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={handleAddProp}
                 disabled={!!batchProgress}
                 className="px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
@@ -1971,7 +2278,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                   从道具库添加
                 </button>
               )}
-              <button 
+              <button
                 onClick={() => openLibrary('prop')}
                 disabled={!!batchProgress}
                 className={STYLES.secondaryButton}
@@ -1980,7 +2287,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                 从资产库选择
               </button>
               {(project.scriptData.props || []).length > 0 && (
-                <button 
+                <button
                   onClick={handleBatchGenerateProps}
                   disabled={!!batchProgress}
                   className={allPropsReady ? STYLES.secondaryButton : STYLES.primaryButton}
@@ -2013,6 +2320,7 @@ const StageAssets: React.FC<Props> = ({ project, updateProject, onApiKeyError, o
                   onDelete={() => handleDeleteProp(prop.id)}
                   onUpdateInfo={(updates) => handleUpdatePropInfo(prop.id, updates)}
                   onAddToLibrary={() => handleAddPropToLibrary(prop)}
+                  onAddToProjectLibrary={() => handleAddPropToProjectLibrary(prop)}
                 />
               ))}
             </div>

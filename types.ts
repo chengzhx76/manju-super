@@ -439,7 +439,7 @@ export interface Episode {
   title: string;
   createdAt: number;
   lastModified: number;
-  stage: 'script' | 'assets' | 'director' | 'export' | 'prompts';
+  stage: 'script' | 'assets' | 'director' | 'lark-director' | 'export' | 'prompts';
   rawScript: string;
   targetDuration: string;
   language: string;

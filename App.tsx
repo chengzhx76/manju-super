@@ -6,6 +6,8 @@ import StageAssets from './components/StageAssets';
 import StageDirector from './components/StageDirector';
 import StageExport from './components/StageExport';
 import StagePrompts from './components/StagePrompts';
+import LarkDirector from './components/LarkDirector';
+import AccountCenter from './components/account-center';
 import Dashboard from './components/Dashboard';
 import ProjectOverview from './components/ProjectOverview';
 import CharacterLibraryPage from './components/CharacterLibrary';
@@ -108,6 +110,7 @@ function EpisodeWorkspace() {
   const [showSaveStatus, setShowSaveStatus] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showModelConfig, setShowModelConfig] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const saveTimeoutRef = useRef<any>(null);
   const hideStatusTimeoutRef = useRef<any>(null);
 
@@ -183,7 +186,7 @@ function EpisodeWorkspace() {
     updateEpisode(updates);
   };
 
-  const setStage = (stage: 'script' | 'assets' | 'director' | 'export' | 'prompts') => {
+  const setStage = (stage: 'script' | 'assets' | 'director' | 'lark-director' | 'export' | 'prompts') => {
     if (isGenerating) {
       showAlert('当前正在执行生成任务，切换页面会导致生成数据丢失。\n\n确定要离开当前页面吗？', {
         title: '生成任务进行中', type: 'warning', showCancel: true, confirmText: '确定离开', cancelText: '继续等待',
@@ -228,6 +231,8 @@ function EpisodeWorkspace() {
         return <StageAssets project={currentEpisode} updateProject={handleUpdateProject} onGeneratingChange={setIsGenerating} />;
       case 'director':
         return <StageDirector project={currentEpisode} updateProject={handleUpdateProject} onGeneratingChange={setIsGenerating} />;
+      case 'lark-director':
+        return <LarkDirector project={currentEpisode} updateProject={handleUpdateProject} onGeneratingChange={setIsGenerating} />;
       case 'export':
         return <StageExport project={currentEpisode} />;
       case 'prompts':
@@ -248,6 +253,8 @@ function EpisodeWorkspace() {
   return (
     <div className="flex h-screen bg-[var(--bg-secondary)] font-sans text-[var(--text-secondary)] selection:bg-[var(--accent-bg)]">
       <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         currentStage={currentEpisode.stage}
         setStage={setStage}
         onExit={handleExit}
@@ -258,7 +265,7 @@ function EpisodeWorkspace() {
         episodeInfo={project ? { projectId: project.id, projectTitle: project.title, episodeTitle: displayEpisodeTitle } : undefined}
         onGoToProject={project ? () => navigate(`/project/${project.id}`) : undefined}
       />
-      <main className="ml-72 flex-1 h-screen overflow-hidden relative">
+      <main className={`${isSidebarOpen ? 'ml-72' : 'ml-0'} transition-all duration-300 flex-1 h-screen overflow-hidden relative`}>
         {project && currentEpisode && (() => {
           const { outdatedRefs: outdatedCharacters } = checkCharacterSync(currentEpisode, project);
           const { outdatedRefs: outdatedScenes } = checkSceneSync(currentEpisode, project);
