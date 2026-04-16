@@ -7,6 +7,7 @@ import {
   Edit2,
   AlertCircle,
   FolderPlus,
+  FolderMinus,
   Upload,
   X,
   Sparkles,
@@ -20,6 +21,8 @@ import InlineEditableText from './InlineEditableText'
 
 interface PropCardProps {
   prop: Prop
+  isInGlobalLibrary?: boolean
+  isInProjectLibrary?: boolean
   isGenerating: boolean
   shapeReferenceImage?: string
   onGenerate: () => void
@@ -40,6 +43,8 @@ interface PropCardProps {
 
 const PropCard: React.FC<PropCardProps> = ({
   prop,
+  isInGlobalLibrary = false,
+  isInProjectLibrary = false,
   isGenerating,
   shapeReferenceImage,
   onGenerate,
@@ -66,20 +71,20 @@ const PropCard: React.FC<PropCardProps> = ({
 
   return (
     <div
-      className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}
+      className="bg-[var(--bg-surface)] border border-[var(--border-primary)] hover:border-[var(--border-secondary)] rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg"
     >
-      {isLinked && (
-        <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
-          <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
-          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
-            项目道具
-          </span>
-        </div>
-      )}
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() => prop.referenceImage && onImageClick(prop.referenceImage)}
       >
+        {isLinked && (
+          <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-md flex items-center gap-1.5">
+            <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
+            <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
+              项目道具
+            </span>
+          </div>
+        )}
         {prop.referenceImage ? (
           <>
             <img
@@ -134,7 +139,7 @@ const PropCard: React.FC<PropCardProps> = ({
         )}
       </div>
 
-      <div className="p-3 border-t border-[var(--border-primary)] bg-[var(--bg-base)]">
+      <div className="p-4 border-t border-[var(--border-primary)] flex-1 flex flex-col">
         <div className="flex justify-between items-center mb-1 gap-2">
           <InlineEditableText
             value={prop.name}
@@ -196,16 +201,24 @@ const PropCard: React.FC<PropCardProps> = ({
                 disabled={isGenerating}
                 className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <FolderPlus className="w-3 h-3" />
-                加入全局资产库
+                {isInGlobalLibrary ? (
+                  <FolderMinus className="w-3 h-3" />
+                ) : (
+                  <FolderPlus className="w-3 h-3" />
+                )}
+                {isInGlobalLibrary ? '从全局资产库移除' : '加入全局资产库'}
               </button>
               <button
                 onClick={onAddToProjectLibrary}
                 disabled={isGenerating}
                 className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
-                <FolderPlus className="w-3 h-3" />
-                加入项目道具库
+                {isInProjectLibrary ? (
+                  <FolderMinus className="w-3 h-3" />
+                ) : (
+                  <FolderPlus className="w-3 h-3" />
+                )}
+                {isInProjectLibrary ? '从项目道具库移除' : '加入项目道具库'}
               </button>
             </div>
             <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
@@ -233,7 +246,7 @@ const PropCard: React.FC<PropCardProps> = ({
             onSave={onPromptSave}
             label="道具提示词"
             placeholder="输入道具的视觉描述..."
-            maxHeight="max-h-[160px]"
+            maxHeight="h-[160px]"
           />
         </div>
 
@@ -307,7 +320,7 @@ const PropCard: React.FC<PropCardProps> = ({
           </div>
         )}
 
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+        <div className="mt-auto pt-3 border-t border-[var(--border-primary)]">
           <button
             onClick={onDelete}
             disabled={isGenerating}

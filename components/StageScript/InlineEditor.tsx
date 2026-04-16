@@ -86,7 +86,7 @@ const InlineEditor: React.FC<Props> = ({
   return (
     <div className="flex items-start gap-2 group">
       <p
-        className={`flex-1 text-xs text-[var(--text-tertiary)] leading-relaxed ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}
+        className={`flex-1 text-xs text-[var(--text-tertiary)] leading-relaxed whitespace-pre-wrap break-words ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}
       >
         {displayValue || value || emptyText}
       </p>

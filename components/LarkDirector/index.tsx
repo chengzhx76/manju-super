@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ProjectState, Shot } from '../../types'
 import { useAlert } from '../GlobalAlert'
 import { useProjectContext } from '../../contexts/ProjectContext'
+import { getNextMainShotId, parseShotId } from '../../services/storyboardIdUtils'
 import {
   Plus,
   Users,
@@ -11,6 +12,7 @@ import {
   Play,
   Volume2,
   Download,
+  Trash2,
   Edit2,
   RotateCw,
   LayoutGrid,
@@ -41,6 +43,108 @@ const LarkDirector: React.FC<Props> = ({
   // 临时使用 scenes 模拟 clip (因为我们目前没有 clip 结构，可以用 shot 或者 scene 来展示)
   const clips = project.shots || []
   const activeClip = clips[activeClipIndex] || null
+
+  const getClipDisplayNumber = (clip: Shot, fallbackIndex: number): string => {
+    const parsed = parseShotId(clip.id)
+    if (parsed.mode === 'canonical') {
+      return parsed.subIndex === undefined
+        ? String(parsed.mainIndex)
+        : `${parsed.mainIndex}-${parsed.subIndex}`
+    }
+    if (parsed.mode === 'scene-scoped') {
+      return parsed.subIndex === undefined
+        ? `${parsed.sceneIndex}-${parsed.shotIndex}`
+        : `${parsed.sceneIndex}-${parsed.shotIndex}-${parsed.subIndex}`
+    }
+    return String(fallbackIndex + 1)
+  }
+
+  const activeClipTitle = activeClip
+    ? `片段 ${getClipDisplayNumber(activeClip, activeClipIndex)}`
+    : '片段'
+
+  useEffect(() => {
+    if (clips.length === 0) {
+      if (activeClipIndex !== 0) setActiveClipIndex(0)
+      return
+    }
+    if (activeClipIndex >= clips.length) {
+      setActiveClipIndex(clips.length - 1)
+    }
+  }, [clips.length, activeClipIndex])
+
+  const createNewClip = (): Shot => {
+    const newId = getNextMainShotId(clips.map((shot) => shot.id))
+    const defaultSceneId = project.scriptData?.scenes?.[0]?.id || 'scene_unassigned'
+    return {
+      id: newId,
+      sceneId: defaultSceneId,
+      actionSummary: '',
+      cameraMovement: '平移',
+      shotSize: '中景',
+      characters: [],
+      keyframes: [
+        {
+          id: `kf-${newId}-start`,
+          type: 'start',
+          visualPrompt: '',
+          status: 'pending'
+        }
+      ]
+    }
+  }
+
+  const handleAddClip = () => {
+    const nextIndex = clips.length
+    const newClip = createNewClip()
+    updateProject((prev) => ({
+      ...prev,
+      shots: [...(prev.shots || []), newClip]
+    }))
+    setActiveClipIndex(nextIndex)
+  }
+
+  const handleDeleteActiveClip = () => {
+    if (clips.length === 0 || !activeClip) {
+      showAlert('当前没有可删除的片段', { type: 'warning' })
+      return
+    }
+
+    const targetIndex = activeClipIndex
+    const targetClipId = clips[targetIndex]?.id
+    if (!targetClipId) {
+      showAlert('当前激活片段无效，请重新选择', { type: 'warning' })
+      return
+    }
+    const displayName = `片段 ${getClipDisplayNumber(clips[targetIndex], targetIndex)}`
+
+    showAlert(`确定要删除${displayName}吗？此操作不可撤销。`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
+      onConfirm: () => {
+        const nextIndex = Math.max(0, Math.min(targetIndex, clips.length - 2))
+        updateProject((prev) => ({
+          ...prev,
+          shots: (prev.shots || []).filter((shot) => shot.id !== targetClipId)
+        }))
+        setActiveClipIndex(nextIndex)
+        showAlert(`${displayName} 已删除`, { type: 'success' })
+      }
+    })
+  }
+
+  const handleSaveActiveClipText = (text: string) => {
+    if (!activeClip) return
+    const targetId = activeClip.id
+    updateProject((prev) => ({
+      ...prev,
+      shots: (prev.shots || []).map((shot) =>
+        shot.id === targetId ? { ...shot, actionSummary: text } : shot
+      )
+    }))
+  }
 
   return (
     <div className="flex flex-col h-screen bg-[var(--bg-base)] overflow-hidden text-[var(--text-primary)] select-none">
@@ -109,7 +213,10 @@ const LarkDirector: React.FC<Props> = ({
         <aside className="w-80 border-r border-[var(--border-primary)] bg-[var(--bg-surface)] flex flex-col h-full shrink-0">
           <div className="h-14 border-b border-[var(--border-primary)] flex items-center justify-between px-6 shrink-0">
             <h2 className="text-sm font-bold tracking-wider">本集资产库</h2>
-            <button className="p-1 hover:bg-[var(--bg-hover)] rounded">
+            <button
+              onClick={() => showAlert('功能暂未实现', { type: 'warning' })}
+              className="p-1 hover:bg-[var(--bg-hover)] rounded"
+            >
               <Plus className="w-4 h-4 text-[var(--text-muted)]" />
             </button>
           </div>
@@ -224,20 +331,34 @@ const LarkDirector: React.FC<Props> = ({
             <div className="flex-1 flex flex-col min-w-0 border-r border-[var(--border-primary)] bg-[var(--bg-base)]">
               <div className="h-12 border-b border-[var(--border-subtle)] flex items-center justify-between px-6 shrink-0">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-sm font-bold">片段 1</h3>
+                  <h3 className="text-sm font-bold">{activeClipTitle}</h3>
                   <span className="text-[10px] text-[var(--text-tertiary)]">
                     片段时长请限制在4-15s，输入"@"可快速调整镜头时长、引用角色、场景、素材
                   </span>
                 </div>
-                <span className="text-[10px] text-[var(--text-tertiary)]">
-                  参数设置：
-                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDeleteActiveClip}
+                    disabled={!activeClip}
+                    className="px-2 py-1 rounded border border-[var(--error-border)] text-[10px] text-[var(--error-text)] hover:bg-[var(--error-bg)] transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="删除当前片段"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    删除
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 bg-[var(--bg-sunken)]">
                 <ScriptEditorRich
+                  key={activeClip?.id || 'empty-clip'}
                   project={project}
                   projectLibrary={seriesProject}
+                  clipId={activeClip?.id}
+                  initialText={activeClip?.actionSummary ?? ''}
+                  placeholder="输入描述，@ 引用角色/道具/场景..."
+                  autoFocusWhenEmpty={true}
+                  onSaveText={handleSaveActiveClipText}
                 />
               </div>
             </div>
@@ -300,65 +421,57 @@ const LarkDirector: React.FC<Props> = ({
             </div>
 
             <div className="flex-1 overflow-x-auto px-4 py-3 flex items-center gap-4 custom-scrollbar">
-              {clips.length > 0
-                ? clips.map((clip, idx) => (
-                    <div
-                      key={clip.id}
-                      className={`w-36 aspect-[16/12] rounded-xl shrink-0 border cursor-pointer relative p-1.5 ${
-                        activeClipIndex === idx
-                          ? 'border-[var(--accent)] bg-[var(--bg-base)]'
-                          : 'border-[var(--border-primary)] bg-[var(--bg-base)] hover:border-[var(--border-secondary)]'
-                      } transition-colors`}
-                      onClick={() => setActiveClipIndex(idx)}
-                    >
-                      <div className="relative w-full h-full rounded-lg overflow-hidden bg-[var(--bg-elevated)]">
-                        <div className="absolute top-1 left-1 w-4 h-4 bg-black/45 rounded flex items-center justify-center text-[8px] text-white z-10 backdrop-blur-sm">
-                          {idx + 1}
-                        </div>
-
-                        {clip.videoUrl ? (
-                          <video
-                            src={clip.videoUrl}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : clip.keyframes?.[0]?.imageUrl ? (
-                          <img
-                            src={clip.keyframes[0].imageUrl}
-                            className="w-full h-full object-cover"
-                            alt="start frame"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
-                            无画面
-                          </div>
-                        )}
-
-                        <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/45 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
-                          00:
-                          {Math.floor(clip.duration || 5)
-                            .toString()
-                            .padStart(2, '0')}
-                        </div>
-                      </div>
+              {clips.map((clip, idx) => (
+                <div
+                  key={clip.id}
+                  className={`w-36 aspect-[16/12] rounded-xl shrink-0 border cursor-pointer relative p-1.5 ${
+                    activeClipIndex === idx
+                      ? 'border-[var(--accent)] bg-[var(--bg-base)]'
+                      : 'border-[var(--border-primary)] bg-[var(--bg-base)] hover:border-[var(--border-secondary)]'
+                  } transition-colors`}
+                  onClick={() => setActiveClipIndex(idx)}
+                >
+                  <div className="relative w-full h-full rounded-lg overflow-hidden bg-[var(--bg-elevated)]">
+                    <div className="absolute top-1 left-1 w-4 h-4 bg-black/45 rounded flex items-center justify-center text-[8px] text-white z-10 backdrop-blur-sm">
+                      {getClipDisplayNumber(clip, idx)}
                     </div>
-                  ))
-                : // Empty state timeline items
-                  Array.from({ length: 9 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-36 aspect-[16/10] rounded-xl shrink-0 border border-[var(--border-primary)] bg-[var(--bg-base)] p-1.5"
-                    >
-                      <div className="w-full h-full rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center justify-center relative">
-                        <div className="absolute top-1 left-1 w-4 h-4 bg-[var(--bg-base)] rounded flex items-center justify-center text-[8px] text-[var(--text-tertiary)] z-10 border border-[var(--border-subtle)]">
-                          {i + 1}
-                        </div>
-                        <button className="px-2 py-1 bg-[var(--bg-base)] border border-[var(--border-primary)] rounded text-[9px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1">
-                          <ImageIcon className="w-3 h-3" />
-                          生成
-                        </button>
+
+                    {clip.videoUrl ? (
+                      <video src={clip.videoUrl} className="w-full h-full object-cover" />
+                    ) : clip.keyframes?.[0]?.imageUrl ? (
+                      <img
+                        src={clip.keyframes[0].imageUrl}
+                        className="w-full h-full object-cover"
+                        alt="start frame"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
+                        无画面
                       </div>
+                    )}
+
+                    <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/45 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
+                      00:
+                      {Math.floor(clip.duration || 5)
+                        .toString()
+                        .padStart(2, '0')}
                     </div>
-                  ))}
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={handleAddClip}
+                className="w-36 aspect-[16/12] rounded-xl shrink-0 border border-dashed border-[var(--border-secondary)] bg-[var(--bg-base)] p-1.5 hover:border-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+                title="新增片段"
+              >
+                <div className="w-full h-full rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex flex-col items-center justify-center gap-1.5 text-[var(--text-tertiary)]">
+                  <Plus className="w-4 h-4" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    新增片段
+                  </span>
+                </div>
+              </button>
             </div>
           </div>
         </main>

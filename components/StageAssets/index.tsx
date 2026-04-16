@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Users,
   Sparkles,
@@ -370,6 +370,15 @@ const StageAssets: React.FC<Props> = ({
       setLibraryLoading(false)
     }
   }
+
+  useEffect(() => {
+    void refreshLibrary()
+  }, [])
+
+  const findGlobalLibraryItem = (
+    type: AssetLibraryItem['type'],
+    name: string
+  ) => libraryItems.find((item) => item.type === type && item.name === name)
 
   const openLibrary = (
     filter: 'all' | 'character' | 'scene' | 'prop',
@@ -809,6 +818,32 @@ const StageAssets: React.FC<Props> = ({
     }
   }
 
+  const handleRemoveCharacterFromGlobalLibrary = (char: Character) => {
+    const existing = findGlobalLibraryItem('character', char.name)
+    if (!existing) {
+      showAlert(`全局资产库中不存在角色：${char.name}`, { type: 'warning' })
+      return
+    }
+
+    showAlert(`确定要从全局资产库移除角色“${char.name}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: async () => {
+        try {
+          await deleteAssetFromLibrary(existing.id)
+          setLibraryItems((prev) =>
+            prev.filter((item) => item.id !== existing.id)
+          )
+          showAlert(`已从全局资产库移除：${char.name}`, { type: 'success' })
+        } catch (e: any) {
+          showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
+        }
+      }
+    })
+  }
+
   const handleAddToProjectLibrary = (char: Character) => {
     if (!seriesProject) {
       showAlert('无法获取项目信息，请刷新重试', { type: 'error' })
@@ -910,6 +945,49 @@ const StageAssets: React.FC<Props> = ({
     } else {
       saveToLibrary()
     }
+  }
+
+  const handleRemoveCharacterFromProjectLibrary = (char: Character) => {
+    if (!char.libraryId) {
+      showAlert(`该角色尚未加入项目角色库：${char.name}`, { type: 'warning' })
+      return
+    }
+
+    showAlert(`确定要从项目角色库移除角色“${char.name}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: () => {
+        const targetLibraryId = char.libraryId!
+        updateProject((prev) => {
+          if (!prev.scriptData) return prev
+
+          const newCharacters = prev.scriptData.characters.map((c) =>
+            compareIds(c.id, char.id)
+              ? { ...c, libraryId: undefined, libraryVersion: undefined }
+              : c
+          )
+
+          const hasOtherLinked = newCharacters.some(
+            (c) => c.libraryId === targetLibraryId
+          )
+          const nextRefs = hasOtherLinked
+            ? prev.characterRefs || []
+            : (prev.characterRefs || []).filter(
+                (ref) => ref.characterId !== targetLibraryId
+              )
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, characters: newCharacters },
+            characterRefs: nextRefs
+          }
+        })
+
+        showAlert(`已从项目角色库移除：${char.name}`, { type: 'success' })
+      }
+    })
   }
 
   const handleAddSceneToProjectLibrary = (scene: Scene) => {
@@ -1016,6 +1094,51 @@ const StageAssets: React.FC<Props> = ({
     }
   }
 
+  const handleRemoveSceneFromProjectLibrary = (scene: Scene) => {
+    if (!scene.libraryId) {
+      showAlert(`该场景尚未加入项目场景库：${scene.location}`, {
+        type: 'warning'
+      })
+      return
+    }
+
+    showAlert(`确定要从项目场景库移除场景“${scene.location}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: () => {
+        const targetLibraryId = scene.libraryId!
+        updateProject((prev) => {
+          if (!prev.scriptData) return prev
+
+          const newScenes = prev.scriptData.scenes.map((s) =>
+            compareIds(s.id, scene.id)
+              ? { ...s, libraryId: undefined, libraryVersion: undefined }
+              : s
+          )
+
+          const hasOtherLinked = newScenes.some(
+            (s) => s.libraryId === targetLibraryId
+          )
+          const nextRefs = hasOtherLinked
+            ? prev.sceneRefs || []
+            : (prev.sceneRefs || []).filter(
+                (ref) => ref.sceneId !== targetLibraryId
+              )
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, scenes: newScenes },
+            sceneRefs: nextRefs
+          }
+        })
+
+        showAlert(`已从项目场景库移除：${scene.location}`, { type: 'success' })
+      }
+    })
+  }
+
   const handleAddSceneToLibrary = async (scene: Scene) => {
     const processSave = async (existingItem?: AssetLibraryItem) => {
       try {
@@ -1068,6 +1191,32 @@ const StageAssets: React.FC<Props> = ({
     } catch (e) {
       confirmAndSave()
     }
+  }
+
+  const handleRemoveSceneFromGlobalLibrary = (scene: Scene) => {
+    const existing = findGlobalLibraryItem('scene', scene.location)
+    if (!existing) {
+      showAlert(`全局资产库中不存在场景：${scene.location}`, { type: 'warning' })
+      return
+    }
+
+    showAlert(`确定要从全局资产库移除场景“${scene.location}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: async () => {
+        try {
+          await deleteAssetFromLibrary(existing.id)
+          setLibraryItems((prev) =>
+            prev.filter((item) => item.id !== existing.id)
+          )
+          showAlert(`已从全局资产库移除：${scene.location}`, { type: 'success' })
+        } catch (e: any) {
+          showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
+        }
+      }
+    })
   }
 
   const handleImportFromLibrary = (item: AssetLibraryItem) => {
@@ -1764,6 +1913,47 @@ const StageAssets: React.FC<Props> = ({
     }
   }
 
+  const handleRemovePropFromProjectLibrary = (prop: Prop) => {
+    if (!prop.libraryId) {
+      showAlert(`该道具尚未加入项目道具库：${prop.name}`, { type: 'warning' })
+      return
+    }
+
+    showAlert(`确定要从项目道具库移除道具“${prop.name}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: () => {
+        const targetLibraryId = prop.libraryId!
+        updateProject((prev) => {
+          if (!prev.scriptData) return prev
+
+          const newProps = prev.scriptData.props.map((p) =>
+            compareIds(p.id, prop.id)
+              ? { ...p, libraryId: undefined, libraryVersion: undefined }
+              : p
+          )
+
+          const hasOtherLinked = newProps.some(
+            (p) => p.libraryId === targetLibraryId
+          )
+          const nextRefs = hasOtherLinked
+            ? prev.propRefs || []
+            : (prev.propRefs || []).filter((ref) => ref.propId !== targetLibraryId)
+
+          return {
+            ...prev,
+            scriptData: { ...prev.scriptData, props: newProps },
+            propRefs: nextRefs
+          }
+        })
+
+        showAlert(`已从项目道具库移除：${prop.name}`, { type: 'success' })
+      }
+    })
+  }
+
   const handleAddPropToLibrary = async (prop: Prop) => {
     const processSave = async (existingItem?: AssetLibraryItem) => {
       try {
@@ -1816,6 +2006,32 @@ const StageAssets: React.FC<Props> = ({
     } catch (e) {
       confirmAndSave()
     }
+  }
+
+  const handleRemovePropFromGlobalLibrary = (prop: Prop) => {
+    const existing = findGlobalLibraryItem('prop', prop.name)
+    if (!existing) {
+      showAlert(`全局资产库中不存在道具：${prop.name}`, { type: 'warning' })
+      return
+    }
+
+    showAlert(`确定要从全局资产库移除道具“${prop.name}”吗？`, {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      onConfirm: async () => {
+        try {
+          await deleteAssetFromLibrary(existing.id)
+          setLibraryItems((prev) =>
+            prev.filter((item) => item.id !== existing.id)
+          )
+          showAlert(`已从全局资产库移除：${prop.name}`, { type: 'success' })
+        } catch (e: any) {
+          showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
+        }
+      }
+    })
   }
 
   /**
@@ -2192,6 +2408,33 @@ const StageAssets: React.FC<Props> = ({
     const query = libraryQuery.trim().toLowerCase()
     return item.name.toLowerCase().includes(query)
   })
+  const globalCharacterNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'character')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
+  const globalSceneNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'scene')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
+  const globalPropNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'prop')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
 
   return (
     <div className={STYLES.mainContainer}>
@@ -2459,7 +2702,7 @@ const StageAssets: React.FC<Props> = ({
             className={STYLES.secondaryButton}
           >
             <Archive className="w-4 h-4" />
-            资产库
+            项目库
           </button>
           {/* 横竖屏选择 */}
           <div className="flex items-center gap-2">
@@ -2568,6 +2811,8 @@ const StageAssets: React.FC<Props> = ({
               <CharacterCard
                 key={char.id}
                 character={char}
+                isInGlobalLibrary={globalCharacterNames.has(char.name)}
+                isInProjectLibrary={!!char.libraryId}
                 isGenerating={char.status === 'generating'}
                 shapeReferenceImage={char.shapeReferenceImage}
                 onGenerate={() => handleGenerateAsset('character', char.id)}
@@ -2588,8 +2833,16 @@ const StageAssets: React.FC<Props> = ({
                 onUpdateInfo={(updates) =>
                   handleUpdateCharacterInfo(char.id, updates)
                 }
-                onAddToLibrary={() => handleAddCharacterToLibrary(char)}
-                onAddToProjectLibrary={() => handleAddToProjectLibrary(char)}
+                onAddToLibrary={() =>
+                  globalCharacterNames.has(char.name)
+                    ? handleRemoveCharacterFromGlobalLibrary(char)
+                    : handleAddCharacterToLibrary(char)
+                }
+                onAddToProjectLibrary={() =>
+                  char.libraryId
+                    ? handleRemoveCharacterFromProjectLibrary(char)
+                    : handleAddToProjectLibrary(char)
+                }
                 onReplaceFromLibrary={() => openLibrary('character', char.id)}
               />
             ))}
@@ -2661,6 +2914,8 @@ const StageAssets: React.FC<Props> = ({
               <SceneCard
                 key={scene.id}
                 scene={scene}
+                isInGlobalLibrary={globalSceneNames.has(scene.location)}
+                isInProjectLibrary={!!scene.libraryId}
                 isGenerating={scene.status === 'generating'}
                 shapeReferenceImage={scene.shapeReferenceImage}
                 onGenerate={() => handleGenerateAsset('scene', scene.id)}
@@ -2679,9 +2934,15 @@ const StageAssets: React.FC<Props> = ({
                 onUpdateInfo={(updates) =>
                   handleUpdateSceneInfo(scene.id, updates)
                 }
-                onAddToLibrary={() => handleAddSceneToLibrary(scene)}
+                onAddToLibrary={() =>
+                  globalSceneNames.has(scene.location)
+                    ? handleRemoveSceneFromGlobalLibrary(scene)
+                    : handleAddSceneToLibrary(scene)
+                }
                 onAddToProjectLibrary={() =>
-                  handleAddSceneToProjectLibrary(scene)
+                  scene.libraryId
+                    ? handleRemoveSceneFromProjectLibrary(scene)
+                    : handleAddSceneToProjectLibrary(scene)
                 }
               />
             ))}
@@ -2762,6 +3023,8 @@ const StageAssets: React.FC<Props> = ({
                 <PropCard
                   key={prop.id}
                   prop={prop}
+                  isInGlobalLibrary={globalPropNames.has(prop.name)}
+                  isInProjectLibrary={!!prop.libraryId}
                   isGenerating={prop.status === 'generating'}
                   shapeReferenceImage={prop.shapeReferenceImage}
                   onGenerate={() => handleGeneratePropAsset(prop.id)}
@@ -2780,9 +3043,15 @@ const StageAssets: React.FC<Props> = ({
                   onUpdateInfo={(updates) =>
                     handleUpdatePropInfo(prop.id, updates)
                   }
-                  onAddToLibrary={() => handleAddPropToLibrary(prop)}
+                  onAddToLibrary={() =>
+                    globalPropNames.has(prop.name)
+                      ? handleRemovePropFromGlobalLibrary(prop)
+                      : handleAddPropToLibrary(prop)
+                  }
                   onAddToProjectLibrary={() =>
-                    handleAddPropToProjectLibrary(prop)
+                    prop.libraryId
+                      ? handleRemovePropFromProjectLibrary(prop)
+                      : handleAddPropToProjectLibrary(prop)
                   }
                 />
               ))}

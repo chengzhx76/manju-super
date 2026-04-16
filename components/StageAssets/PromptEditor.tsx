@@ -14,7 +14,7 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
   onSave,
   label = '提示词',
   placeholder = '输入视觉描述...',
-  maxHeight = 'max-h-[260px]'
+  maxHeight = 'h-[160px]'
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editedPrompt, setEditedPrompt] = useState(prompt)
@@ -53,11 +53,11 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
       </div>
 
       {isEditing ? (
-        <div className="flex-1 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <textarea
             value={editedPrompt}
             onChange={(e) => setEditedPrompt(e.target.value)}
-            className={`flex-1 bg-[var(--bg-base)] border border-[var(--accent)] text-[var(--text-primary)] px-3 py-2 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none font-mono leading-relaxed min-h-[140px] ${maxHeight}`}
+            className={`w-full bg-[var(--bg-base)] border border-[var(--accent)] text-[var(--text-primary)] px-3 py-2 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none font-mono leading-relaxed ${maxHeight}`}
             placeholder={placeholder}
             autoFocus
           />
@@ -79,10 +79,10 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
         </div>
       ) : (
         <div
-          className={`flex-1 bg-[var(--nav-hover-bg)] border border-[var(--border-primary)] rounded-lg p-3 overflow-y-auto ${maxHeight}`}
+          className={`bg-[var(--nav-hover-bg)] border border-[var(--border-primary)] rounded-lg p-3 overflow-y-auto ${maxHeight}`}
         >
           {prompt ? (
-            <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed font-mono">
+            <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed font-mono whitespace-pre-wrap break-words">
               {prompt}
             </p>
           ) : (

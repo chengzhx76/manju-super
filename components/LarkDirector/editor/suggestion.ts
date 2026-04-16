@@ -130,6 +130,7 @@ export default function getSuggestion(
             props: {
               ...props,
               libraryItems,
+              allowDurationAction: true,
               onAddFromLibrary: createAddFromLibraryHandler()
             },
             editor: props.editor
@@ -160,6 +161,7 @@ export default function getSuggestion(
           component.updateProps({
             ...props,
             libraryItems,
+            allowDurationAction: true,
             onAddFromLibrary: createAddFromLibraryHandler()
           })
 

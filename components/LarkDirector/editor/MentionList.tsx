@@ -4,7 +4,7 @@ import React, {
   useImperativeHandle,
   useState
 } from 'react'
-import { ChevronRight, User, MapPin, Package } from 'lucide-react'
+import { ChevronRight, User, MapPin, Package, Clock3 } from 'lucide-react'
 
 export default forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -20,13 +20,26 @@ export default forwardRef((props: any, ref) => {
     return item?.type === libraryFilter
   })
   const visibleItems = libraryExpanded ? filteredLibraryItems : defaultItems
-  const bottomActions =
+  const quickActions =
+    props.allowDurationAction && !libraryExpanded
+      ? [
+          {
+            key: 'duration',
+            title: '添加时间',
+            subtitle: '时间',
+            kind: 'duration' as const,
+            Icon: Clock3
+          }
+        ]
+      : []
+  const libraryActions =
     canAddFromLibrary && !libraryExpanded
       ? [
           {
             key: 'character',
             title: '角色库',
             subtitle: '从项目角色库添加',
+            kind: 'library' as const,
             filter: 'character' as const,
             Icon: User
           },
@@ -34,6 +47,7 @@ export default forwardRef((props: any, ref) => {
             key: 'scene',
             title: '场景库',
             subtitle: '从项目场景库添加',
+            kind: 'library' as const,
             filter: 'scene' as const,
             Icon: MapPin
           },
@@ -41,11 +55,13 @@ export default forwardRef((props: any, ref) => {
             key: 'prop',
             title: '道具库',
             subtitle: '从项目道具库添加',
+            kind: 'library' as const,
             filter: 'prop' as const,
             Icon: Package
           }
         ]
       : []
+  const bottomActions = [...quickActions, ...libraryActions]
   const actionStartIndex = visibleItems.length
   const itemCount = visibleItems.length + bottomActions.length
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([])
@@ -62,6 +78,18 @@ export default forwardRef((props: any, ref) => {
     if (!libraryExpanded && index >= actionStartIndex) {
       const action = bottomActions[index - actionStartIndex]
       if (action) {
+        if (action.kind === 'duration') {
+          props.command({
+            id: 'duration-tag',
+            label: '添加时间',
+            itemData: {
+              type: 'duration',
+              name: '添加时间',
+              value: 5.0
+            }
+          })
+          return
+        }
         openLibraryByFilter(action.filter)
       }
       return
@@ -118,7 +146,7 @@ export default forwardRef((props: any, ref) => {
       if (event.key === 'ArrowRight') {
         if (!libraryExpanded && selectedIndex >= actionStartIndex) {
           const action = bottomActions[selectedIndex - actionStartIndex]
-          if (action) {
+          if (action && action.kind === 'library') {
             openLibraryByFilter(action.filter)
           }
           return true
@@ -128,11 +156,11 @@ export default forwardRef((props: any, ref) => {
       if (event.key === 'ArrowLeft') {
         if (libraryExpanded) {
           setLibraryExpanded(false)
-          const fallbackIdx = bottomActions.findIndex(
+          const fallbackIdx = libraryActions.findIndex(
             (action) => action.filter === libraryFilter
           )
           const actionIdx = fallbackIdx >= 0 ? fallbackIdx : 0
-          setSelectedIndex(defaultItems.length + actionIdx)
+          setSelectedIndex(defaultItems.length + quickActions.length + actionIdx)
           return true
         }
       }
@@ -231,7 +259,9 @@ export default forwardRef((props: any, ref) => {
                     </span>
                   </div>
                 </div>
-                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                {action.kind === 'library' ? (
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                ) : null}
               </button>
             )
           })}

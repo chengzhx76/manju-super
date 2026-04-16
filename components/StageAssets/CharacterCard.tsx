@@ -7,6 +7,7 @@ import {
   Edit2,
   AlertCircle,
   FolderPlus,
+  FolderMinus,
   Grid3x3,
   Link2,
   Upload,
@@ -21,6 +22,8 @@ import InlineEditableText from './InlineEditableText'
 
 interface CharacterCardProps {
   character: Character
+  isInGlobalLibrary?: boolean
+  isInProjectLibrary?: boolean
   isGenerating: boolean
   shapeReferenceImage?: string
   onGenerate: () => void
@@ -45,6 +48,8 @@ interface CharacterCardProps {
 
 const CharacterCard: React.FC<CharacterCardProps> = ({
   character,
+  isInGlobalLibrary = false,
+  isInProjectLibrary = false,
   isGenerating,
   shapeReferenceImage,
   onGenerate,
@@ -73,16 +78,8 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
 
   return (
     <div
-      className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}
+      className="bg-[var(--bg-surface)] border border-[var(--border-primary)] hover:border-[var(--border-secondary)] rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg"
     >
-      {isLinked && (
-        <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
-          <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
-          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
-            项目角色
-          </span>
-        </div>
-      )}
       <div className="flex gap-4 p-4 pb-0">
         {/* Character Image */}
         <div className="w-48 flex-shrink-0">
@@ -92,6 +89,14 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
               character.referenceImage && onImageClick(character.referenceImage)
             }
           >
+            {isLinked && (
+              <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-md flex items-center gap-1.5">
+                <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
+                <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
+                  项目角色
+                </span>
+              </div>
+            )}
             {character.referenceImage ? (
               <>
                 <img
@@ -256,16 +261,24 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
           disabled={isGenerating}
           className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <FolderPlus className="w-3 h-3" />
-          加入全局资产库
+          {isInGlobalLibrary ? (
+            <FolderMinus className="w-3 h-3" />
+          ) : (
+            <FolderPlus className="w-3 h-3" />
+          )}
+          {isInGlobalLibrary ? '从全局资产库移除' : '加入全局资产库'}
         </button>
         <button
           onClick={onAddToProjectLibrary}
           disabled={isGenerating}
           className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <FolderPlus className="w-3 h-3" />
-          加入项目角色库
+          {isInProjectLibrary ? (
+            <FolderMinus className="w-3 h-3" />
+          ) : (
+            <FolderPlus className="w-3 h-3" />
+          )}
+          {isInProjectLibrary ? '从项目角色库移除' : '加入项目角色库'}
         </button>
       </div>
 
@@ -278,6 +291,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
             onSave={onPromptSave}
             label="角色提示词"
             placeholder="输入角色的视觉描述..."
+            maxHeight="h-[160px]"
           />
         </div>
 

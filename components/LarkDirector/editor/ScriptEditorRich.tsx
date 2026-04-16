@@ -20,16 +20,19 @@ import { ProjectState, SeriesProject } from '../../../types'
 import { Clock, PlusCircle, Edit2, Film } from 'lucide-react'
 
 const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
+  const formatDurationValue = (value: number): string => {
+    return Number.isInteger(value) ? value.toFixed(1) : value.toString()
+  }
+
   const [localValue, setLocalValue] = useState(() => {
-    return typeof node.attrs.value === 'number' && node.attrs.value !== 0
-      ? node.attrs.value.toString()
-      : '0.0'
+    return typeof node.attrs.value === 'number'
+      ? formatDurationValue(node.attrs.value)
+      : '5.0'
   })
 
   useEffect(() => {
     if (typeof node.attrs.value === 'number') {
-      const valStr =
-        node.attrs.value === 0 ? '0.0' : node.attrs.value.toString()
+      const valStr = formatDurationValue(node.attrs.value)
       // Only sync from node if our localValue is radically different, and not while the user is typing an empty string or partial decimal.
       if (valStr !== localValue) {
         const parsedLocal = parseFloat(localValue)
@@ -46,10 +49,10 @@ const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
 
   const handleBlur = () => {
     let val = parseFloat(localValue)
-    if (isNaN(val)) val = 0.0
+    if (isNaN(val)) val = 5.0
 
     // Ensure it's formatted with at least one decimal place if it's an integer
-    const formatted = Number.isInteger(val) ? val.toFixed(1) : val.toString()
+    const formatted = formatDurationValue(val)
     setLocalValue(formatted)
     updateAttributes({ value: val })
   }
@@ -194,7 +197,12 @@ const CustomMention = Mention.extend({
 interface Props {
   project: ProjectState
   projectLibrary?: SeriesProject | null
+  clipId?: string
   initialContent?: string
+  initialText?: string
+  placeholder?: string
+  autoFocusWhenEmpty?: boolean
+  onSaveText?: (text: string) => void
 }
 
 const DEFAULT_SCRIPT = `<p>分镜1 <span data-duration-tag="" value="5.0"></span> : 氛围压抑而紧张，走廊光线昏暗，只有一道门缝透出明亮的室内光。镜头从<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的肩后缓缓推近，她面部朝向门缝，正透过半开的门向泽维尔的办公室里窥视。门缝中，<span data-type="mention" data-id="泽维尔" data-item='{"type":"character","name":"泽维尔", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0171ccb7-d72e-4a9a-b061-3744361f6c05?X-Everphoto-Sum=74f5a1101e64ac618575af72b606d695503d8488&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAAKMaDNP8pfLTxE1YdgqiL8uU4GrXBW25-4aqUCNC6wyxl5GGlLvEe9YlUqikV7C2xCAwcBdVsD3ZnGXvB-ReJPg"}'>@泽维尔-基础形象</span>的手指穿过<span data-type="mention" data-id="金发女孩" data-item='{"type":"character","name":"金发女孩", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_a4fc59f5-7611-4299-99bb-12fcce1a1080?X-Everphoto-Sum=461daeaa265f7a817e29c11d4c7ed8040b53a73d&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGyzzclIKCtUB2Bz1iR3srmp3NaGmpcCp6NJIPQOHYhZnPtydlFIi_z6qN6SvtvfLDE"}'>@金发女孩-基础形象</span>的金发，嘴唇压在她脖颈上。镜头切换到<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的眼部特写，她瞳孔微颤，随后镜头下移，她的手紧紧攥住文件，指节因用力而发白。画面中所有角色全程不说话。</p>`
@@ -202,12 +210,50 @@ const DEFAULT_SCRIPT = `<p>分镜1 <span data-duration-tag="" value="5.0"></span
 const ScriptEditorRich: React.FC<Props> = ({
   project,
   projectLibrary,
-  initialContent
+  clipId,
+  initialContent,
+  initialText,
+  placeholder = '输入描述，@ 引用角色/道具/场景...',
+  autoFocusWhenEmpty = false,
+  onSaveText
 }) => {
-  const [isEditing, setIsEditing] = useState(false)
-  const [savedContent, setSavedContent] = useState(
-    initialContent || DEFAULT_SCRIPT
-  )
+  const extractTextFromHtml = (html: string): string => {
+    return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+  }
+  const isEffectivelyEmpty = (html: string, text: string): boolean => {
+    if (text.trim().length > 0) return false
+    if (html.includes('data-duration-tag')) return false
+    if (html.includes('data-type="mention"')) return false
+    return true
+  }
+
+  const toParagraphHtml = (text: string): string => {
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+    return `<p>${escaped}</p>`
+  }
+
+  const resolveInitialContent = (): string => {
+    if (initialContent !== undefined) return initialContent
+    if (initialText !== undefined) return toParagraphHtml(initialText)
+    return DEFAULT_SCRIPT
+  }
+
+  const [savedContent, setSavedContent] = useState(resolveInitialContent)
+  const [isEditing, setIsEditing] = useState(() => {
+    const initial = resolveInitialContent()
+    const initialTextValue = extractTextFromHtml(initial)
+    return autoFocusWhenEmpty && isEffectivelyEmpty(initial, initialTextValue)
+  })
+  const [isEditorEmpty, setIsEditorEmpty] = useState(() => {
+    const initial = resolveInitialContent()
+    const initialTextValue = extractTextFromHtml(initial)
+    return isEffectivelyEmpty(initial, initialTextValue)
+  })
 
   const projectRef = useRef(project)
   const projectLibraryRef = useRef(projectLibrary || null)
@@ -251,11 +297,45 @@ const ScriptEditorRich: React.FC<Props> = ({
             () => projectLibraryRef.current
           ),
           allowedPrefixes: null, // null allows any prefix in Tiptap
-          allowSpaces: true
+          allowSpaces: true,
+          command: ({ editor, range, props: mentionProps }: any) => {
+            const selected = mentionProps?.itemData || mentionProps
+
+            if (selected?.type === 'duration') {
+              editor
+                .chain()
+                .focus()
+                .insertContentAt(range, [
+                  {
+                    type: 'durationTag',
+                    attrs: { value: selected.value ?? 5.0 }
+                  },
+                  { type: 'text', text: ' ' }
+                ])
+                .run()
+              return
+            }
+
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(range, [
+                {
+                  type: 'mention',
+                  attrs: {
+                    id: mentionProps?.id,
+                    label: mentionProps?.label,
+                    itemData: mentionProps?.itemData || null
+                  }
+                },
+                { type: 'text', text: ' ' }
+              ])
+              .run()
+          }
         }
       })
     ],
-    content: savedContent,
+    content: resolveInitialContent(),
     editable: isEditing,
     editorProps: {
       attributes: {
@@ -278,6 +358,7 @@ const ScriptEditorRich: React.FC<Props> = ({
             props: {
               items: scriptItems,
               libraryItems,
+              allowDurationAction: false,
               onAddFromLibrary: () => {},
               command: (payload: any) => {
                 const selected = payload?.itemData || payload
@@ -354,6 +435,11 @@ const ScriptEditorRich: React.FC<Props> = ({
         }
         return false
       }
+    },
+    onUpdate: ({ editor: currentEditor }) => {
+      const text = currentEditor.getText().trim()
+      const html = currentEditor.getHTML()
+      setIsEditorEmpty(isEffectivelyEmpty(html, text))
     }
   })
 
@@ -362,6 +448,22 @@ const ScriptEditorRich: React.FC<Props> = ({
       editor.setEditable(isEditing)
     }
   }, [isEditing, editor])
+
+  useEffect(() => {
+    const nextContent = resolveInitialContent()
+    const nextText = extractTextFromHtml(nextContent)
+    const empty = isEffectivelyEmpty(nextContent, nextText)
+    const shouldAutoFocus = autoFocusWhenEmpty && empty
+
+    setSavedContent(nextContent)
+    setIsEditorEmpty(empty)
+    setIsEditing(shouldAutoFocus)
+    if (!editor) return
+    editor.commands.setContent(nextContent)
+    if (shouldAutoFocus) {
+      setTimeout(() => editor.commands.focus('end'), 0)
+    }
+  }, [clipId, initialContent, initialText, editor, autoFocusWhenEmpty])
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl p-4 h-full min-h-0 flex flex-col shadow-sm transition-all duration-200">
@@ -401,6 +503,20 @@ const ScriptEditorRich: React.FC<Props> = ({
         }
       `}</style>
       <div className="flex-1 min-h-0 relative flex flex-col cursor-text overflow-hidden">
+        {isEditorEmpty ? (
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditing(true)
+              setTimeout(() => editor?.commands.focus('end'), 0)
+            }}
+            className={`absolute left-0 top-0 z-10 text-[13px] leading-[2] text-[var(--text-muted)] ${
+              isEditing ? 'pointer-events-none' : ''
+            }`}
+          >
+            {placeholder}
+          </button>
+        ) : null}
         <EditorContent
           editor={editor}
           className="flex-1 min-h-0 w-full overflow-y-auto bg-transparent text-[13px] leading-relaxed text-[var(--text-primary)] pr-1"
@@ -425,7 +541,9 @@ const ScriptEditorRich: React.FC<Props> = ({
                 e.stopPropagation()
                 setIsEditing(false)
                 if (editor) {
-                  setSavedContent(editor.getHTML())
+                  const html = editor.getHTML()
+                  setSavedContent(html)
+                  onSaveText?.(editor.getText().trim())
                 }
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm"
