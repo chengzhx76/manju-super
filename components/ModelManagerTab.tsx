@@ -1,39 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Server, 
-  MessageSquare, 
-  Image, 
-  Video, 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Check, 
-  X, 
+import {
+  Server,
+  MessageSquare,
+  Image,
+  Video,
+  Plus,
+  Trash2,
+  Edit2,
+  Check,
+  X,
   ExternalLink,
   Sparkles,
   Gift
 } from 'lucide-react';
 import { useAlert } from './GlobalAlert';
-import { 
-  ModelProvider, 
-  ModelConfig, 
-  AspectRatio, 
-  VideoDuration 
+import {
+  ModelProvider,
+  ModelConfig,
+  AspectRatio,
+  VideoDuration
 } from '../types';
 import {
   getModelManagerState,
-  getProviders,
-  getCurrentConfig,
   addProvider,
   updateProvider,
   deleteProvider,
   updateChatModelConfig,
-  updateImageModelConfig,
   updateVideoModelConfig,
   setDefaultAspectRatio,
   setDefaultVideoDuration,
   AVAILABLE_CHAT_MODELS,
-  AVAILABLE_IMAGE_MODELS,
   AVAILABLE_VIDEO_MODELS
 } from '../services/modelConfigService';
 import { USER_MANUAL_URL } from '../constants/links';
@@ -48,7 +44,7 @@ const ModelManagerTab: React.FC<ModelManagerTabProps> = ({ onConfigChange }) => 
   const [config, setConfig] = useState<ModelConfig | null>(null);
   const [defaultAspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [defaultVideoDuration, setDuration] = useState<VideoDuration>(8);
-  
+
   // 编辑状态
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', baseUrl: '', apiKey: '' });
@@ -71,14 +67,14 @@ const ModelManagerTab: React.FC<ModelManagerTabProps> = ({ onConfigChange }) => 
   // 添加提供商
   const handleAddProvider = () => {
     if (!newProviderForm.name.trim() || !newProviderForm.baseUrl.trim()) return;
-    
+
     addProvider({
       name: newProviderForm.name.trim(),
       baseUrl: newProviderForm.baseUrl.trim(),
       apiKey: newProviderForm.apiKey.trim() || undefined,
       isDefault: false
     });
-    
+
     setNewProviderForm({ name: '', baseUrl: '', apiKey: '' });
     setIsAddingProvider(false);
     loadConfig();
@@ -166,18 +162,18 @@ const ModelManagerTab: React.FC<ModelManagerTabProps> = ({ onConfigChange }) => 
               本开源项目由 BigBanana API 提供支持。
             </p>
             <div className="flex items-center gap-3">
-              <a 
-                href="https://api.antsk.cn" 
-                target="_blank" 
+              <a
+                href="https://api.antsk.cn"
+                target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] text-xs font-bold rounded-lg hover:bg-[var(--btn-primary-hover)] transition-colors inline-flex items-center gap-1.5"
               >
                 立即购买
                 <ExternalLink className="w-3 h-3" />
               </a>
-              <a 
+              <a
                 href={USER_MANUAL_URL}
-                target="_blank" 
+                target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 bg-[var(--bg-hover)] text-[var(--text-secondary)] text-xs font-bold rounded-lg hover:bg-[var(--border-secondary)] transition-colors inline-flex items-center gap-1.5"
               >
@@ -256,7 +252,7 @@ const ModelManagerTab: React.FC<ModelManagerTabProps> = ({ onConfigChange }) => 
 
           {/* 提供商列表 */}
           {providers.map((provider) => (
-            <div 
+            <div
               key={provider.id}
               className={`bg-[var(--bg-elevated)]/50 border rounded-lg p-3 ${
                 provider.isDefault ? 'border-[var(--accent-border)]' : 'border-[var(--border-primary)]'
@@ -389,7 +385,7 @@ const ModelManagerTab: React.FC<ModelManagerTabProps> = ({ onConfigChange }) => 
         <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest mb-3 block">
           默认生成设置
         </label>
-        
+
         <div className="grid grid-cols-2 gap-4">
           {/* 默认横竖屏 */}
           <div>

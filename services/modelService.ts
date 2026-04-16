@@ -155,8 +155,8 @@ export const splitShot = async (options: {
 /**
  * 验证 API Key
  */
-export const verifyApiKey = async (apiKey: string): Promise<{ success: boolean; message: string }> => {
-  return verifyChatApiKey(apiKey);
+export const verifyApiKey = async (apiKey: string, baseUrl?: string): Promise<{ success: boolean; message: string }> => {
+  return verifyChatApiKey(apiKey, baseUrl);
 };
 
 /**

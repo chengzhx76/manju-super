@@ -4,8 +4,8 @@
  */
 
 import React, { useRef, useState, useEffect } from 'react';
-import { X, Settings, MessageSquare, Image, Video, Mic, Key, ExternalLink, Gift, Sparkles } from 'lucide-react';
-import { ModelType, ModelDefinition } from '../../types/model';
+import { X, Settings, MessageSquare, Image, Video, Mic, Key, ExternalLink, Gift, Sparkles, Download, Upload, Server } from 'lucide-react';
+import { ModelType, ModelDefinition, ModelRegistryState } from '../../types/model';
 import {
   getRegistryState,
   getModels,
@@ -14,8 +14,7 @@ import {
   updateModel,
   registerModel,
   removeModel,
-  getGlobalApiKey,
-  setGlobalApiKey,
+  saveRegistry
 } from '../../services/modelRegistry';
 import { verifyApiKey } from '../../services/modelService';
 import ModelList from './ModelList';
@@ -32,9 +31,57 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
   const [activeTab, setActiveTab] = useState<TabType>('global');
   const [refreshKey, setRefreshKey] = useState(0);
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pointerDownOutsideRef = useRef(false);
 
   const refresh = () => setRefreshKey(k => k + 1);
+
+  const handleExport = () => {
+    const state = getRegistryState();
+    const dataStr = JSON.stringify(state, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+    const exportFileDefaultName = `bigbanana_model_config_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  const handleImport = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        if (json && typeof json === 'object' && Array.isArray(json.models) && Array.isArray(json.providers)) {
+          saveRegistry(json as ModelRegistryState);
+          refresh();
+          alert('配置导入成功！页面将刷新以应用新配置。');
+          window.location.reload();
+        } else {
+          alert('导入失败：无效的配置文件格式。');
+        }
+      } catch (err) {
+        alert('导入失败：解析 JSON 文件出错。');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    // 重置 input 值，允许重复导入同一个文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -47,7 +94,7 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
   ];
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[200] flex items-center justify-center"
       onPointerDown={(e) => {
         // 仅当按下发生在弹窗外部时，才允许后续抬起关闭。
@@ -70,7 +117,7 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
       <div className="absolute inset-0 bg-[var(--bg-base)]/80 backdrop-blur-sm" />
 
       {/* 弹窗 */}
-      <div 
+      <div
         className="relative z-10 w-full max-w-2xl mx-4 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl shadow-2xl animate-in zoom-in-95 fade-in duration-200 max-h-[85vh] flex flex-col"
         ref={modalRef}
         onClick={(e) => e.stopPropagation()}
@@ -117,8 +164,8 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
           {activeTab === 'global' ? (
             <GlobalSettings onRefresh={refresh} />
           ) : (
-            <ModelList 
-              type={activeTab as ModelType} 
+            <ModelList
+              type={activeTab as ModelType}
               onRefresh={refresh}
             />
           )}
@@ -126,9 +173,34 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
 
         {/* 底部 */}
         <div className="px-6 py-4 border-t border-[var(--border-subtle)] bg-[var(--bg-sunken)] rounded-b-xl flex-shrink-0 flex items-center justify-between">
-          <p className="text-[10px] text-[var(--text-muted)] font-mono">
-            配置仅保存在本地浏览器
-          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExport}
+              className="px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-primary)] text-[var(--text-secondary)] text-xs font-bold rounded-lg hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5"
+              title="导出所有模型配置"
+            >
+              <Download className="w-3.5 h-3.5" />
+              导出配置
+            </button>
+            <button
+              onClick={handleImport}
+              className="px-3 py-1.5 bg-[var(--bg-surface)] border border-[var(--border-primary)] text-[var(--text-secondary)] text-xs font-bold rounded-lg hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5"
+              title="导入模型配置"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              导入配置
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".json"
+              className="hidden"
+            />
+            <p className="text-[10px] text-[var(--text-muted)] font-mono ml-2 hidden sm:block">
+              配置仅保存在本地浏览器
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] text-xs font-bold rounded-lg hover:bg-[var(--btn-primary-hover)] transition-colors"

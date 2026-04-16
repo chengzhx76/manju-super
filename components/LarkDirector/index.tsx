@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { ProjectState, Shot } from '../../types';
 import { useAlert } from '../GlobalAlert';
 import { useProjectContext } from '../../contexts/ProjectContext';
-import { Plus, Users, Image as ImageIcon, Maximize2, Play, Volume2, Download, Edit2, RotateCw, LayoutGrid, Monitor, Smartphone, Sparkles } from 'lucide-react';
-import ScriptEditor from './ScriptEditor';
+import { Plus, Users, Image as ImageIcon, Package, Maximize2, Play, Volume2, Download, Edit2, RotateCw, LayoutGrid, Monitor, Smartphone, Sparkles } from 'lucide-react';
+import ScriptEditorRich from './editor/ScriptEditorRich';
 
 interface Props {
   project: ProjectState;
@@ -69,7 +69,7 @@ const LarkDirector: React.FC<Props> = ({ project, updateProject, onGeneratingCha
         {/* Left Sidebar - Asset Library */}
         <aside className="w-80 border-r border-[var(--border-primary)] bg-[var(--bg-surface)] flex flex-col h-full shrink-0">
         <div className="h-14 border-b border-[var(--border-primary)] flex items-center justify-between px-6 shrink-0">
-          <h2 className="text-sm font-bold tracking-wider">资产库</h2>
+          <h2 className="text-sm font-bold tracking-wider">本集资产库</h2>
           <button className="p-1 hover:bg-[var(--bg-hover)] rounded">
             <Plus className="w-4 h-4 text-[var(--text-muted)]" />
           </button>
@@ -119,6 +119,28 @@ const LarkDirector: React.FC<Props> = ({ project, updateProject, onGeneratingCha
               ))}
             </div>
           </div>
+
+          {/* Props */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest">
+              <Package className="w-3 h-3" />
+              <span>道具 ({project.scriptData?.props.length || 0})</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {project.scriptData?.props.map((prop) => (
+                <div key={prop.id} className="flex flex-col gap-1.5 cursor-pointer group">
+                  <div className="aspect-video bg-[var(--bg-elevated)] rounded-lg overflow-hidden border border-[var(--border-primary)] group-hover:border-[var(--accent-border)] transition-colors relative">
+                    {prop.referenceImage ? (
+                      <img src={prop.referenceImage} alt={prop.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">无图片</div>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-[var(--text-secondary)] text-center truncate">{prop.name}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -135,11 +157,11 @@ const LarkDirector: React.FC<Props> = ({ project, updateProject, onGeneratingCha
                 <h3 className="text-sm font-bold">片段 1</h3>
                 <span className="text-[10px] text-[var(--text-tertiary)]">片段时长请限制在4-15s，输入"@"可快速调整镜头时长、引用角色、场景、素材</span>
               </div>
-              <span className="text-[10px] text-[var(--text-tertiary)]">视频每1秒消耗14积分，以实际生成为准</span>
+              <span className="text-[10px] text-[var(--text-tertiary)]">参数设置：</span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 bg-[var(--bg-sunken)]">
-              <ScriptEditor project={project} />
+            <div className="flex-1 overflow-y-auto p-4 bg-[var(--bg-sunken)]">
+              <ScriptEditorRich project={project} projectLibrary={seriesProject} />
             </div>
           </div>
 
@@ -192,44 +214,52 @@ const LarkDirector: React.FC<Props> = ({ project, updateProject, onGeneratingCha
             </button>
           </div>
 
-          <div className="flex-1 overflow-x-auto p-4 flex items-center gap-3 custom-scrollbar">
+          <div className="flex-1 overflow-x-auto px-4 py-3 flex items-center gap-4 custom-scrollbar">
             {clips.length > 0 ? (
               clips.map((clip, idx) => (
                 <div
                   key={clip.id}
-                  className={`w-32 aspect-video rounded-lg overflow-hidden shrink-0 border-2 cursor-pointer relative ${activeClipIndex === idx ? 'border-[var(--accent)]' : 'border-transparent hover:border-[var(--border-primary)]'} bg-[var(--bg-elevated)] transition-colors`}
+                  className={`w-36 aspect-[16/12] rounded-xl shrink-0 border cursor-pointer relative p-1.5 ${
+                    activeClipIndex === idx
+                      ? 'border-[var(--accent)] bg-[var(--bg-base)]'
+                      : 'border-[var(--border-primary)] bg-[var(--bg-base)] hover:border-[var(--border-secondary)]'
+                  } transition-colors`}
                   onClick={() => setActiveClipIndex(idx)}
                 >
-                  <div className="absolute top-1 left-1 w-4 h-4 bg-black/50 rounded flex items-center justify-center text-[8px] text-white z-10 backdrop-blur-sm">
-                    {idx + 1}
-                  </div>
-
-                  {clip.videoUrl ? (
-                    <video src={clip.videoUrl} className="w-full h-full object-cover" />
-                  ) : clip.keyframes?.[0]?.imageUrl ? (
-                    <img src={clip.keyframes[0].imageUrl} className="w-full h-full object-cover" alt="start frame" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
-                      无画面
+                  <div className="relative w-full h-full rounded-lg overflow-hidden bg-[var(--bg-elevated)]">
+                    <div className="absolute top-1 left-1 w-4 h-4 bg-black/45 rounded flex items-center justify-center text-[8px] text-white z-10 backdrop-blur-sm">
+                      {idx + 1}
                     </div>
-                  )}
 
-                  <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/50 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
-                    00:{Math.floor(clip.duration || 5).toString().padStart(2, '0')}
+                    {clip.videoUrl ? (
+                      <video src={clip.videoUrl} className="w-full h-full object-cover" />
+                    ) : clip.keyframes?.[0]?.imageUrl ? (
+                      <img src={clip.keyframes[0].imageUrl} className="w-full h-full object-cover" alt="start frame" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
+                        无画面
+                      </div>
+                    )}
+
+                    <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/45 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
+                      00:{Math.floor(clip.duration || 5).toString().padStart(2, '0')}
+                    </div>
                   </div>
                 </div>
               ))
             ) : (
               // Empty state timeline items
               Array.from({ length: 9 }).map((_, i) => (
-                <div key={i} className="w-32 aspect-video rounded-lg overflow-hidden shrink-0 border border-[var(--border-primary)] bg-[var(--bg-base)] flex items-center justify-center relative">
-                  <div className="absolute top-1 left-1 w-4 h-4 bg-[var(--bg-elevated)] rounded flex items-center justify-center text-[8px] text-[var(--text-tertiary)] z-10">
-                    {i + 1}
+                <div key={i} className="w-36 aspect-[16/10] rounded-xl shrink-0 border border-[var(--border-primary)] bg-[var(--bg-base)] p-1.5">
+                  <div className="w-full h-full rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)] flex items-center justify-center relative">
+                    <div className="absolute top-1 left-1 w-4 h-4 bg-[var(--bg-base)] rounded flex items-center justify-center text-[8px] text-[var(--text-tertiary)] z-10 border border-[var(--border-subtle)]">
+                      {i + 1}
+                    </div>
+                    <button className="px-2 py-1 bg-[var(--bg-base)] border border-[var(--border-primary)] rounded text-[9px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1">
+                      <ImageIcon className="w-3 h-3" />
+                      生成
+                    </button>
                   </div>
-                  <button className="px-2 py-1 bg-[var(--bg-elevated)] border border-[var(--border-primary)] rounded text-[9px] font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1">
-                    <ImageIcon className="w-3 h-3" />
-                    生成
-                  </button>
                 </div>
               ))
             )}

@@ -3,11 +3,11 @@
  * 管理 API 提供商和模型配置
  */
 
-import { 
-  ModelProvider, 
-  ModelConfig, 
-  ModelManagerState, 
-  AspectRatio, 
+import {
+  ModelProvider,
+  ModelConfig,
+  ModelManagerState,
+  AspectRatio,
   VideoDuration,
   ChatModelConfig,
   ImageModelConfig,
@@ -176,14 +176,14 @@ export const updateProvider = (id: string, updates: Partial<ModelProvider>): boo
   const state = loadModelConfig();
   const index = state.providers.findIndex(p => p.id === id);
   if (index === -1) return false;
-  
+
   // 不允许修改内置提供商的某些属性
   if (state.providers[index].isBuiltIn) {
     delete updates.id;
     delete updates.isBuiltIn;
     delete updates.baseUrl;
   }
-  
+
   state.providers[index] = { ...state.providers[index], ...updates };
   saveModelConfig(state);
   return true;
@@ -195,12 +195,12 @@ export const updateProvider = (id: string, updates: Partial<ModelProvider>): boo
 export const deleteProvider = (id: string): boolean => {
   const state = loadModelConfig();
   const provider = state.providers.find(p => p.id === id);
-  
+
   // 不允许删除内置提供商
   if (!provider || provider.isBuiltIn) return false;
-  
+
   state.providers = state.providers.filter(p => p.id !== id);
-  
+
   // 如果删除的是当前使用的提供商，切换回默认
   if (state.currentConfig.chatModel.providerId === id) {
     state.currentConfig.chatModel.providerId = 'antsk';
@@ -211,7 +211,7 @@ export const deleteProvider = (id: string): boolean => {
   if (state.currentConfig.videoModel.providerId === id) {
     state.currentConfig.videoModel.providerId = 'antsk';
   }
-  
+
   saveModelConfig(state);
   return true;
 };
@@ -280,7 +280,7 @@ export const getVideoApiUrl = (): string => {
   const config = getCurrentConfig();
   const provider = getProviderById(config.videoModel.providerId) || getDefaultProvider();
   const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-  
+
   if (config.videoModel.type === 'sora') {
     return `${baseUrl}/v1/videos`;
   } else {
@@ -294,7 +294,7 @@ export const getVideoApiUrl = (): string => {
 export const getApiBaseUrl = (type: 'chat' | 'image' | 'video' = 'chat'): string => {
   const config = getCurrentConfig();
   let providerId: string;
-  
+
   switch (type) {
     case 'chat':
       providerId = config.chatModel.providerId;
@@ -308,7 +308,7 @@ export const getApiBaseUrl = (type: 'chat' | 'image' | 'video' = 'chat'): string
     default:
       providerId = 'antsk';
   }
-  
+
   const provider = getProviderById(providerId) || getDefaultProvider();
   return provider.baseUrl.replace(/\/+$/, '');
 };
@@ -367,7 +367,7 @@ export const getVideoModelType = (): 'sora' | 'veo' => {
  */
 export const getVeoModelName = (hasReferenceImage: boolean, aspectRatio: AspectRatio): string => {
   const orientation = aspectRatio === '9:16' ? 'portrait' : 'landscape';
-  
+
   if (hasReferenceImage) {
     return `veo_3_1_i2v_s_fast_fl_${orientation}`;
   } else {
@@ -400,28 +400,14 @@ export const resetToDefault = (): void => {
  * 预定义的对话模型列表
  */
 export const AVAILABLE_CHAT_MODELS = [
-  { name: 'GPT-5.2', value: 'gpt-5.2', description: '综合能力最强，适合复杂任务' },
-  { name: 'GPT-5.1', value: 'gpt-5.1', description: '旗舰通用模型，稳定可靠' },
   { name: 'GPT-5.4', value: 'gpt-5.4', description: '高性价比，适合长文本处理' },
   { name: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6', description: '速度与智能平衡，代码/Agent 友好' },
-  { name: 'Claude Opus 4.6', value: 'claude-opus-4-6-20260205', description: '复杂推理与高难任务优先' },
-  { name: 'Claude Sonnet 4.5', value: 'claude-sonnet-4-5-20250929', description: '均衡稳定，适合高频文本任务' },
-  { name: 'Gemini 3.1 Pro Preview', value: 'gemini-3.1-pro-preview', description: '多模态与超长上下文能力' },
-];
-
-/**
- * 预定义的画图模型列表
- */
-export const AVAILABLE_IMAGE_MODELS = [
-  { name: 'Gemini 3 Pro Image', value: 'gemini-3-pro-image-preview', description: '高质量图片生成' },
-  { name: 'Gemini 3.1 Flash Image (Nano Banana 2)', value: 'gemini-3.1-flash-image-preview', description: '价格更低，速度更快' },
 ];
 
 /**
  * 预定义的视频模型列表
  */
 export const AVAILABLE_VIDEO_MODELS = [
-  { name: 'Veo 3.1 Fast', value: 'veo_3_1-fast', type: 'sora' as const, description: '异步模式，支持横/竖屏，固定 8 秒' },
   { name: 'Sora-2', value: 'sora-2', type: 'sora' as const, description: '异步模式，支持 4/8/12 秒' },
   { name: 'Doubao Seedance 1.5 Pro (内置)', value: 'doubao-seedance-1-5-pro', type: 'sora' as const, description: 'Async mode with the same request style as Sora-2, supports 4/8/12 seconds.' },
 ];

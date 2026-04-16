@@ -44,7 +44,6 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         res.statusCode = upstream.status;
         const passthroughHeaders = [
           'content-type',
-          'content-length',
           'content-range',
           'accept-ranges',
           'cache-control',
@@ -131,7 +130,6 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         res.statusCode = upstream.status;
         const passthroughHeaders = [
           'content-type',
-          'content-length',
           'cache-control',
           'etag',
           'last-modified',

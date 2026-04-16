@@ -20,7 +20,6 @@ const allowedProtocols = (process.env.MEDIA_PROXY_ALLOWED_PROTOCOLS || 'https')
 
 const passThroughResponseHeaders = new Set([
   'content-type',
-  'content-length',
   'content-range',
   'accept-ranges',
   'cache-control',

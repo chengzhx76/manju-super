@@ -5,8 +5,8 @@
 
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2, ToggleLeft, ToggleRight, CheckCircle, Circle } from 'lucide-react';
-import { 
-  ModelDefinition, 
+import {
+  ModelDefinition,
   ChatModelParams,
   ImageModelParams,
   VideoModelParams,
@@ -37,6 +37,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
 }) => {
   const [editParams, setEditParams] = useState<any>(model.params);
   const [editApiKey, setEditApiKey] = useState<string>(model.apiKey || '');
+
   const provider = getProviderById(model.providerId);
   const isVolcengineModel = model.providerId === 'volcengine';
   const modelHasApiKey = Boolean(model.apiKey?.trim());
@@ -199,7 +200,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const apiModelLabel = model.apiModel || model.id;
 
   return (
-    <div 
+    <div
       className={`bg-[var(--bg-elevated)]/50 border rounded-lg overflow-hidden transition-all ${
         isActive ? 'border-[var(--accent-border)] bg-[var(--accent-bg)]' : 'border-[var(--border-primary)]'
       } ${!model.isEnabled ? 'opacity-60' : ''}`}
@@ -243,7 +244,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
               使用
             </button>
           )}
-          
+
           {/* 当前激活标记 */}
           {isActive && (
             <span className="px-2.5 py-1 bg-[var(--accent-bg)] text-[var(--accent-text-hover)] text-[10px] font-bold rounded flex items-center gap-1">
@@ -320,7 +321,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
                 <p className="text-[9px] text-[var(--success)] mt-1">✓ 已配置专属 Key</p>
               )}
             </div>
-            
+
             {model.type === 'chat' && renderChatParams(model.params)}
             {model.type === 'image' && renderImageParams(model.params)}
             {model.type === 'video' && renderVideoParams(model.params)}

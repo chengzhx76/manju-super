@@ -351,55 +351,13 @@ export const BUILTIN_CHAT_MODELS: ChatModelDefinition[] = [
     isBuiltIn: true,
     isEnabled: true,
     params: { ...DEFAULT_CHAT_PARAMS },
-  },
-  {
-    id: 'claude-opus-4-6-20260205',
-    name: 'Claude Opus 4.6',
-    type: 'chat',
-    providerId: 'antsk',
-    description: 'Claude 顶级智能：复杂推理、长流程 agent 与高难编码任务表现更强，适合高质量优先场景',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_CHAT_PARAMS },
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro Preview',
-    type: 'chat',
-    providerId: 'antsk',
-    description: '多模态预览模型：支持超长上下文与复杂推理，适合文档理解、研究分析与工具增强流程',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_CHAT_PARAMS },
-  },
+  }
 ];
 
 /**
  * 内置图片模型列表
  */
 export const BUILTIN_IMAGE_MODELS: ImageModelDefinition[] = [
-  {
-    id: 'gemini-3-pro-image-preview',
-    name: 'Gemini 3 Pro Image(Nano Banana Pro)',
-    type: 'image',
-    providerId: 'antsk',
-    endpoint: '/v1beta/models/gemini-3-pro-image-preview:generateContent',
-    description: '旗舰画质与高一致性：擅长复杂构图、精细文字与参考图控制，适合高要求角色与品牌场景（价格较高）',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_IMAGE_PARAMS },
-  },
-  {
-    id: 'gemini-3.1-flash-image-preview',
-    name: 'Gemini 3.1 Flash Image Preview(Nano Banana 2)',
-    type: 'image',
-    providerId: 'antsk',
-    endpoint: '/v1beta/models/gemini-3.1-flash-image-preview:generateContent',
-    description: '高性价比高速模型：为快速交互和高吞吐生成优化，适合批量出图与频繁迭代（成本低于 Pro）',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_IMAGE_PARAMS },
-  },
   {
     id: 'gpt-image-1.5',
     apiModel: 'gpt-image-1.5',
@@ -431,17 +389,6 @@ export const BUILTIN_IMAGE_MODELS: ImageModelDefinition[] = [
  */
 export const BUILTIN_VIDEO_MODELS: VideoModelDefinition[] = [
   {
-    id: 'veo_3_1-fast',
-    name: 'Veo 3.1 Fast',
-    type: 'video',
-    providerId: 'antsk',
-    endpoint: '/v1/videos',
-    description: '异步模式，支持横屏/竖屏、支持单图和首尾帧，固定 8 秒时长,价格便宜速度快',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_VIDEO_PARAMS_VEO_FAST },
-  },
-  {
     id: 'sora-2',
     name: 'Sora-2',
     type: 'video',
@@ -451,30 +398,6 @@ export const BUILTIN_VIDEO_MODELS: VideoModelDefinition[] = [
     isBuiltIn: true,
     isEnabled: true,
     params: { ...DEFAULT_VIDEO_PARAMS_SORA },
-  },
-  {
-    id: 'doubao-seedance-1-5-pro',
-    apiModel: 'doubao-seedance-1-5-pro',
-    name: 'Doubao Seedance 1.5 Pro (内置)',
-    type: 'video',
-    providerId: 'antsk',
-    endpoint: '/v1/videos',
-    description: 'AntSK async video mode via /v1/videos with Sora-2-compatible request format, supporting 4/8/12 seconds.',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_VIDEO_PARAMS_SORA },
-  },
-  {
-    id: 'doubao-seedance-1-5-pro-251215',
-    apiModel: 'doubao-seedance-1-5-pro-251215',
-    name: 'Doubao Seedance 1.5 Pro',
-    type: 'video',
-    providerId: 'volcengine',
-    endpoint: '/api/v3/contents/generations/tasks',
-    description: '火山引擎异步任务模式（create task + poll task），支持 4/8/12 秒',
-    isBuiltIn: true,
-    isEnabled: true,
-    params: { ...DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE_1_5 },
   },
   {
     id: 'doubao-seedance-2-0-260128',
@@ -535,7 +458,7 @@ export const BUILTIN_PROVIDERS: ModelProvider[] = [
     id: 'volcengine',
     name: 'Volcengine Ark',
     baseUrl: 'https://ark.cn-beijing.volces.com',
-    isBuiltIn: true,
+    isBuiltIn: false,
     isDefault: false,
   },
 ];
