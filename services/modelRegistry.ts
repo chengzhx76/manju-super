@@ -8,6 +8,7 @@ import {
   ModelDefinition,
   ModelProvider,
   ModelRegistryState,
+  AssetLibraryConfig,
   ActiveModels,
   ChatModelDefinition,
   ImageModelDefinition,
@@ -24,10 +25,30 @@ import { normalizeChatModelId } from './modelIdUtils'
 // localStorage 键名
 const STORAGE_KEY = 'bigbanana_model_registry'
 const API_KEY_STORAGE_KEY = 'antsk_api_key'
+const DEFAULT_ASSET_LIBRARY_CONFIG: AssetLibraryConfig = {
+  id: 'asset_lib_default',
+  address: '',
+  access_key: '',
+  secret_key: '',
+  isDefault: true
+}
 
 // 规范化 URL（去尾部斜杠、转小写）用于去重
 const normalizeBaseUrl = (url: string): string =>
   url.trim().replace(/\/+$/, '').toLowerCase()
+
+const createAssetLibraryConfigId = (): string =>
+  `asset_lib_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+
+const normalizeAssetLibraryConfig = (
+  config?: Partial<AssetLibraryConfig>
+): AssetLibraryConfig => ({
+  id: config?.id?.trim() || createAssetLibraryConfigId(),
+  address: (config?.address || '').trim().replace(/\/+$/, ''),
+  access_key: (config?.access_key || '').trim(),
+  secret_key: (config?.secret_key || '').trim(),
+  isDefault: !!config?.isDefault
+})
 
 // 运行时状态缓存
 let registryState: ModelRegistryState | null = null
@@ -43,7 +64,8 @@ const getDefaultState = (): ModelRegistryState => ({
   providers: [...BUILTIN_PROVIDERS],
   models: [...ALL_BUILTIN_MODELS],
   activeModels: { ...DEFAULT_ACTIVE_MODELS },
-  globalApiKey: localStorage.getItem(API_KEY_STORAGE_KEY) || undefined
+  globalApiKey: localStorage.getItem(API_KEY_STORAGE_KEY) || undefined,
+  assetLibraryConfigs: []
 })
 
 /**
@@ -300,6 +322,68 @@ export const loadRegistry = (): ModelRegistryState => {
         globalApiKeyMigrated = true
       }
 
+      let assetLibraryConfigMigrated = false
+      const parsedAny = parsed as ModelRegistryState & {
+        assetLibraryConfig?: Partial<AssetLibraryConfig>
+      }
+      const legacyAssetLibraryConfig = parsedAny.assetLibraryConfig
+      const rawAssetLibraryConfigs = Array.isArray(parsed.assetLibraryConfigs)
+        ? parsed.assetLibraryConfigs
+        : []
+
+      let normalizedAssetLibraryConfigs = rawAssetLibraryConfigs.map((config) =>
+        normalizeAssetLibraryConfig(config)
+      )
+
+      // 从旧版本的单配置字段迁移到多配置数组
+      if (
+        normalizedAssetLibraryConfigs.length === 0 &&
+        legacyAssetLibraryConfig &&
+        (legacyAssetLibraryConfig.address ||
+          legacyAssetLibraryConfig.access_key ||
+          legacyAssetLibraryConfig.secret_key)
+      ) {
+        normalizedAssetLibraryConfigs = [
+          normalizeAssetLibraryConfig({
+            ...legacyAssetLibraryConfig,
+            isDefault: true
+          })
+        ]
+        assetLibraryConfigMigrated = true
+      }
+
+      // 保证每条记录有唯一 ID，并确保仅有一条默认记录
+      const usedAssetLibraryIds = new Set<string>()
+      normalizedAssetLibraryConfigs = normalizedAssetLibraryConfigs.map(
+        (config) => {
+          let nextId = config.id
+          while (!nextId || usedAssetLibraryIds.has(nextId)) {
+            nextId = createAssetLibraryConfigId()
+          }
+          usedAssetLibraryIds.add(nextId)
+          return { ...config, id: nextId }
+        }
+      )
+      const defaultCount = normalizedAssetLibraryConfigs.filter(
+        (config) => config.isDefault
+      ).length
+      if (normalizedAssetLibraryConfigs.length > 0 && defaultCount !== 1) {
+        normalizedAssetLibraryConfigs = normalizedAssetLibraryConfigs.map(
+          (config, index) => ({
+            ...config,
+            isDefault: index === 0
+          })
+        )
+        assetLibraryConfigMigrated = true
+      }
+
+      const beforeSerialized = JSON.stringify(rawAssetLibraryConfigs)
+      const afterSerialized = JSON.stringify(normalizedAssetLibraryConfigs)
+      if (beforeSerialized !== afterSerialized) {
+        assetLibraryConfigMigrated = true
+      }
+      parsed.assetLibraryConfigs = normalizedAssetLibraryConfigs
+
       registryState = parsed
 
       // 如果发生了迁移，立即回写 localStorage，避免每次加载都重复执行
@@ -309,7 +393,8 @@ export const loadRegistry = (): ModelRegistryState => {
         modelsReordered ||
         chatModelAliasMigrated ||
         providerMigrated ||
-        globalApiKeyMigrated
+        globalApiKeyMigrated ||
+        assetLibraryConfigMigrated
       ) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed))
@@ -749,6 +834,131 @@ export const setGlobalApiKey = (apiKey: string): void => {
   const state = loadRegistry()
   state.globalApiKey = apiKey
   localStorage.setItem(API_KEY_STORAGE_KEY, apiKey)
+  saveRegistry(state)
+}
+
+/**
+ * 获取资产库配置列表
+ */
+export const getAssetLibraryConfigs = (): AssetLibraryConfig[] => {
+  const state = loadRegistry()
+  return state.assetLibraryConfigs || []
+}
+
+/**
+ * 获取当前使用的资产库配置
+ */
+export const getAssetLibraryConfig = (): AssetLibraryConfig => {
+  const configs = getAssetLibraryConfigs()
+  return (
+    configs.find((config) => config.isDefault) ||
+    configs[0] || { ...DEFAULT_ASSET_LIBRARY_CONFIG }
+  )
+}
+
+/**
+ * 添加资产库配置
+ */
+export const addAssetLibraryConfig = (
+  config: Omit<AssetLibraryConfig, 'id' | 'isDefault'>
+): AssetLibraryConfig => {
+  const state = loadRegistry()
+  const newConfig = normalizeAssetLibraryConfig({
+    ...config,
+    isDefault: state.assetLibraryConfigs.length === 0
+  })
+  state.assetLibraryConfigs.push(newConfig)
+  saveRegistry(state)
+  return newConfig
+}
+
+/**
+ * 更新资产库配置
+ */
+export const updateAssetLibraryConfig = (
+  id: string,
+  updates: Partial<AssetLibraryConfig>
+): boolean => {
+  const state = loadRegistry()
+  const index = state.assetLibraryConfigs.findIndex((config) => config.id === id)
+  if (index === -1) return false
+
+  const merged = normalizeAssetLibraryConfig({
+    ...state.assetLibraryConfigs[index],
+    ...updates,
+    id
+  })
+  state.assetLibraryConfigs[index] = {
+    ...merged,
+    isDefault: state.assetLibraryConfigs[index].isDefault
+  }
+  saveRegistry(state)
+  return true
+}
+
+/**
+ * 设置默认资产库配置
+ */
+export const setDefaultAssetLibraryConfig = (id: string): boolean => {
+  const state = loadRegistry()
+  const exists = state.assetLibraryConfigs.some((config) => config.id === id)
+  if (!exists) return false
+
+  state.assetLibraryConfigs = state.assetLibraryConfigs.map((config) => ({
+    ...config,
+    isDefault: config.id === id
+  }))
+  saveRegistry(state)
+  return true
+}
+
+/**
+ * 删除资产库配置
+ */
+export const removeAssetLibraryConfig = (id: string): boolean => {
+  const state = loadRegistry()
+  const target = state.assetLibraryConfigs.find((config) => config.id === id)
+  if (!target) return false
+
+  state.assetLibraryConfigs = state.assetLibraryConfigs.filter(
+    (config) => config.id !== id
+  )
+  if (target.isDefault && state.assetLibraryConfigs.length > 0) {
+    state.assetLibraryConfigs[0].isDefault = true
+  }
+  saveRegistry(state)
+  return true
+}
+
+/**
+ * 兼容旧调用：更新当前使用配置（不存在则自动新增）
+ */
+export const setAssetLibraryConfig = (
+  config: Partial<AssetLibraryConfig>
+): void => {
+  const state = loadRegistry()
+  const current =
+    state.assetLibraryConfigs.find((item) => item.isDefault) ||
+    state.assetLibraryConfigs[0]
+  if (current) {
+    const index = state.assetLibraryConfigs.findIndex(
+      (item) => item.id === current.id
+    )
+    state.assetLibraryConfigs[index] = normalizeAssetLibraryConfig({
+      ...current,
+      ...config,
+      id: current.id,
+      isDefault: true
+    })
+  } else {
+    state.assetLibraryConfigs.push(
+      normalizeAssetLibraryConfig({
+        ...DEFAULT_ASSET_LIBRARY_CONFIG,
+        ...config,
+        isDefault: true
+      })
+    )
+  }
   saveRegistry(state)
 }
 

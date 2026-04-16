@@ -168,6 +168,17 @@ export interface ModelProvider {
   isDefault: boolean // 是否为默认提供商
 }
 
+/**
+ * 资产库对象存储配置
+ */
+export interface AssetLibraryConfig {
+  id: string // 唯一标识
+  address: string // 对象存储地址
+  access_key: string
+  secret_key: string
+  isDefault: boolean // 是否为当前使用配置
+}
+
 // ============================================
 // 注册中心状态
 // ============================================
@@ -190,6 +201,7 @@ export interface ModelRegistryState {
   models: ModelDefinition[]
   activeModels: ActiveModels
   globalApiKey?: string
+  assetLibraryConfigs: AssetLibraryConfig[]
 }
 
 // ============================================
