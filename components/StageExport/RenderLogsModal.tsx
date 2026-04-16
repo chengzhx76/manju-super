@@ -1,23 +1,23 @@
-import React from 'react';
-import { Clock, ChevronUp, ChevronDown } from 'lucide-react';
-import { RenderLog } from '../../types';
-import { STYLES } from './constants';
-import { 
-  formatTimestamp, 
-  formatDuration, 
-  getLogStats, 
-  getLogTypeIcon, 
+import React from 'react'
+import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
+import { RenderLog } from '../../types'
+import { STYLES } from './constants'
+import {
+  formatTimestamp,
+  formatDuration,
+  getLogStats,
+  getLogTypeIcon,
   getLogTypeLabel,
   getLogStatusLabel,
   getStatusColorClass,
-  hasLogDetails 
-} from './utils';
+  hasLogDetails
+} from './utils'
 
 interface Props {
-  logs: RenderLog[];
-  expandedLogId: string | null;
-  onClose: () => void;
-  onToggleExpand: (logId: string) => void;
+  logs: RenderLog[]
+  expandedLogId: string | null
+  onClose: () => void
+  onToggleExpand: (logId: string) => void
 }
 
 const RenderLogsModal: React.FC<Props> = ({
@@ -26,7 +26,7 @@ const RenderLogsModal: React.FC<Props> = ({
   onClose,
   onToggleExpand
 }) => {
-  const stats = getLogStats(logs);
+  const stats = getLogStats(logs)
 
   return (
     <div className={STYLES.modal.overlay}>
@@ -35,7 +35,9 @@ const RenderLogsModal: React.FC<Props> = ({
         <div className={STYLES.modal.header}>
           <div className="flex items-center gap-3">
             <Clock className="w-5 h-5 text-[var(--accent)]" />
-            <h3 className="text-xl font-bold text-[var(--text-primary)]">渲染日志</h3>
+            <h3 className="text-xl font-bold text-[var(--text-primary)]">
+              渲染日志
+            </h3>
             <span className="px-2 py-0.5 bg-[var(--bg-elevated)] border border-[var(--border-secondary)] text-[var(--text-tertiary)] text-[10px] rounded uppercase font-mono tracking-wider">
               {logs.length} 条记录
             </span>
@@ -53,15 +55,21 @@ const RenderLogsModal: React.FC<Props> = ({
           <div className={STYLES.statsPanel.grid}>
             <div className={STYLES.statsPanel.card}>
               <div className={STYLES.statsPanel.label}>总记录</div>
-              <div className="text-2xl font-mono font-bold text-[var(--text-primary)]">{stats.total}</div>
+              <div className="text-2xl font-mono font-bold text-[var(--text-primary)]">
+                {stats.total}
+              </div>
             </div>
             <div className={STYLES.statsPanel.card}>
               <div className={STYLES.statsPanel.label}>成功</div>
-              <div className="text-2xl font-mono font-bold text-[var(--success-text)]">{stats.success}</div>
+              <div className="text-2xl font-mono font-bold text-[var(--success-text)]">
+                {stats.success}
+              </div>
             </div>
             <div className={STYLES.statsPanel.card}>
               <div className={STYLES.statsPanel.label}>失败</div>
-              <div className="text-2xl font-mono font-bold text-[var(--error-text)]">{stats.failed}</div>
+              <div className="text-2xl font-mono font-bold text-[var(--error-text)]">
+                {stats.failed}
+              </div>
             </div>
           </div>
         </div>
@@ -71,19 +79,21 @@ const RenderLogsModal: React.FC<Props> = ({
           {logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-[var(--text-muted)]">
               <Clock className="w-12 h-12 mb-4 opacity-30" />
-              <p className="text-sm font-mono uppercase tracking-widest">暂无生成历史</p>
+              <p className="text-sm font-mono uppercase tracking-widest">
+                暂无生成历史
+              </p>
             </div>
           ) : (
             logs.map((log) => {
-              const statusColor = getStatusColorClass(log.status);
-              const typeIcon = getLogTypeIcon(log.type);
-              const typeLabel = getLogTypeLabel(log.type);
-              const isExpanded = expandedLogId === log.id;
-              const hasDetails = hasLogDetails(log);
-              
+              const statusColor = getStatusColorClass(log.status)
+              const typeIcon = getLogTypeIcon(log.type)
+              const typeLabel = getLogTypeLabel(log.type)
+              const isExpanded = expandedLogId === log.id
+              const hasDetails = hasLogDetails(log)
+
               return (
                 <div key={log.id} className={STYLES.logItem.container}>
-                  <div 
+                  <div
                     className={STYLES.logItem.header}
                     onClick={() => onToggleExpand(log.id)}
                   >
@@ -91,8 +101,12 @@ const RenderLogsModal: React.FC<Props> = ({
                       <span className="text-2xl mt-0.5">{typeIcon}</span>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-sm font-bold text-[var(--text-primary)]">{log.resourceName}</h4>
-                          <span className={`px-1.5 py-0.5 text-[9px] font-mono tracking-wider rounded border ${statusColor}`}>
+                          <h4 className="text-sm font-bold text-[var(--text-primary)]">
+                            {log.resourceName}
+                          </h4>
+                          <span
+                            className={`px-1.5 py-0.5 text-[9px] font-mono tracking-wider rounded border ${statusColor}`}
+                          >
                             {getLogStatusLabel(log.status)}
                           </span>
                           {log.duration && (
@@ -102,11 +116,17 @@ const RenderLogsModal: React.FC<Props> = ({
                           )}
                         </div>
                         <div className="flex items-center gap-4 text-[10px] text-[var(--text-tertiary)]">
-                          <span className="font-mono">{formatTimestamp(log.timestamp)}</span>
+                          <span className="font-mono">
+                            {formatTimestamp(log.timestamp)}
+                          </span>
                           <span className="text-[var(--text-muted)]">|</span>
-                          <span className="uppercase tracking-wider">{log.model}</span>
+                          <span className="uppercase tracking-wider">
+                            {log.model}
+                          </span>
                           <span className="text-[var(--text-muted)]">|</span>
-                          <span className="tracking-wider text-[var(--text-muted)]">{typeLabel}</span>
+                          <span className="tracking-wider text-[var(--text-muted)]">
+                            {typeLabel}
+                          </span>
                         </div>
                         {log.error && (
                           <div className="mt-2 p-2 bg-[var(--error-bg)] border border-[var(--error-border)] rounded text-[10px] text-[var(--error-text)]">
@@ -116,53 +136,77 @@ const RenderLogsModal: React.FC<Props> = ({
                       </div>
                       {hasDetails && (
                         <button className="mt-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
                         </button>
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Expanded Details */}
                   {isExpanded && hasDetails && (
                     <div className={STYLES.logItem.details}>
                       {log.resourceId && (
                         <div>
-                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">资源编号</div>
+                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">
+                            资源编号
+                          </div>
                           <div className="text-[10px] text-[var(--text-tertiary)] font-mono bg-[var(--bg-base)]/30 px-2 py-1 rounded">
                             {log.resourceId}
                           </div>
                         </div>
                       )}
-                      
+
                       {log.prompt && (
                         <div>
-                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">提示词</div>
+                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">
+                            提示词
+                          </div>
                           <div className="text-[10px] text-[var(--text-secondary)] bg-[var(--bg-base)]/30 px-3 py-2 rounded max-h-32 overflow-y-auto">
                             {log.prompt}
                           </div>
                         </div>
                       )}
-                      
-                      {(log.inputTokens || log.outputTokens || log.totalTokens) && (
+
+                      {(log.inputTokens ||
+                        log.outputTokens ||
+                        log.totalTokens) && (
                         <div>
-                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">令牌用量</div>
+                          <div className="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-1">
+                            令牌用量
+                          </div>
                           <div className="flex gap-4 text-[10px]">
                             {log.inputTokens && (
                               <div className="bg-[var(--bg-base)]/30 px-2 py-1 rounded">
-                                <span className="text-[var(--text-tertiary)]">输入：</span>
-                                <span className="text-[var(--accent-text)] font-mono ml-1">{log.inputTokens}</span>
+                                <span className="text-[var(--text-tertiary)]">
+                                  输入：
+                                </span>
+                                <span className="text-[var(--accent-text)] font-mono ml-1">
+                                  {log.inputTokens}
+                                </span>
                               </div>
                             )}
                             {log.outputTokens && (
                               <div className="bg-[var(--bg-base)]/30 px-2 py-1 rounded">
-                                <span className="text-[var(--text-tertiary)]">输出：</span>
-                                <span className="text-[var(--accent-text)] font-mono ml-1">{log.outputTokens}</span>
+                                <span className="text-[var(--text-tertiary)]">
+                                  输出：
+                                </span>
+                                <span className="text-[var(--accent-text)] font-mono ml-1">
+                                  {log.outputTokens}
+                                </span>
                               </div>
                             )}
                             {log.totalTokens && (
                               <div className="bg-[var(--bg-base)]/30 px-2 py-1 rounded">
-                                <span className="text-[var(--text-tertiary)]">总计：</span>
-                                <span className="text-[var(--accent-text)] font-mono ml-1">{log.totalTokens}</span>
+                                <span className="text-[var(--text-tertiary)]">
+                                  总计：
+                                </span>
+                                <span className="text-[var(--accent-text)] font-mono ml-1">
+                                  {log.totalTokens}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -171,7 +215,7 @@ const RenderLogsModal: React.FC<Props> = ({
                     </div>
                   )}
                 </div>
-              );
+              )
             })
           )}
         </div>
@@ -187,7 +231,7 @@ const RenderLogsModal: React.FC<Props> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default RenderLogsModal;
+export default RenderLogsModal

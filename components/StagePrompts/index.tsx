@@ -1,35 +1,51 @@
-import React, { useMemo, useState } from 'react';
-import { Search, Film, Users, MapPin, Package, SlidersHorizontal, X } from 'lucide-react';
-import { ProjectState, PromptVersion } from '../../types';
-import { PromptCategory, EditingPrompt } from './constants';
-import { 
-  savePromptEdit, 
+import React, { useMemo, useState } from 'react'
+import {
+  Search,
+  Film,
+  Users,
+  MapPin,
+  Package,
+  SlidersHorizontal,
+  X
+} from 'lucide-react'
+import { ProjectState, PromptVersion } from '../../types'
+import { PromptCategory, EditingPrompt } from './constants'
+import {
+  savePromptEdit,
   rollbackPromptEdit,
   getPromptVersionsForEdit,
-  filterCharacters, 
-  filterScenes, 
+  filterCharacters,
+  filterScenes,
   filterProps,
-  filterShots 
-} from './utils';
-import CharacterSection from './CharacterSection';
-import SceneSection from './SceneSection';
-import PropSection from './PropSection';
-import KeyframeSection from './KeyframeSection';
-import TemplateSection from './TemplateSection';
+  filterShots
+} from './utils'
+import CharacterSection from './CharacterSection'
+import SceneSection from './SceneSection'
+import PropSection from './PropSection'
+import KeyframeSection from './KeyframeSection'
+import TemplateSection from './TemplateSection'
 import {
   PromptTemplatePath,
   resolvePromptTemplateConfig,
-  searchPromptTemplateFields,
-} from '../../services/promptTemplateService';
+  searchPromptTemplateFields
+} from '../../services/promptTemplateService'
 
 interface Props {
-  project: ProjectState;
-  updateProject: (updates: Partial<ProjectState> | ((prev: ProjectState) => ProjectState)) => void;
+  project: ProjectState
+  updateProject: (
+    updates: Partial<ProjectState> | ((prev: ProjectState) => ProjectState)
+  ) => void
 }
 
-type SectionKey = 'templates' | 'characters' | 'scenes' | 'props' | 'shots';
+type SectionKey = 'templates' | 'characters' | 'scenes' | 'props' | 'shots'
 
-const SECTION_KEYS: SectionKey[] = ['templates', 'characters', 'scenes', 'props', 'shots'];
+const SECTION_KEYS: SectionKey[] = [
+  'templates',
+  'characters',
+  'scenes',
+  'props',
+  'shots'
+]
 
 const CATEGORY_LABELS: Record<PromptCategory, string> = {
   all: '全部',
@@ -37,125 +53,141 @@ const CATEGORY_LABELS: Record<PromptCategory, string> = {
   characters: '角色',
   scenes: '场景',
   props: '道具',
-  keyframes: '关键帧',
-};
+  keyframes: '关键帧'
+}
 
 const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState<PromptCategory>('all');
-  const [editingPrompt, setEditingPrompt] = useState<EditingPrompt>(null);
+  const [searchQuery, setSearchQuery] = useState('')
+  const [category, setCategory] = useState<PromptCategory>('all')
+  const [editingPrompt, setEditingPrompt] = useState<EditingPrompt>(null)
   const [expandedSections, setExpandedSections] = useState<Set<SectionKey>>(
     new Set<SectionKey>(SECTION_KEYS)
-  );
+  )
   const templateConfig = useMemo(
     () => resolvePromptTemplateConfig(project.promptTemplateOverrides),
     [project.promptTemplateOverrides]
-  );
+  )
 
   const toggleSection = (section: SectionKey) => {
-    const newExpanded = new Set(expandedSections);
+    const newExpanded = new Set(expandedSections)
     if (newExpanded.has(section)) {
-      newExpanded.delete(section);
+      newExpanded.delete(section)
     } else {
-      newExpanded.add(section);
+      newExpanded.add(section)
     }
-    setExpandedSections(newExpanded);
-  };
+    setExpandedSections(newExpanded)
+  }
 
   const handleStartEdit = (
-    type: 'character' | 'character-variation' | 'scene' | 'prop' | 'keyframe' | 'video',
+    type:
+      | 'character'
+      | 'character-variation'
+      | 'scene'
+      | 'prop'
+      | 'keyframe'
+      | 'video',
     id: string,
     currentValue: string,
     variationId?: string,
     shotId?: string
   ) => {
-    setEditingPrompt({ type, id, value: currentValue, variationId, shotId });
-  };
+    setEditingPrompt({ type, id, value: currentValue, variationId, shotId })
+  }
 
   const handleSaveEdit = () => {
-    if (!editingPrompt) return;
+    if (!editingPrompt) return
 
-    updateProject((prev: ProjectState) => savePromptEdit(prev, editingPrompt));
-    setEditingPrompt(null);
-  };
+    updateProject((prev: ProjectState) => savePromptEdit(prev, editingPrompt))
+    setEditingPrompt(null)
+  }
 
   const handleCancelEdit = () => {
-    setEditingPrompt(null);
-  };
+    setEditingPrompt(null)
+  }
 
   const handlePromptChange = (value: string) => {
     if (editingPrompt) {
-      setEditingPrompt({ ...editingPrompt, value });
+      setEditingPrompt({ ...editingPrompt, value })
     }
-  };
+  }
 
-  const editingVersions: PromptVersion[] = getPromptVersionsForEdit(project, editingPrompt);
+  const editingVersions: PromptVersion[] = getPromptVersionsForEdit(
+    project,
+    editingPrompt
+  )
 
   const handleRollbackVersion = (versionId: string) => {
-    if (!editingPrompt) return;
+    if (!editingPrompt) return
     const { project: nextProject, restoredPrompt } = rollbackPromptEdit(
       project,
       {
         type: editingPrompt.type,
         id: editingPrompt.id,
         variationId: editingPrompt.variationId,
-        shotId: editingPrompt.shotId,
+        shotId: editingPrompt.shotId
       },
       versionId
-    );
-    if (!restoredPrompt) return;
-    updateProject(nextProject);
-    setEditingPrompt({ ...editingPrompt, value: restoredPrompt });
-  };
+    )
+    if (!restoredPrompt) return
+    updateProject(nextProject)
+    setEditingPrompt({ ...editingPrompt, value: restoredPrompt })
+  }
 
   const setAllSectionsExpanded = (expanded: boolean) => {
-    setExpandedSections(expanded ? new Set<SectionKey>(SECTION_KEYS) : new Set<SectionKey>());
-  };
+    setExpandedSections(
+      expanded ? new Set<SectionKey>(SECTION_KEYS) : new Set<SectionKey>()
+    )
+  }
 
   // Search first, then apply category filter
   const searchedTemplateFields = useMemo(
     () => searchPromptTemplateFields(templateConfig, searchQuery),
     [templateConfig, searchQuery]
-  );
-  const searchedCharacters = filterCharacters(project.scriptData?.characters || [], searchQuery);
-  const searchedScenes = filterScenes(project.scriptData?.scenes || [], searchQuery);
-  const searchedProps = filterProps(project.scriptData?.props || [], searchQuery);
-  const searchedShots = filterShots(project.shots || [], searchQuery);
+  )
+  const searchedCharacters = filterCharacters(
+    project.scriptData?.characters || [],
+    searchQuery
+  )
+  const searchedScenes = filterScenes(
+    project.scriptData?.scenes || [],
+    searchQuery
+  )
+  const searchedProps = filterProps(
+    project.scriptData?.props || [],
+    searchQuery
+  )
+  const searchedShots = filterShots(project.shots || [], searchQuery)
 
-  const filteredTemplateFields = category === 'all' || category === 'templates'
-    ? searchedTemplateFields
-    : [];
+  const filteredTemplateFields =
+    category === 'all' || category === 'templates' ? searchedTemplateFields : []
 
-  const filteredCharacters = category === 'all' || category === 'characters'
-    ? searchedCharacters
-    : [];
+  const filteredCharacters =
+    category === 'all' || category === 'characters' ? searchedCharacters : []
 
-  const filteredScenes = category === 'all' || category === 'scenes'
-    ? searchedScenes
-    : [];
+  const filteredScenes =
+    category === 'all' || category === 'scenes' ? searchedScenes : []
 
-  const filteredProps = category === 'all' || category === 'props'
-    ? searchedProps
-    : [];
+  const filteredProps =
+    category === 'all' || category === 'props' ? searchedProps : []
 
-  const filteredShots = category === 'all' || category === 'keyframes'
-    ? searchedShots
-    : [];
+  const filteredShots =
+    category === 'all' || category === 'keyframes' ? searchedShots : []
 
-  const totalCharacters = project.scriptData?.characters.length || 0;
-  const totalScenes = project.scriptData?.scenes.length || 0;
-  const totalProps = project.scriptData?.props.length || 0;
-  const totalShots = project.shots.length || 0;
-  const totalTemplates = searchPromptTemplateFields(templateConfig, '').length;
-  const totalItems = totalTemplates + totalCharacters + totalScenes + totalProps + totalShots;
+  const totalCharacters = project.scriptData?.characters.length || 0
+  const totalScenes = project.scriptData?.scenes.length || 0
+  const totalProps = project.scriptData?.props.length || 0
+  const totalShots = project.shots.length || 0
+  const totalTemplates = searchPromptTemplateFields(templateConfig, '').length
+  const totalItems =
+    totalTemplates + totalCharacters + totalScenes + totalProps + totalShots
   const visibleItems =
     filteredTemplateFields.length +
     filteredCharacters.length +
     filteredScenes.length +
     filteredProps.length +
-    filteredShots.length;
-  const hasNoData = totalItems === 0;
-  const hasFilteredResults = visibleItems > 0;
+    filteredShots.length
+  const hasNoData = totalItems === 0
+  const hasFilteredResults = visibleItems > 0
 
   const sectionSummary = [
     {
@@ -164,7 +196,7 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
       label: '模板',
       icon: <SlidersHorizontal className="w-4 h-4" />,
       total: totalTemplates,
-      filtered: searchedTemplateFields.length,
+      filtered: searchedTemplateFields.length
     },
     {
       key: 'characters' as const,
@@ -198,27 +230,34 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
       total: totalShots,
       filtered: searchedShots.length
     }
-  ];
+  ]
 
-  const categoryOptions: PromptCategory[] = ['all', 'templates', 'characters', 'scenes', 'props', 'keyframes'];
+  const categoryOptions: PromptCategory[] = [
+    'all',
+    'templates',
+    'characters',
+    'scenes',
+    'props',
+    'keyframes'
+  ]
   const editingCategoryLabel = editingPrompt
     ? (() => {
         switch (editingPrompt.type) {
           case 'character':
           case 'character-variation':
-            return CATEGORY_LABELS.characters;
+            return CATEGORY_LABELS.characters
           case 'scene':
-            return CATEGORY_LABELS.scenes;
+            return CATEGORY_LABELS.scenes
           case 'prop':
-            return CATEGORY_LABELS.props;
+            return CATEGORY_LABELS.props
           case 'keyframe':
           case 'video':
-            return CATEGORY_LABELS.keyframes;
+            return CATEGORY_LABELS.keyframes
           default:
-            return CATEGORY_LABELS.all;
+            return CATEGORY_LABELS.all
         }
       })()
-    : null;
+    : null
 
   return (
     <div className="h-full bg-[var(--bg-secondary)] flex flex-col">
@@ -227,8 +266,12 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-1">提示词管理</h1>
-              <p className="text-sm text-[var(--text-tertiary)]">集中查看、检索并编辑角色/场景/道具/关键帧的提示词</p>
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-1">
+                提示词管理
+              </h1>
+              <p className="text-sm text-[var(--text-tertiary)]">
+                集中查看、检索并编辑角色/场景/道具/关键帧的提示词
+              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="text-xs px-3 py-1.5 rounded-full bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[var(--text-secondary)] font-mono">
@@ -247,7 +290,7 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {sectionSummary.map((item) => {
-              const isActive = category === 'all' || category === item.category;
+              const isActive = category === 'all' || category === item.category
               return (
                 <button
                   key={item.key}
@@ -267,7 +310,7 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
                     {item.filtered} / {item.total}
                   </div>
                 </button>
-              );
+              )
             })}
           </div>
 
@@ -338,10 +381,16 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
             <TemplateSection
               templateConfig={templateConfig}
               templateOverrides={project.promptTemplateOverrides}
-              visiblePaths={new Set<PromptTemplatePath>(filteredTemplateFields.map((field) => field.path))}
+              visiblePaths={
+                new Set<PromptTemplatePath>(
+                  filteredTemplateFields.map((field) => field.path)
+                )
+              }
               isExpanded={expandedSections.has('templates')}
               onToggle={() => toggleSection('templates')}
-              onUpdateOverrides={(nextOverrides) => updateProject({ promptTemplateOverrides: nextOverrides })}
+              onUpdateOverrides={(nextOverrides) =>
+                updateProject({ promptTemplateOverrides: nextOverrides })
+              }
             />
           )}
 
@@ -407,7 +456,9 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
           {/* No Filter Results */}
           {!hasNoData && !hasFilteredResults && (
             <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] p-8 text-center">
-              <p className="text-base text-[var(--text-secondary)] mb-2">当前筛选条件下没有可显示的提示词</p>
+              <p className="text-base text-[var(--text-secondary)] mb-2">
+                当前筛选条件下没有可显示的提示词
+              </p>
               <p className="text-sm text-[var(--text-tertiary)] mb-4">
                 你可以调整分类或清空搜索关键字后重试
               </p>
@@ -440,14 +491,16 @@ const StagePrompts: React.FC<Props> = ({ project, updateProject }) => {
               <div className="text-[var(--text-muted)] mb-4">
                 <Film className="w-16 h-16 mx-auto mb-4 opacity-50" />
                 <p className="text-lg">暂无提示词数据</p>
-                <p className="text-sm mt-2">请先在剧本阶段生成角色和场景，或在导演工作台生成分镜</p>
+                <p className="text-sm mt-2">
+                  请先在剧本阶段生成角色和场景，或在导演工作台生成分镜
+                </p>
               </div>
             </div>
           )}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default StagePrompts;
+export default StagePrompts

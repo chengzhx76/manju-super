@@ -1,25 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Video, Loader2, Edit2 } from 'lucide-react';
-import { Shot, AspectRatio, VideoDuration } from '../../types';
-import { VideoSettingsPanel } from '../AspectRatioSelector';
-import { resolveVideoModelRouting } from './utils';
+import React, { useState, useEffect } from 'react'
+import { Video, Loader2, Edit2 } from 'lucide-react'
+import { Shot, AspectRatio, VideoDuration } from '../../types'
+import { VideoSettingsPanel } from '../AspectRatioSelector'
+import { resolveVideoModelRouting } from './utils'
 import {
   getDefaultAspectRatio,
   getDefaultVideoDuration,
   getVideoModels,
   getActiveVideoModel,
-  getProviderById,
-} from '../../services/modelRegistry';
-import { VideoModelDefinition } from '../../types/model';
-import { useResolvedVideoUrl } from '../../hooks/useResolvedVideoUrl';
+  getProviderById
+} from '../../services/modelRegistry'
+import { VideoModelDefinition } from '../../types/model'
+import { useResolvedVideoUrl } from '../../hooks/useResolvedVideoUrl'
 
 interface VideoGeneratorProps {
-  shot: Shot;
-  hasStartFrame: boolean;
-  hasEndFrame: boolean;
-  onGenerate: (aspectRatio: AspectRatio, duration: VideoDuration, modelId: string) => void;
-  onEditPrompt: () => void;
-  onModelChange?: (modelId: string) => void;
+  shot: Shot
+  hasStartFrame: boolean
+  hasEndFrame: boolean
+  onGenerate: (
+    aspectRatio: AspectRatio,
+    duration: VideoDuration,
+    modelId: string
+  ) => void
+  onEditPrompt: () => void
+  onModelChange?: (modelId: string) => void
 }
 
 const VideoGenerator: React.FC<VideoGeneratorProps> = ({
@@ -28,56 +32,72 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   hasEndFrame,
   onGenerate,
   onEditPrompt,
-  onModelChange,
+  onModelChange
 }) => {
   const normalizeModelId = (modelId?: string) => {
-    if (!modelId) return modelId;
-    const normalized = modelId.toLowerCase();
-    if (normalized === 'veo_3_1-fast-4k') return 'veo_3_1-fast';
+    if (!modelId) return modelId
+    const normalized = modelId.toLowerCase()
+    if (normalized === 'veo_3_1-fast-4k') return 'veo_3_1-fast'
     if (
       normalized === 'veo' ||
       normalized === 'veo-r2v' ||
       normalized === 'veo_3_1' ||
       normalized.startsWith('veo_3_0_r2v')
     ) {
-      return 'veo_3_1-fast';
+      return 'veo_3_1-fast'
     }
-    return modelId;
-  };
+    return modelId
+  }
 
   const resolveVeoFastQuality = (modelId?: string): 'standard' | '4k' => {
-    if (!modelId) return 'standard';
-    return modelId.toLowerCase() === 'veo_3_1-fast-4k' ? '4k' : 'standard';
-  };
+    if (!modelId) return 'standard'
+    return modelId.toLowerCase() === 'veo_3_1-fast-4k' ? '4k' : 'standard'
+  }
 
-  const videoModels = getVideoModels().filter((m) => m.isEnabled);
-  const defaultModel = getActiveVideoModel();
+  const videoModels = getVideoModels().filter((m) => m.isEnabled)
+  const defaultModel = getActiveVideoModel()
 
   const [selectedModelId, setSelectedModelId] = useState<string>(
-    normalizeModelId(shot.videoModel) || defaultModel?.id || videoModels[0]?.id || 'sora-2'
-  );
+    normalizeModelId(shot.videoModel) ||
+      defaultModel?.id ||
+      videoModels[0]?.id ||
+      'sora-2'
+  )
   const [veoFastQuality, setVeoFastQuality] = useState<'standard' | '4k'>(
     resolveVeoFastQuality(shot.videoModel)
-  );
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(() => getDefaultAspectRatio());
-  const [duration, setDuration] = useState<VideoDuration>(() => getDefaultVideoDuration());
+  )
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(() =>
+    getDefaultAspectRatio()
+  )
+  const [duration, setDuration] = useState<VideoDuration>(() =>
+    getDefaultVideoDuration()
+  )
 
-  const selectedModel = videoModels.find((m) => m.id === selectedModelId) as VideoModelDefinition | undefined;
-  const selectedProvider = selectedModel ? getProviderById(selectedModel.providerId) : undefined;
-  const requiresDedicatedApiKey = selectedModel?.providerId === 'volcengine';
+  const selectedModel = videoModels.find((m) => m.id === selectedModelId) as
+    | VideoModelDefinition
+    | undefined
+  const selectedProvider = selectedModel
+    ? getProviderById(selectedModel.providerId)
+    : undefined
+  const requiresDedicatedApiKey = selectedModel?.providerId === 'volcengine'
   const hasDedicatedApiKey = Boolean(
     (selectedModel?.apiKey && selectedModel.apiKey.trim()) ||
-      (selectedProvider?.apiKey && selectedProvider.apiKey.trim())
-  );
-  const isMissingVolcengineApiKey = Boolean(requiresDedicatedApiKey && !hasDedicatedApiKey);
-  const modelType: 'sora' | 'veo' = selectedModel?.params.mode === 'async' ? 'sora' : 'veo';
+    (selectedProvider?.apiKey && selectedProvider.apiKey.trim())
+  )
+  const isMissingVolcengineApiKey = Boolean(
+    requiresDedicatedApiKey && !hasDedicatedApiKey
+  )
+  const modelType: 'sora' | 'veo' =
+    selectedModel?.params.mode === 'async' ? 'sora' : 'veo'
   const effectiveModelId =
     selectedModelId === 'veo_3_1-fast'
       ? veoFastQuality === '4k'
         ? 'veo_3_1-fast-4K'
         : 'veo_3_1-fast'
-      : selectedModelId;
-  const modelRouting = resolveVideoModelRouting(effectiveModelId || selectedModelId || 'sora-2');
+      : selectedModelId
+  const modelRouting = resolveVideoModelRouting(
+    effectiveModelId || selectedModelId || 'sora-2'
+  )
   const routingLabel =
     modelRouting.family === 'sora'
       ? 'Sora'
@@ -85,53 +105,53 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         ? 'Doubao Task'
         : modelRouting.family === 'veo-fast'
           ? 'Veo Fast'
-          : 'Unknown';
+          : 'Unknown'
 
   const getRecommendedModeLabel = (modelId: string): string => {
-    const routing = resolveVideoModelRouting(modelId);
+    const routing = resolveVideoModelRouting(modelId)
     if (routing.family === 'sora' || routing.family === 'doubao-task') {
-      return '推荐网格分镜';
+      return '推荐网格分镜'
     }
     if (routing.family === 'veo-fast') {
-      return '网格/首尾帧';
+      return '网格/首尾帧'
     }
-    return '按镜头选择';
-  };
+    return '按镜头选择'
+  }
 
-  const isGenerating = shot.interval?.status === 'generating';
-  const hasVideo = !!shot.interval?.videoUrl;
-  const resolvedVideoSrc = useResolvedVideoUrl(shot.interval?.videoUrl);
+  const isGenerating = shot.interval?.status === 'generating'
+  const hasVideo = !!shot.interval?.videoUrl
+  const resolvedVideoSrc = useResolvedVideoUrl(shot.interval?.videoUrl)
 
   useEffect(() => {
-    if (!selectedModel) return;
+    if (!selectedModel) return
 
     if (!selectedModel.params.supportedAspectRatios.includes(aspectRatio)) {
-      setAspectRatio(selectedModel.params.defaultAspectRatio);
+      setAspectRatio(selectedModel.params.defaultAspectRatio)
     }
     if (!selectedModel.params.supportedDurations.includes(duration)) {
-      setDuration(selectedModel.params.defaultDuration);
+      setDuration(selectedModel.params.defaultDuration)
     }
-  }, [selectedModelId]);
+  }, [selectedModelId])
 
   useEffect(() => {
-    if (!shot.videoModel) return;
-    setSelectedModelId(normalizeModelId(shot.videoModel));
-    setVeoFastQuality(resolveVeoFastQuality(shot.videoModel));
-  }, [shot.videoModel]);
+    if (!shot.videoModel) return
+    setSelectedModelId(normalizeModelId(shot.videoModel))
+    setVeoFastQuality(resolveVeoFastQuality(shot.videoModel))
+  }, [shot.videoModel])
 
   const handleGenerate = () => {
-    onGenerate(aspectRatio, duration, effectiveModelId);
-  };
+    onGenerate(aspectRatio, duration, effectiveModelId)
+  }
 
   const handleVeoFastQualityChange = (quality: 'standard' | '4k') => {
-    setVeoFastQuality(quality);
+    setVeoFastQuality(quality)
     if (selectedModelId === 'veo_3_1-fast') {
-      const modelId = quality === '4k' ? 'veo_3_1-fast-4K' : 'veo_3_1-fast';
-      onModelChange?.(modelId);
+      const modelId = quality === '4k' ? 'veo_3_1-fast-4K' : 'veo_3_1-fast'
+      onModelChange?.(modelId)
     }
-  };
+  }
 
-  const canGenerate = hasStartFrame && !isMissingVolcengineApiKey;
+  const canGenerate = hasStartFrame && !isMissingVolcengineApiKey
 
   return (
     <div className="bg-[var(--bg-surface)] rounded-xl p-5 border border-[var(--border-primary)] space-y-4">
@@ -148,7 +168,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
           </button>
         </h4>
         {shot.interval?.status === 'completed' && (
-          <span className="text-[10px] text-[var(--success)] font-mono flex items-center gap-1">● READY</span>
+          <span className="text-[10px] text-[var(--success)] font-mono flex items-center gap-1">
+            ● READY
+          </span>
         )}
       </div>
 
@@ -159,28 +181,28 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         <select
           value={selectedModelId}
           onChange={(e) => {
-            const newModelId = e.target.value;
-            setSelectedModelId(newModelId);
+            const newModelId = e.target.value
+            setSelectedModelId(newModelId)
             const resolvedModelId =
               newModelId === 'veo_3_1-fast'
                 ? veoFastQuality === '4k'
                   ? 'veo_3_1-fast-4K'
                   : 'veo_3_1-fast'
-                : newModelId;
-            onModelChange?.(resolvedModelId);
+                : newModelId
+            onModelChange?.(resolvedModelId)
           }}
           className="w-full bg-[var(--bg-base)] text-[var(--text-primary)] border border-[var(--border-secondary)] rounded-lg px-3 py-2 text-xs outline-none focus:border-[var(--accent)] transition-colors"
           disabled={isGenerating}
         >
           {videoModels.map((model) => {
-            const vm = model as VideoModelDefinition;
-            const modeLabel = vm.params.mode === 'async' ? '异步' : '同步';
-            const recommendationLabel = getRecommendedModeLabel(model.id);
+            const vm = model as VideoModelDefinition
+            const modeLabel = vm.params.mode === 'async' ? '异步' : '同步'
+            const recommendationLabel = getRecommendedModeLabel(model.id)
             return (
               <option key={model.id} value={model.id}>
                 {model.name}（{modeLabel} · {recommendationLabel}）
               </option>
-            );
+            )
           })}
         </select>
         {selectedModel && (
@@ -194,32 +216,49 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         )}
         {isMissingVolcengineApiKey && (
           <div className="rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-2">
-            <p className="text-[10px] text-[var(--error-text)] font-bold">当前模型需要火山引擎专用 API Key</p>
+            <p className="text-[10px] text-[var(--error-text)] font-bold">
+              当前模型需要火山引擎专用 API Key
+            </p>
             <p className="text-[9px] text-[var(--error-text)]/90 mt-1">
-              未检测到该模型或 Volcengine 提供商的 Key。此模型不会使用 AntSK 全局 Key，请先到模型配置里设置后再生成。
+              未检测到该模型或 Volcengine 提供商的 Key。此模型不会使用 AntSK
+              全局 Key，请先到模型配置里设置后再生成。
             </p>
           </div>
         )}
         <div className="bg-[var(--bg-base)] border border-[var(--border-secondary)] rounded-lg p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">模型能力卡</span>
-            <span className="text-[10px] font-mono text-[var(--text-secondary)]">{routingLabel}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--text-tertiary)]">
+              模型能力卡
+            </span>
+            <span className="text-[10px] font-mono text-[var(--text-secondary)]">
+              {routingLabel}
+            </span>
           </div>
           {[
-            { key: 'start-only', label: '首帧支持', enabled: modelRouting.supportsStartFrame },
+            {
+              key: 'start-only',
+              label: '首帧支持',
+              enabled: modelRouting.supportsStartFrame
+            },
             {
               key: 'start-end',
               label: '首尾帧支持',
-              enabled: modelRouting.supportsStartFrame && modelRouting.supportsEndFrame,
+              enabled:
+                modelRouting.supportsStartFrame && modelRouting.supportsEndFrame
             },
             {
               key: 'nine-grid-priority',
               label: '九宫格优先',
-              enabled: modelRouting.prefersNineGridStoryboard,
-            },
+              enabled: modelRouting.prefersNineGridStoryboard
+            }
           ].map((capability) => (
-            <div key={capability.key} className="flex items-center justify-between text-[10px]">
-              <span className="text-[var(--text-secondary)]">{capability.label}</span>
+            <div
+              key={capability.key}
+              className="flex items-center justify-between text-[10px]"
+            >
+              <span className="text-[var(--text-secondary)]">
+                {capability.label}
+              </span>
               <span
                 className={`px-2 py-0.5 rounded border font-mono ${
                   capability.enabled
@@ -239,7 +278,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         </div>
         {selectedModelId === 'veo_3_1-fast' && (
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[var(--text-tertiary)] uppercase">清晰度</span>
+            <span className="text-[10px] text-[var(--text-tertiary)] uppercase">
+              清晰度
+            </span>
             <div className="flex gap-1">
               <button
                 onClick={() => handleVeoFastQualityChange('standard')}
@@ -277,7 +318,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
       </div>
 
       <div className="space-y-2">
-        <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest block">视频设置</label>
+        <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest block">
+          视频设置
+        </label>
         <VideoSettingsPanel
           aspectRatio={aspectRatio}
           onAspectRatioChange={setAspectRatio}
@@ -296,7 +339,9 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         </div>
       ) : (
         <div className="w-full aspect-video bg-[var(--nav-hover-bg)] rounded-lg border border-dashed border-[var(--border-primary)] flex items-center justify-center">
-          <span className="text-xs text-[var(--text-muted)] font-mono">PREVIEW AREA</span>
+          <span className="text-xs text-[var(--text-muted)] font-mono">
+            PREVIEW AREA
+          </span>
         </div>
       )}
 
@@ -330,7 +375,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default VideoGenerator;
+export default VideoGenerator

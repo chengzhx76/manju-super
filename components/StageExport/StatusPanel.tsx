@@ -1,27 +1,31 @@
-import React from 'react';
-import { Film, CheckCircle, BarChart3 } from 'lucide-react';
-import { ProjectState } from '../../types';
-import { STYLES } from './constants';
+import React from 'react'
+import { Film, CheckCircle, BarChart3 } from 'lucide-react'
+import { ProjectState } from '../../types'
+import { STYLES } from './constants'
 
 interface Props {
-  project: ProjectState;
-  progress: number;
-  estimatedDuration: number;
+  project: ProjectState
+  progress: number
+  estimatedDuration: number
 }
 
 const formatTargetDuration = (targetDuration?: string): string => {
-  if (!targetDuration) return '--';
+  if (!targetDuration) return '--'
 
-  const normalized = targetDuration.trim();
-  const secondsMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*s$/i);
+  const normalized = targetDuration.trim()
+  const secondsMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*s$/i)
   if (secondsMatch) {
-    return `${secondsMatch[1]}秒`;
+    return `${secondsMatch[1]}秒`
   }
 
-  return normalized;
-};
+  return normalized
+}
 
-const StatusPanel: React.FC<Props> = ({ project, progress, estimatedDuration }) => {
+const StatusPanel: React.FC<Props> = ({
+  project,
+  progress,
+  estimatedDuration
+}) => {
   return (
     <div className={STYLES.statusPanel.container}>
       {/* Background Decoration */}
@@ -41,34 +45,46 @@ const StatusPanel: React.FC<Props> = ({ project, progress, estimatedDuration }) 
           <div className="flex items-center gap-6 mt-3">
             <div className={STYLES.statusPanel.stat}>
               <span className={STYLES.statusPanel.statLabel}>镜头数</span>
-              <span className={STYLES.statusPanel.statValue}>{project.shots.length}</span>
+              <span className={STYLES.statusPanel.statValue}>
+                {project.shots.length}
+              </span>
             </div>
             <div className="w-px h-6 bg-[var(--bg-hover)]"></div>
             <div className={STYLES.statusPanel.stat}>
               <span className={STYLES.statusPanel.statLabel}>预估时长</span>
-              <span className={STYLES.statusPanel.statValue}>约 {estimatedDuration} 秒</span>
+              <span className={STYLES.statusPanel.statValue}>
+                约 {estimatedDuration} 秒
+              </span>
             </div>
             <div className="w-px h-6 bg-[var(--bg-hover)]"></div>
             <div className={STYLES.statusPanel.stat}>
               <span className={STYLES.statusPanel.statLabel}>目标时长</span>
-              <span className={STYLES.statusPanel.statValue}>{formatTargetDuration(project.targetDuration)}</span>
+              <span className={STYLES.statusPanel.statValue}>
+                {formatTargetDuration(project.targetDuration)}
+              </span>
             </div>
           </div>
         </div>
-        
+
         <div className={STYLES.statusPanel.progressBadge}>
           <div className="flex items-baseline justify-end gap-1 mb-1">
-            <span className="text-3xl font-mono font-bold text-[var(--accent-text)]">{progress}</span>
+            <span className="text-3xl font-mono font-bold text-[var(--accent-text)]">
+              {progress}
+            </span>
             <span className="text-sm text-[var(--text-tertiary)]">%</span>
           </div>
           <div className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest flex items-center justify-end gap-2">
-            {progress === 100 ? <CheckCircle className="w-3 h-3 text-[var(--success)]" /> : <BarChart3 className="w-3 h-3" />}
+            {progress === 100 ? (
+              <CheckCircle className="w-3 h-3 text-[var(--success)]" />
+            ) : (
+              <BarChart3 className="w-3 h-3" />
+            )}
             渲染状态
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default StatusPanel;
+export default StatusPanel

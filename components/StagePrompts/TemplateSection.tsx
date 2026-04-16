@@ -1,9 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { SlidersHorizontal, RotateCcw, Pencil } from 'lucide-react';
-import type {
-  PromptTemplateConfig,
-  PromptTemplateOverrides,
-} from '../../types';
+import React, { useMemo, useState } from 'react'
+import { SlidersHorizontal, RotateCcw, Pencil } from 'lucide-react'
+import type { PromptTemplateConfig, PromptTemplateOverrides } from '../../types'
 import {
   getDefaultPromptTemplateValue,
   getPromptTemplateCategoryLabel,
@@ -14,20 +11,25 @@ import {
   PromptTemplatePath,
   removePromptTemplateOverride,
   sanitizePromptTemplateOverrides,
-  setPromptTemplateOverride,
-} from '../../services/promptTemplateService';
-import CollapsibleSection from './CollapsibleSection';
+  setPromptTemplateOverride
+} from '../../services/promptTemplateService'
+import CollapsibleSection from './CollapsibleSection'
 
 interface Props {
-  templateConfig: PromptTemplateConfig;
-  templateOverrides?: PromptTemplateOverrides;
-  visiblePaths: Set<PromptTemplatePath>;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onUpdateOverrides: (overrides?: PromptTemplateOverrides) => void;
+  templateConfig: PromptTemplateConfig
+  templateOverrides?: PromptTemplateOverrides
+  visiblePaths: Set<PromptTemplatePath>
+  isExpanded: boolean
+  onToggle: () => void
+  onUpdateOverrides: (overrides?: PromptTemplateOverrides) => void
 }
 
-const CATEGORY_ORDER: PromptTemplateCategory[] = ['storyboard', 'keyframe', 'nineGrid', 'video'];
+const CATEGORY_ORDER: PromptTemplateCategory[] = [
+  'storyboard',
+  'keyframe',
+  'nineGrid',
+  'video'
+]
 
 const TemplateSection: React.FC<Props> = ({
   templateConfig,
@@ -35,59 +37,65 @@ const TemplateSection: React.FC<Props> = ({
   visiblePaths,
   isExpanded,
   onToggle,
-  onUpdateOverrides,
+  onUpdateOverrides
 }) => {
-  const [editingPath, setEditingPath] = useState<PromptTemplatePath | null>(null);
-  const [draftValue, setDraftValue] = useState('');
+  const [editingPath, setEditingPath] = useState<PromptTemplatePath | null>(
+    null
+  )
+  const [draftValue, setDraftValue] = useState('')
 
   const filteredFields = useMemo(
-    () => PROMPT_TEMPLATE_FIELD_DEFINITIONS.filter((field) => visiblePaths.has(field.path)),
+    () =>
+      PROMPT_TEMPLATE_FIELD_DEFINITIONS.filter((field) =>
+        visiblePaths.has(field.path)
+      ),
     [visiblePaths]
-  );
+  )
 
   const groupedFields = useMemo(
     () =>
       CATEGORY_ORDER.map((category) => ({
         category,
-        items: filteredFields.filter((field) => field.category === category),
+        items: filteredFields.filter((field) => field.category === category)
       })).filter((group) => group.items.length > 0),
     [filteredFields]
-  );
+  )
 
-  const hasAnyOverride = !!sanitizePromptTemplateOverrides(templateOverrides);
+  const hasAnyOverride = !!sanitizePromptTemplateOverrides(templateOverrides)
 
   const handleStartEdit = (path: PromptTemplatePath) => {
-    setEditingPath(path);
-    setDraftValue(getPromptTemplateValueByPath(templateConfig, path));
-  };
+    setEditingPath(path)
+    setDraftValue(getPromptTemplateValueByPath(templateConfig, path))
+  }
 
   const handleSaveEdit = () => {
-    if (!editingPath) return;
-    const defaultValue = getDefaultPromptTemplateValue(editingPath);
-    const nextOverrides = draftValue === defaultValue
-      ? removePromptTemplateOverride(templateOverrides, editingPath)
-      : setPromptTemplateOverride(templateOverrides, editingPath, draftValue);
-    onUpdateOverrides(nextOverrides);
-    setEditingPath(null);
-    setDraftValue('');
-  };
+    if (!editingPath) return
+    const defaultValue = getDefaultPromptTemplateValue(editingPath)
+    const nextOverrides =
+      draftValue === defaultValue
+        ? removePromptTemplateOverride(templateOverrides, editingPath)
+        : setPromptTemplateOverride(templateOverrides, editingPath, draftValue)
+    onUpdateOverrides(nextOverrides)
+    setEditingPath(null)
+    setDraftValue('')
+  }
 
   const handleCancelEdit = () => {
-    setEditingPath(null);
-    setDraftValue('');
-  };
+    setEditingPath(null)
+    setDraftValue('')
+  }
 
   const handleRestoreOne = (path: PromptTemplatePath) => {
-    onUpdateOverrides(removePromptTemplateOverride(templateOverrides, path));
+    onUpdateOverrides(removePromptTemplateOverride(templateOverrides, path))
     if (editingPath === path) {
-      handleCancelEdit();
+      handleCancelEdit()
     }
-  };
+  }
 
   const handleRestoreAll = () => {
-    onUpdateOverrides(undefined);
-    handleCancelEdit();
-  };
+    onUpdateOverrides(undefined)
+    handleCancelEdit()
+  }
 
   return (
     <CollapsibleSection
@@ -125,9 +133,15 @@ const TemplateSection: React.FC<Props> = ({
           </div>
 
           {group.items.map((field) => {
-            const currentValue = getPromptTemplateValueByPath(templateConfig, field.path);
-            const isOverridden = hasPromptTemplateOverride(templateOverrides, field.path);
-            const isEditing = editingPath === field.path;
+            const currentValue = getPromptTemplateValueByPath(
+              templateConfig,
+              field.path
+            )
+            const isOverridden = hasPromptTemplateOverride(
+              templateOverrides,
+              field.path
+            )
+            const isEditing = editingPath === field.path
 
             return (
               <div
@@ -137,7 +151,9 @@ const TemplateSection: React.FC<Props> = ({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-semibold text-[var(--text-primary)]">{field.title}</h4>
+                      <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+                        {field.title}
+                      </h4>
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded border ${
                           isOverridden
@@ -148,7 +164,9 @@ const TemplateSection: React.FC<Props> = ({
                         {isOverridden ? '自定义' : '默认'}
                       </span>
                     </div>
-                    <p className="text-xs text-[var(--text-tertiary)] mt-1">{field.description}</p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-1">
+                      {field.description}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -177,7 +195,9 @@ const TemplateSection: React.FC<Props> = ({
                         key={placeholder}
                         className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-base)] border border-[var(--border-primary)] text-[var(--text-muted)]"
                       >
-                        {'{'}{placeholder}{'}'}
+                        {'{'}
+                        {placeholder}
+                        {'}'}
                       </span>
                     ))}
                   </div>
@@ -213,12 +233,12 @@ const TemplateSection: React.FC<Props> = ({
                   </pre>
                 )}
               </div>
-            );
+            )
           })}
         </div>
       ))}
     </CollapsibleSection>
-  );
-};
+  )
+}
 
-export default TemplateSection;
+export default TemplateSection

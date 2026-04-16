@@ -1,32 +1,48 @@
-import React from 'react';
-import { MapPin, Check, Loader2, Trash2, Edit2, AlertCircle, FolderPlus, Upload, X, Sparkles, Link2 } from 'lucide-react';
-import PromptEditor from './PromptEditor';
-import ImageUploadButton from './ImageUploadButton';
-import InlineEditableText from './InlineEditableText';
+import React from 'react'
+import {
+  MapPin,
+  Check,
+  Loader2,
+  Trash2,
+  Edit2,
+  AlertCircle,
+  FolderPlus,
+  Upload,
+  X,
+  Sparkles,
+  Link2
+} from 'lucide-react'
+import PromptEditor from './PromptEditor'
+import ImageUploadButton from './ImageUploadButton'
+import InlineEditableText from './InlineEditableText'
 
 interface SceneCardProps {
   scene: {
-    id: string;
-    location: string;
-    time: string;
-    atmosphere: string;
-    visualPrompt?: string;
-    referenceImage?: string;
-    status?: 'pending' | 'generating' | 'completed' | 'failed';
-    libraryId?: string;
-  };
-  isGenerating: boolean;
-  shapeReferenceImage?: string;
-  onGenerate: () => void;
-  onUpload: (file: File) => void;
-  onUploadShapeReference: (file: File) => void;
-  onClearShapeReference: () => void;
-  onPromptSave: (newPrompt: string) => void;
-  onImageClick: (imageUrl: string) => void;
-  onDelete: () => void;
-  onUpdateInfo: (updates: { location?: string; time?: string; atmosphere?: string }) => void;
-  onAddToLibrary: () => void;
-  onAddToProjectLibrary?: () => void;
+    id: string
+    location: string
+    time: string
+    atmosphere: string
+    visualPrompt?: string
+    referenceImage?: string
+    status?: 'pending' | 'generating' | 'completed' | 'failed'
+    libraryId?: string
+  }
+  isGenerating: boolean
+  shapeReferenceImage?: string
+  onGenerate: () => void
+  onUpload: (file: File) => void
+  onUploadShapeReference: (file: File) => void
+  onClearShapeReference: () => void
+  onPromptSave: (newPrompt: string) => void
+  onImageClick: (imageUrl: string) => void
+  onDelete: () => void
+  onUpdateInfo: (updates: {
+    location?: string
+    time?: string
+    atmosphere?: string
+  }) => void
+  onAddToLibrary: () => void
+  onAddToProjectLibrary?: () => void
 }
 
 const SceneCard: React.FC<SceneCardProps> = ({
@@ -42,32 +58,44 @@ const SceneCard: React.FC<SceneCardProps> = ({
   onDelete,
   onUpdateInfo,
   onAddToLibrary,
-  onAddToProjectLibrary,
+  onAddToProjectLibrary
 }) => {
-  const handleShapeReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    onUploadShapeReference(file);
-    e.target.value = '';
-  };
+  const handleShapeReferenceChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onUploadShapeReference(file)
+    e.target.value = ''
+  }
 
-  const isLinked = !!scene.libraryId;
+  const isLinked = !!scene.libraryId
 
   return (
-    <div className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}>
+    <div
+      className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}
+    >
       {isLinked && (
         <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
           <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
-          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">项目场景</span>
+          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
+            项目场景
+          </span>
         </div>
       )}
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
-        onClick={() => scene.referenceImage && onImageClick(scene.referenceImage)}
+        onClick={() =>
+          scene.referenceImage && onImageClick(scene.referenceImage)
+        }
       >
         {scene.referenceImage ? (
           <>
-            <img src={scene.referenceImage} alt={scene.location} className="w-full h-full object-cover" />
+            <img
+              src={scene.referenceImage}
+              alt={scene.location}
+              className="w-full h-full object-cover"
+            />
             <div className="absolute top-2 right-2 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg backdrop-blur">
               <Check className="w-3 h-3" />
             </div>
@@ -77,12 +105,16 @@ const SceneCard: React.FC<SceneCardProps> = ({
             {isGenerating ? (
               <>
                 <Loader2 className="w-10 h-10 mb-3 animate-spin text-[var(--accent)]" />
-                <span className="text-[10px] text-[var(--text-tertiary)]">生成中...</span>
+                <span className="text-[10px] text-[var(--text-tertiary)]">
+                  生成中...
+                </span>
               </>
             ) : scene.status === 'failed' ? (
               <>
                 <AlertCircle className="w-10 h-10 mb-3 text-[var(--error)]" />
-                <span className="text-[10px] text-[var(--error)] mb-2">生成失败</span>
+                <span className="text-[10px] text-[var(--error)] mb-2">
+                  生成失败
+                </span>
                 <ImageUploadButton
                   variant="inline"
                   size="small"
@@ -119,7 +151,12 @@ const SceneCard: React.FC<SceneCardProps> = ({
             inputClassName="font-bold text-[var(--text-secondary)] text-sm bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-2 py-1 flex-1 min-w-0 focus:outline-none focus:border-[var(--accent)]"
             renderDisplay={(value, startEdit) => (
               <div className="flex items-center gap-2 flex-1 min-w-0 group/location">
-                <h3 className="font-bold text-[var(--text-secondary)] text-sm truncate" title={value}>{value}</h3>
+                <h3
+                  className="font-bold text-[var(--text-secondary)] text-sm truncate"
+                  title={value}
+                >
+                  {value}
+                </h3>
                 <button
                   onClick={startEdit}
                   className="opacity-0 group-hover/location:opacity-100 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-opacity flex-shrink-0"
@@ -187,10 +224,10 @@ const SceneCard: React.FC<SceneCardProps> = ({
                 accept="image/*"
                 className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
+                  const file = e.target.files?.[0]
                   if (file) {
-                    onUpload(file);
-                    e.target.value = '';
+                    onUpload(file)
+                    e.target.value = ''
                   }
                 }}
               />
@@ -212,7 +249,9 @@ const SceneCard: React.FC<SceneCardProps> = ({
         {/* Scene Prompt Section */}
         <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">场景参考图</span>
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">
+              场景参考图
+            </span>
             {shapeReferenceImage && (
               <button
                 onClick={onClearShapeReference}
@@ -235,15 +274,23 @@ const SceneCard: React.FC<SceneCardProps> = ({
                 onChange={handleShapeReferenceChange}
               />
             </label>
-            <span className="text-[9px] text-[var(--text-muted)]">仅参考场景构图，风格遵循剧本</span>
+            <span className="text-[9px] text-[var(--text-muted)]">
+              仅参考场景构图，风格遵循剧本
+            </span>
           </div>
           {shapeReferenceImage && (
             <button
               onClick={() => onImageClick(shapeReferenceImage)}
               className="mt-2 w-full flex items-center gap-2 p-2 rounded border border-[var(--border-primary)] hover:border-[var(--border-secondary)] transition-colors text-left"
             >
-              <img src={shapeReferenceImage} alt="场景参考图" className="w-10 h-10 rounded object-cover" />
-              <span className="text-[10px] text-[var(--text-secondary)]">已设置场景参考图，下次生成将生效</span>
+              <img
+                src={shapeReferenceImage}
+                alt="场景参考图"
+                className="w-10 h-10 rounded object-cover"
+              />
+              <span className="text-[10px] text-[var(--text-secondary)]">
+                已设置场景参考图，下次生成将生效
+              </span>
             </button>
           )}
         </div>
@@ -279,7 +326,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default SceneCard;
+export default SceneCard

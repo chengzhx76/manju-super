@@ -1,25 +1,31 @@
-import React from 'react';
-import { Film } from 'lucide-react';
-import { Shot, ScriptData, PromptVersion } from '../../types';
-import { EditingPrompt, STYLES } from './constants';
-import { getDefaultVideoPrompt } from './utils';
-import CollapsibleSection from './CollapsibleSection';
-import PromptEditor from './PromptEditor';
-import StatusBadge from './StatusBadge';
-import { findSceneByIdCompat } from '../../services/storyboardIdUtils';
+import React from 'react'
+import { Film } from 'lucide-react'
+import { Shot, ScriptData, PromptVersion } from '../../types'
+import { EditingPrompt, STYLES } from './constants'
+import { getDefaultVideoPrompt } from './utils'
+import CollapsibleSection from './CollapsibleSection'
+import PromptEditor from './PromptEditor'
+import StatusBadge from './StatusBadge'
+import { findSceneByIdCompat } from '../../services/storyboardIdUtils'
 
 interface Props {
-  shots: Shot[];
-  scriptData?: ScriptData;
-  isExpanded: boolean;
-  onToggle: () => void;
-  editingPrompt: EditingPrompt;
-  editingVersions: PromptVersion[];
-  onStartEdit: (type: 'keyframe' | 'video', id: string, value: string, variationId: undefined, shotId: string) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  onPromptChange: (value: string) => void;
-  onRollbackVersion: (versionId: string) => void;
+  shots: Shot[]
+  scriptData?: ScriptData
+  isExpanded: boolean
+  onToggle: () => void
+  editingPrompt: EditingPrompt
+  editingVersions: PromptVersion[]
+  onStartEdit: (
+    type: 'keyframe' | 'video',
+    id: string,
+    value: string,
+    variationId: undefined,
+    shotId: string
+  ) => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  onPromptChange: (value: string) => void
+  onRollbackVersion: (versionId: string) => void
 }
 
 const KeyframeSection: React.FC<Props> = ({
@@ -35,7 +41,7 @@ const KeyframeSection: React.FC<Props> = ({
   onPromptChange,
   onRollbackVersion
 }) => {
-  if (shots.length === 0) return null;
+  if (shots.length === 0) return null
 
   return (
     <CollapsibleSection
@@ -46,7 +52,7 @@ const KeyframeSection: React.FC<Props> = ({
       onToggle={onToggle}
     >
       {shots.map((shot, shotIndex) => {
-        const scene = findSceneByIdCompat(scriptData?.scenes, shot.sceneId);
+        const scene = findSceneByIdCompat(scriptData?.scenes, shot.sceneId)
         return (
           <div key={shot.id} className={STYLES.card.base}>
             <div className="mb-3">
@@ -60,7 +66,9 @@ const KeyframeSection: React.FC<Props> = ({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-[var(--text-tertiary)]">{shot.actionSummary}</p>
+              <p className="text-sm text-[var(--text-tertiary)]">
+                {shot.actionSummary}
+              </p>
               <p className="text-xs text-[var(--text-muted)] mt-1">
                 {shot.cameraMovement} · {shot.shotSize || '标准镜头'}
               </p>
@@ -71,26 +79,36 @@ const KeyframeSection: React.FC<Props> = ({
                 <div key={keyframe.id} className={STYLES.card.nested}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className={
-                        keyframe.type === 'start' 
-                          ? STYLES.badge.keyframeStart 
-                          : STYLES.badge.keyframeEnd
-                      }>
+                      <span
+                        className={
+                          keyframe.type === 'start'
+                            ? STYLES.badge.keyframeStart
+                            : STYLES.badge.keyframeEnd
+                        }
+                      >
                         {keyframe.type === 'start' ? '起始帧' : '结束帧'}
                       </span>
                       <StatusBadge status={keyframe.status || 'idle'} />
                     </div>
                     <button
-                      onClick={() => onStartEdit('keyframe', keyframe.id, keyframe.visualPrompt, undefined, shot.id)}
+                      onClick={() =>
+                        onStartEdit(
+                          'keyframe',
+                          keyframe.id,
+                          keyframe.visualPrompt,
+                          undefined,
+                          shot.id
+                        )
+                      }
                       className={STYLES.button.editSmall}
                     >
                       编辑
                     </button>
                   </div>
 
-                  {editingPrompt?.type === 'keyframe' && 
-                   editingPrompt.id === keyframe.id && 
-                   editingPrompt.shotId === shot.id ? (
+                  {editingPrompt?.type === 'keyframe' &&
+                  editingPrompt.id === keyframe.id &&
+                  editingPrompt.shotId === shot.id ? (
                     <PromptEditor
                       value={editingPrompt.value}
                       onChange={onPromptChange}
@@ -108,8 +126,8 @@ const KeyframeSection: React.FC<Props> = ({
 
                   {keyframe.imageUrl && (
                     <div className="mt-2 rounded overflow-hidden border border-[var(--border-primary)]">
-                      <img 
-                        src={keyframe.imageUrl} 
+                      <img
+                        src={keyframe.imageUrl}
                         alt={`关键帧 ${keyframe.type}`}
                         className="w-full h-auto"
                       />
@@ -131,8 +149,16 @@ const KeyframeSection: React.FC<Props> = ({
                       </div>
                       <button
                         onClick={() => {
-                          const defaultPrompt = shot.interval!.videoPrompt || getDefaultVideoPrompt(shot);
-                          onStartEdit('video', shot.interval!.id, defaultPrompt, undefined, shot.id);
+                          const defaultPrompt =
+                            shot.interval!.videoPrompt ||
+                            getDefaultVideoPrompt(shot)
+                          onStartEdit(
+                            'video',
+                            shot.interval!.id,
+                            defaultPrompt,
+                            undefined,
+                            shot.id
+                          )
                         }}
                         className={STYLES.button.editVideo}
                       >
@@ -140,7 +166,8 @@ const KeyframeSection: React.FC<Props> = ({
                       </button>
                     </div>
 
-                    {editingPrompt?.type === 'video' && editingPrompt.shotId === shot.id ? (
+                    {editingPrompt?.type === 'video' &&
+                    editingPrompt.shotId === shot.id ? (
                       <PromptEditor
                         value={editingPrompt.value}
                         onChange={onPromptChange}
@@ -170,10 +197,10 @@ const KeyframeSection: React.FC<Props> = ({
               )}
             </div>
           </div>
-        );
+        )
       })}
     </CollapsibleSection>
-  );
-};
+  )
+}
 
-export default KeyframeSection;
+export default KeyframeSection

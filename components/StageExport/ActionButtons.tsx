@@ -1,20 +1,23 @@
-import React from 'react';
-import { Play, Download, FileVideo, Loader2 } from 'lucide-react';
-import { DownloadState } from './constants';
-import { useAlert } from '../GlobalAlert';
-import { MasterExportMode, MasterVideoQuality } from '../../services/exportService';
+import React from 'react'
+import { Play, Download, FileVideo, Loader2 } from 'lucide-react'
+import { DownloadState } from './constants'
+import { useAlert } from '../GlobalAlert'
+import {
+  MasterExportMode,
+  MasterVideoQuality
+} from '../../services/exportService'
 
 interface Props {
-  completedShotsCount: number;
-  totalShots: number;
-  progress: number;
-  downloadState: DownloadState;
-  exportMode: MasterExportMode;
-  exportQuality: MasterVideoQuality;
-  onExportModeChange: (mode: MasterExportMode) => void;
-  onExportQualityChange: (quality: MasterVideoQuality) => void;
-  onPreview: () => void;
-  onDownloadMaster: () => void;
+  completedShotsCount: number
+  totalShots: number
+  progress: number
+  downloadState: DownloadState
+  exportMode: MasterExportMode
+  exportQuality: MasterVideoQuality
+  onExportModeChange: (mode: MasterExportMode) => void
+  onExportQualityChange: (quality: MasterVideoQuality) => void
+  onPreview: () => void
+  onDownloadMaster: () => void
 }
 
 const ActionButtons: React.FC<Props> = ({
@@ -29,28 +32,39 @@ const ActionButtons: React.FC<Props> = ({
   onPreview,
   onDownloadMaster
 }) => {
-  const { showAlert } = useAlert();
-  const { isDownloading, phase, progress: downloadProgress } = downloadState;
-  const canDownloadMaster = progress === 100;
-  const canDownloadSegments = completedShotsCount > 0;
-  const canDownloadByMode = exportMode === 'segments-zip' ? canDownloadSegments : canDownloadMaster;
+  const { showAlert } = useAlert()
+  const { isDownloading, phase, progress: downloadProgress } = downloadState
+  const canDownloadMaster = progress === 100
+  const canDownloadSegments = completedShotsCount > 0
+  const canDownloadByMode =
+    exportMode === 'segments-zip' ? canDownloadSegments : canDownloadMaster
 
-  const modeLabel = exportMode === 'segments-zip' ? '下载分镜片段 ZIP' : '下载母版视频（WEBM）';
-  const cardBase = 'min-h-[156px] rounded-xl border border-[var(--border-primary)] bg-[var(--bg-surface)] p-4 flex flex-col justify-between shadow-sm';
-  const titleClass = 'text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider';
-  const descClass = 'text-[10px] leading-relaxed text-[var(--text-tertiary)]';
-  const ghostActionClass = 'h-10 rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)] transition-colors text-xs font-semibold flex items-center justify-center gap-2';
-  const disabledActionClass = 'h-10 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-2';
-  const primaryActionClass = 'h-10 rounded-lg border border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-text)] hover:bg-[var(--accent-hover)] transition-colors text-xs font-bold flex items-center justify-center gap-2';
-  const darkActionClass = 'h-10 rounded-lg border border-black/20 bg-black text-white hover:bg-black/90 transition-colors text-xs font-bold flex items-center justify-center gap-2';
-  const loadingActionClass = 'h-10 rounded-lg border border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-text)] cursor-wait text-xs font-bold flex items-center justify-center gap-2';
+  const modeLabel =
+    exportMode === 'segments-zip' ? '下载分镜片段 ZIP' : '下载母版视频（WEBM）'
+  const cardBase =
+    'min-h-[156px] rounded-xl border border-[var(--border-primary)] bg-[var(--bg-surface)] p-4 flex flex-col justify-between shadow-sm'
+  const titleClass =
+    'text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider'
+  const descClass = 'text-[10px] leading-relaxed text-[var(--text-tertiary)]'
+  const ghostActionClass =
+    'h-10 rounded-lg border border-[var(--border-secondary)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-secondary)] hover:text-[var(--text-primary)] transition-colors text-xs font-semibold flex items-center justify-center gap-2'
+  const disabledActionClass =
+    'h-10 rounded-lg border border-[var(--border-primary)] bg-[var(--bg-elevated)] text-[var(--text-muted)] cursor-not-allowed text-xs font-semibold flex items-center justify-center gap-2'
+  const primaryActionClass =
+    'h-10 rounded-lg border border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-text)] hover:bg-[var(--accent-hover)] transition-colors text-xs font-bold flex items-center justify-center gap-2'
+  const darkActionClass =
+    'h-10 rounded-lg border border-black/20 bg-black text-white hover:bg-black/90 transition-colors text-xs font-bold flex items-center justify-center gap-2'
+  const loadingActionClass =
+    'h-10 rounded-lg border border-[var(--accent-border)] bg-[var(--accent)] text-[var(--accent-text)] cursor-wait text-xs font-bold flex items-center justify-center gap-2'
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
       <div className={cardBase}>
         <div className="space-y-1.5">
           <p className={titleClass}>预览校验</p>
-          <p className={descClass}>快速检查镜头顺序与生成完整度，避免导出后再返工。</p>
+          <p className={descClass}>
+            快速检查镜头顺序与生成完整度，避免导出后再返工。
+          </p>
         </div>
         <button
           onClick={onPreview}
@@ -70,7 +84,9 @@ const ActionButtons: React.FC<Props> = ({
           <div className="grid grid-cols-2 gap-2">
             <select
               value={exportMode}
-              onChange={(event) => onExportModeChange(event.target.value as MasterExportMode)}
+              onChange={(event) =>
+                onExportModeChange(event.target.value as MasterExportMode)
+              }
               disabled={isDownloading}
               className="h-8 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[var(--text-secondary)] rounded px-2 text-[11px] focus:outline-none"
             >
@@ -80,7 +96,11 @@ const ActionButtons: React.FC<Props> = ({
             {exportMode === 'master-video' ? (
               <select
                 value={exportQuality}
-                onChange={(event) => onExportQualityChange(event.target.value as MasterVideoQuality)}
+                onChange={(event) =>
+                  onExportQualityChange(
+                    event.target.value as MasterVideoQuality
+                  )
+                }
                 disabled={isDownloading}
                 className="h-8 bg-[var(--bg-elevated)] border border-[var(--border-primary)] text-[var(--text-secondary)] rounded px-2 text-[11px] focus:outline-none"
               >
@@ -89,7 +109,10 @@ const ActionButtons: React.FC<Props> = ({
                 <option value="pro">高画质</option>
               </select>
             ) : (
-              <div className="h-8 rounded border border-transparent bg-transparent" aria-hidden="true" />
+              <div
+                className="h-8 rounded border border-transparent bg-transparent"
+                aria-hidden="true"
+              />
             )}
           </div>
           <p className={descClass}>
@@ -121,7 +144,9 @@ const ActionButtons: React.FC<Props> = ({
       <div className={cardBase}>
         <div className="space-y-1.5">
           <p className={titleClass}>剪辑工程</p>
-          <p className={descClass}>导出 NLE 工程模板（PR/FCP/达芬奇）用于协同制作。</p>
+          <p className={descClass}>
+            导出 NLE 工程模板（PR/FCP/达芬奇）用于协同制作。
+          </p>
         </div>
         <button
           className={ghostActionClass}
@@ -132,7 +157,7 @@ const ActionButtons: React.FC<Props> = ({
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ActionButtons;
+export default ActionButtons

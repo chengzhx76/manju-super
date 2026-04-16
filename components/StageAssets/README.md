@@ -26,24 +26,28 @@ components/
 ### 1. **消除重复代码**
 
 #### 图片上传逻辑（3处 → 1处）
+
 - ✅ 统一为 `handleImageUpload()` 函数
 - ✅ 封装为 `ImageUploadButton` 组件
 
 #### 地域特征前缀（2处 → 1处）
+
 - ✅ `getRegionalPrefix()` 和 `getEthnicityPrefix()` 合并
 - ✅ 支持参数化配置
 
 #### 提示词编辑状态（6个状态变量 → 组件内部管理）
+
 - ✅ 角色和场景的编辑状态独立管理
 - ✅ `PromptEditor` 组件封装编辑逻辑
 
 ### 2. **可复用UI组件**
 
 #### ImageUploadButton
+
 ```tsx
 <ImageUploadButton
-  variant="inline"        // 'inline' | 'separate'
-  size="small"           // 'small' | 'medium' | 'large'
+  variant="inline" // 'inline' | 'separate'
+  size="small" // 'small' | 'medium' | 'large'
   onUpload={handleUpload}
   onGenerate={handleGenerate}
   isGenerating={false}
@@ -51,6 +55,7 @@ components/
 ```
 
 #### PromptEditor
+
 ```tsx
 <PromptEditor
   prompt="角色描述"
@@ -61,10 +66,11 @@ components/
 ```
 
 #### ImagePreviewModal
+
 ```tsx
-<ImagePreviewModal 
-  imageUrl={previewImage} 
-  onClose={() => setPreviewImage(null)} 
+<ImagePreviewModal
+  imageUrl={previewImage}
+  onClose={() => setPreviewImage(null)}
 />
 ```
 
@@ -77,12 +83,14 @@ components/
 ### 4. **常量与配置提取**
 
 #### constants.ts
+
 - 🎨 **STYLES**: 统一UI样式类名
 - 📐 **GRID_LAYOUTS**: 网格布局配置
 - ⚙️ **DEFAULTS**: 默认配置值
 - 🌏 **REGIONAL_FEATURES**: 地域特征配置
 
 #### utils.ts
+
 - `getRegionalPrefix()`: 获取地域前缀
 - `handleImageUpload()`: 图片上传处理
 - `getProjectLanguage()`: 获取项目语言
@@ -93,33 +101,37 @@ components/
 
 ## 📊 重构效果对比
 
-| 指标 | 重构前 | 重构后 | 改善 |
-|------|--------|--------|------|
-| **文件行数** | 945行 | 主组件 ~350行 | ↓ 63% |
-| **重复代码** | 多处重复 | 无重复 | ✅ 100% |
-| **组件数量** | 1个巨型组件 | 9个模块 | ✅ 模块化 |
-| **可维护性** | ⭐⭐ | ⭐⭐⭐⭐⭐ | ↑ 150% |
-| **可测试性** | 困难 | 简单 | ✅ 单元测试友好 |
-| **可复用性** | 0% | 80% | ✅ 组件可复用 |
+| 指标         | 重构前      | 重构后        | 改善            |
+| ------------ | ----------- | ------------- | --------------- |
+| **文件行数** | 945行       | 主组件 ~350行 | ↓ 63%           |
+| **重复代码** | 多处重复    | 无重复        | ✅ 100%         |
+| **组件数量** | 1个巨型组件 | 9个模块       | ✅ 模块化       |
+| **可维护性** | ⭐⭐        | ⭐⭐⭐⭐⭐    | ↑ 150%          |
+| **可测试性** | 困难        | 简单          | ✅ 单元测试友好 |
+| **可复用性** | 0%          | 80%           | ✅ 组件可复用   |
 
 ## 🎯 主要改进
 
 ### 1. 代码组织
+
 - ✅ 按功能拆分模块
 - ✅ 单一职责原则
 - ✅ 清晰的文件结构
 
 ### 2. 可维护性
+
 - ✅ 更小的文件便于理解
 - ✅ 独立的组件易于修改
 - ✅ 统一的样式管理
 
 ### 3. 可扩展性
+
 - ✅ 新增功能不影响现有代码
 - ✅ 组件可在其他地方复用
 - ✅ 配置集中管理
 
 ### 4. 性能优化
+
 - ✅ 组件按需加载
 - ✅ 更好的代码分割
 - ✅ 减少不必要的重渲染
@@ -129,20 +141,21 @@ components/
 **重要**: 原有的 `StageAssets.tsx` 仍然存在，现在作为重定向文件：
 
 ```tsx
-export { default } from './StageAssets/index';
+export { default } from './StageAssets/index'
 ```
 
 所有现有的导入语句**无需修改**，可以直接使用：
 
 ```tsx
-import StageAssets from './components/StageAssets';
+import StageAssets from './components/StageAssets'
 ```
 
 ## 🚀 使用示例
 
 ### 主组件使用（完全兼容原API）
+
 ```tsx
-<StageAssets 
+<StageAssets
   project={project}
   updateProject={updateProject}
   onApiKeyError={handleApiKeyError}
@@ -150,6 +163,7 @@ import StageAssets from './components/StageAssets';
 ```
 
 ### 独立使用子组件
+
 ```tsx
 import { ImageUploadButton } from './components/StageAssets/ImageUploadButton';
 import { PromptEditor } from './components/StageAssets/PromptEditor';
@@ -162,15 +176,17 @@ import { PromptEditor } from './components/StageAssets/PromptEditor';
 ## 📝 最佳实践
 
 1. **使用提取的常量**
+
    ```tsx
-   import { STYLES, GRID_LAYOUTS } from './constants';
-   <div className={STYLES.card}>...</div>
+   import { STYLES, GRID_LAYOUTS } from './constants'
+   ;<div className={STYLES.card}>...</div>
    ```
 
 2. **使用工具函数**
+
    ```tsx
-   import { getRegionalPrefix, compareIds } from './utils';
-   const prefix = getRegionalPrefix(language, 'character');
+   import { getRegionalPrefix, compareIds } from './utils'
+   const prefix = getRegionalPrefix(language, 'character')
    ```
 
 3. **组件组合**
@@ -187,16 +203,15 @@ import { PromptEditor } from './components/StageAssets/PromptEditor';
 describe('ImageUploadButton', () => {
   it('should call onUpload when file is selected', () => {
     // 测试逻辑
-  });
-});
+  })
+})
 
 // 测试工具函数
 describe('getRegionalPrefix', () => {
   it('should return Chinese prefix for Chinese language', () => {
-    expect(getRegionalPrefix('中文', 'character'))
-      .toContain('Chinese person');
-  });
-});
+    expect(getRegionalPrefix('中文', 'character')).toContain('Chinese person')
+  })
+})
 ```
 
 ## 📚 未来优化方向

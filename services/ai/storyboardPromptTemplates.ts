@@ -3,30 +3,40 @@
  * 供 UI 侧常量与 AI 服务侧共同复用，避免模板漂移
  */
 
-import type { StoryboardGridPanelCount } from '../../types';
+import type { StoryboardGridPanelCount } from '../../types'
 
 export interface StoryboardGridLayoutPreset {
-  panelCount: StoryboardGridPanelCount;
-  rows: number;
-  cols: number;
-  label: string;
-  positionLabels: string[];
+  panelCount: StoryboardGridPanelCount
+  rows: number
+  cols: number
+  label: string
+  positionLabels: string[]
 }
 
-export const STORYBOARD_GRID_LAYOUTS: Record<StoryboardGridPanelCount, StoryboardGridLayoutPreset> = {
+export const STORYBOARD_GRID_LAYOUTS: Record<
+  StoryboardGridPanelCount,
+  StoryboardGridLayoutPreset
+> = {
   4: {
     panelCount: 4,
     rows: 2,
     cols: 2,
     label: '四宫格',
-    positionLabels: ['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right'],
+    positionLabels: ['Top-Left', 'Top-Right', 'Bottom-Left', 'Bottom-Right']
   },
   6: {
     panelCount: 6,
     rows: 2,
     cols: 3,
     label: '六宫格',
-    positionLabels: ['Top-Left', 'Top-Center', 'Top-Right', 'Bottom-Left', 'Bottom-Center', 'Bottom-Right'],
+    positionLabels: [
+      'Top-Left',
+      'Top-Center',
+      'Top-Right',
+      'Bottom-Left',
+      'Bottom-Center',
+      'Bottom-Right'
+    ]
   },
   9: {
     panelCount: 9,
@@ -42,19 +52,21 @@ export const STORYBOARD_GRID_LAYOUTS: Record<StoryboardGridPanelCount, Storyboar
       'Middle-Right',
       'Bottom-Left',
       'Bottom-Center',
-      'Bottom-Right',
-    ],
-  },
-};
-
-export const DEFAULT_STORYBOARD_PANEL_COUNT: StoryboardGridPanelCount = 9;
-
-export const resolveStoryboardGridLayout = (panelCount?: number): StoryboardGridLayoutPreset => {
-  if (panelCount === 4 || panelCount === 6 || panelCount === 9) {
-    return STORYBOARD_GRID_LAYOUTS[panelCount];
+      'Bottom-Right'
+    ]
   }
-  return STORYBOARD_GRID_LAYOUTS[DEFAULT_STORYBOARD_PANEL_COUNT];
-};
+}
+
+export const DEFAULT_STORYBOARD_PANEL_COUNT: StoryboardGridPanelCount = 9
+
+export const resolveStoryboardGridLayout = (
+  panelCount?: number
+): StoryboardGridLayoutPreset => {
+  if (panelCount === 4 || panelCount === 6 || panelCount === 9) {
+    return STORYBOARD_GRID_LAYOUTS[panelCount]
+  }
+  return STORYBOARD_GRID_LAYOUTS[DEFAULT_STORYBOARD_PANEL_COUNT]
+}
 
 export const NINE_GRID_SPLIT_PROMPT = {
   system: `你是专业分镜师。请把同一镜头拆成{panelCount}个不重复视角，用于{gridLayout}网格分镜。网格布局必须严格为 {layoutInstruction}。保持同一场景与角色连续性。`,
@@ -76,7 +88,7 @@ export const NINE_GRID_SPLIT_PROMPT = {
 5) 视角多样性：shotSize + cameraAngle 组合不得重复；当{panelCount}>=6时，至少使用3种不同 shotSize（否则至少2种）
 6) 叙事节奏：index=0 建立场景与主体，最后一格呈现动作结果/情绪落点，中间格逐步推进动作
 7) 连续性：保持角色外观、服装、道具、主运动方向一致；若需要反打/轴线跨越，必须在 description 明确说明动机`
-};
+}
 
 export const NINE_GRID_IMAGE_PROMPT_TEMPLATE = {
   prefix: `Create ONE cinematic storyboard contact sheet.
@@ -102,4 +114,4 @@ Panels (left-to-right, top-to-bottom):`,
 - ABSOLUTE NO-TEXT RULE: include zero readable text in every panel
 - Forbidden text elements: letters, words, numbers, subtitles, captions, logos, watermarks, signage, UI labels, speech bubbles
 - If signs/screens/documents appear, render text areas as blank or illegible marks with no recognizable characters`
-};
+}

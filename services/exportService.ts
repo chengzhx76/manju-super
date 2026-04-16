@@ -1,95 +1,116 @@
-import { ProjectState } from '../types';
-import { dataUrlToBlob, isOpfsVideoRef, isVideoDataUrl, resolveVideoToBlob } from './videoStorageService';
-import { fetchMediaWithCorsFallback } from './mediaFetchService';
+import { ProjectState } from '../types'
+import {
+  dataUrlToBlob,
+  isOpfsVideoRef,
+  isVideoDataUrl,
+  resolveVideoToBlob
+} from './videoStorageService'
+import { fetchMediaWithCorsFallback } from './mediaFetchService'
 
-type ProgressReporter = (phase: string, progress: number) => void;
-
-interface MasterVideoFormat {
-  mimeType: string;
-  extension: string;
+type ProgressReporter = (phase: string, progress: number) => void
+type AudioContextCtor = typeof AudioContext
+type WindowWithAudioContext = Window & {
+  AudioContext?: AudioContextCtor
+  webkitAudioContext?: AudioContextCtor
 }
 
-export type MasterExportMode = 'master-video' | 'segments-zip';
-export type MasterVideoQuality = 'economy' | 'balanced' | 'pro';
+interface MasterVideoFormat {
+  mimeType: string
+  extension: string
+}
+
+export type MasterExportMode = 'master-video' | 'segments-zip'
+export type MasterVideoQuality = 'economy' | 'balanced' | 'pro'
 
 interface MasterQualityPreset {
-  fps: number;
-  videoBitsPerSecond: number;
-  label: string;
+  fps: number
+  videoBitsPerSecond: number
+  label: string
 }
 
 export interface MasterExportOptions {
-  mode?: MasterExportMode;
-  quality?: MasterVideoQuality;
+  mode?: MasterExportMode
+  quality?: MasterVideoQuality
 }
 
-const MASTER_QUALITY_PRESETS: Record<MasterVideoQuality, MasterQualityPreset> = {
-  economy: {
-    fps: 24,
-    videoBitsPerSecond: 4_000_000,
-    label: 'Economy',
-  },
-  balanced: {
-    fps: 30,
-    videoBitsPerSecond: 8_000_000,
-    label: 'Balanced',
-  },
-  pro: {
-    fps: 30,
-    videoBitsPerSecond: 14_000_000,
-    label: 'Pro',
-  },
-};
+const MASTER_QUALITY_PRESETS: Record<MasterVideoQuality, MasterQualityPreset> =
+  {
+    economy: {
+      fps: 24,
+      videoBitsPerSecond: 4_000_000,
+      label: 'Economy'
+    },
+    balanced: {
+      fps: 30,
+      videoBitsPerSecond: 8_000_000,
+      label: 'Balanced'
+    },
+    pro: {
+      fps: 30,
+      videoBitsPerSecond: 14_000_000,
+      label: 'Pro'
+    }
+  }
 
 const MASTER_VIDEO_FORMATS: MasterVideoFormat[] = [
   { mimeType: 'video/webm;codecs=vp9,opus', extension: 'webm' },
   { mimeType: 'video/webm;codecs=vp8,opus', extension: 'webm' },
-  { mimeType: 'video/webm', extension: 'webm' },
-];
+  { mimeType: 'video/webm', extension: 'webm' }
+]
 
 const canStitchMasterVideo = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  if (typeof document === 'undefined') return false;
-  if (typeof MediaRecorder === 'undefined') return false;
-  const canvas = document.createElement('canvas');
-  return typeof canvas.captureStream === 'function';
-};
+  if (typeof window === 'undefined') return false
+  if (typeof document === 'undefined') return false
+  if (typeof MediaRecorder === 'undefined') return false
+  const canvas = document.createElement('canvas')
+  return typeof canvas.captureStream === 'function'
+}
 
 const pickMasterVideoFormat = (): MasterVideoFormat | null => {
-  if (typeof MediaRecorder === 'undefined') return null;
+  if (typeof MediaRecorder === 'undefined') return null
   for (const format of MASTER_VIDEO_FORMATS) {
     if (MediaRecorder.isTypeSupported(format.mimeType)) {
-      return format;
+      return format
     }
   }
-  return null;
-};
+  return null
+}
 
-const createProjectTitle = (project: ProjectState): string => (
+const createProjectTitle = (project: ProjectState): string =>
   project.scriptData?.title || project.title || 'master'
-);
 
-const inferDubbingExtension = (shot: ProjectState['shots'][number]): 'wav' | 'mp3' => {
-  const configured = shot.dubbing?.outputFormat;
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+const inferDubbingExtension = (
+  shot: ProjectState['shots'][number]
+): 'wav' | 'mp3' => {
+  const configured = shot.dubbing?.outputFormat
   if (configured === 'wav' || configured === 'mp3') {
-    return configured;
+    return configured
   }
 
-  const audioUrl = shot.dubbing?.audioUrl || '';
-  const lower = audioUrl.toLowerCase();
-  if (lower.startsWith('data:audio/mpeg') || lower.startsWith('data:audio/mp3')) {
-    return 'mp3';
+  const audioUrl = shot.dubbing?.audioUrl || ''
+  const lower = audioUrl.toLowerCase()
+  if (
+    lower.startsWith('data:audio/mpeg') ||
+    lower.startsWith('data:audio/mp3')
+  ) {
+    return 'mp3'
   }
-  if (lower.startsWith('data:audio/wav') || lower.startsWith('data:audio/x-wav')) {
-    return 'wav';
+  if (
+    lower.startsWith('data:audio/wav') ||
+    lower.startsWith('data:audio/x-wav')
+  ) {
+    return 'wav'
   }
 
-  const extMatch = lower.match(/\.([a-z0-9]{2,4})(?:$|\?)/);
-  if (extMatch?.[1] === 'mp3') return 'mp3';
-  if (extMatch?.[1] === 'wav') return 'wav';
+  const extMatch = lower.match(/\.([a-z0-9]{2,4})(?:$|\?)/)
+  if (extMatch?.[1] === 'mp3') return 'mp3'
+  if (extMatch?.[1] === 'wav') return 'wav'
 
-  return 'wav';
-};
+  return 'wav'
+}
 
 /**
  * Download one media input and normalize it to Blob.
@@ -97,66 +118,68 @@ const inferDubbingExtension = (shot: ProjectState['shots'][number]): 'wav' | 'mp
  */
 async function downloadFile(urlOrBase64: string): Promise<Blob> {
   if (isVideoDataUrl(urlOrBase64) || isOpfsVideoRef(urlOrBase64)) {
-    return resolveVideoToBlob(urlOrBase64);
+    return resolveVideoToBlob(urlOrBase64)
   }
   if (urlOrBase64.startsWith('data:')) {
     try {
-      return dataUrlToBlob(urlOrBase64);
+      return dataUrlToBlob(urlOrBase64)
     } catch {
-      const fallbackResponse = await fetch(urlOrBase64);
+      const fallbackResponse = await fetch(urlOrBase64)
       if (!fallbackResponse.ok) {
-        throw new Error(`Download failed: ${fallbackResponse.statusText}`);
+        throw new Error(`Download failed: ${fallbackResponse.statusText}`)
       }
-      return await fallbackResponse.blob();
+      return await fallbackResponse.blob()
     }
   }
   // Download from remote URL (with dev-time CORS fallback).
-  const response = await fetchMediaWithCorsFallback(urlOrBase64);
+  const response = await fetchMediaWithCorsFallback(urlOrBase64)
   if (!response.ok) {
-    throw new Error(`Download failed: ${response.statusText}`);
+    throw new Error(`Download failed: ${response.statusText}`)
   }
-  return await response.blob();
+  return await response.blob()
 }
 
-const loadVideoElement = (blob: Blob): Promise<{ video: HTMLVideoElement; revoke: () => void }> => {
+const loadVideoElement = (
+  blob: Blob
+): Promise<{ video: HTMLVideoElement; revoke: () => void }> => {
   return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    const objectUrl = URL.createObjectURL(blob);
-    let settled = false;
+    const video = document.createElement('video')
+    const objectUrl = URL.createObjectURL(blob)
+    let settled = false
 
     const cleanup = () => {
-      video.onloadedmetadata = null;
-      video.onerror = null;
-    };
+      video.onloadedmetadata = null
+      video.onerror = null
+    }
 
-    video.preload = 'auto';
-    video.muted = false;
-    video.playsInline = true;
-    video.crossOrigin = 'anonymous';
+    video.preload = 'auto'
+    video.muted = false
+    video.playsInline = true
+    video.crossOrigin = 'anonymous'
 
     video.onloadedmetadata = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
+      if (settled) return
+      settled = true
+      cleanup()
       resolve({
         video,
-        revoke: () => URL.revokeObjectURL(objectUrl),
-      });
-    };
+        revoke: () => URL.revokeObjectURL(objectUrl)
+      })
+    }
 
     video.onerror = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to read video segment metadata'));
-    };
+      if (settled) return
+      settled = true
+      cleanup()
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('Failed to read video segment metadata'))
+    }
 
-    video.src = objectUrl;
-  });
-};
+    video.src = objectUrl
+  })
+}
 
-type VideoAudioAttach = (video: HTMLVideoElement) => (() => void) | void;
+type VideoAudioAttach = (video: HTMLVideoElement) => (() => void) | void
 
 const renderVideoSegmentToCanvas = async (
   video: HTMLVideoElement,
@@ -164,246 +187,259 @@ const renderVideoSegmentToCanvas = async (
   ctx: CanvasRenderingContext2D,
   attachAudio?: VideoAudioAttach
 ): Promise<void> => {
-  const detachAudio = attachAudio?.(video);
+  const detachAudio = attachAudio?.(video)
   try {
-    await video.play();
+    await video.play()
   } catch (error) {
     if (typeof detachAudio === 'function') {
-      detachAudio();
+      detachAudio()
     }
-    throw error;
+    throw error
   }
 
   return new Promise<void>((resolve, reject) => {
-    let rafId = 0;
+    let rafId = 0
 
     const cleanup = () => {
       if (rafId) {
-        cancelAnimationFrame(rafId);
+        cancelAnimationFrame(rafId)
       }
-      video.onended = null;
-      video.onerror = null;
-    };
+      video.onended = null
+      video.onerror = null
+    }
 
     const drawFrame = () => {
       if (video.readyState >= 2) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       }
       if (!video.paused && !video.ended) {
-        rafId = requestAnimationFrame(drawFrame);
+        rafId = requestAnimationFrame(drawFrame)
       }
-    };
+    }
 
     video.onended = () => {
-      cleanup();
+      cleanup()
       if (typeof detachAudio === 'function') {
-        detachAudio();
+        detachAudio()
       }
-      resolve();
-    };
+      resolve()
+    }
 
     video.onerror = () => {
-      cleanup();
+      cleanup()
       if (typeof detachAudio === 'function') {
-        detachAudio();
+        detachAudio()
       }
-      reject(new Error('Failed to render video segment'));
-    };
+      reject(new Error('Failed to render video segment'))
+    }
 
-    drawFrame();
-  });
-};
+    drawFrame()
+  })
+}
 
 const stitchVideoBlobsToMaster = async (
   videoBlobs: Blob[],
   quality: MasterVideoQuality = 'balanced',
   onProgress?: ProgressReporter
 ): Promise<{ blob: Blob; extension: string }> => {
-  const format = pickMasterVideoFormat();
+  const format = pickMasterVideoFormat()
   if (!format) {
-    throw new Error('Browser does not support master video encoding. Please export segments ZIP instead.');
+    throw new Error(
+      'Browser does not support master video encoding. Please export segments ZIP instead.'
+    )
   }
   if (videoBlobs.length === 0) {
-    throw new Error('No video segments available for stitching.');
+    throw new Error('No video segments available for stitching.')
   }
 
-  const qualityPreset = MASTER_QUALITY_PRESETS[quality] || MASTER_QUALITY_PRESETS.balanced;
-  onProgress?.(`Initializing stitcher (${qualityPreset.label})...`, 50);
+  const qualityPreset =
+    MASTER_QUALITY_PRESETS[quality] || MASTER_QUALITY_PRESETS.balanced
+  onProgress?.(`Initializing stitcher (${qualityPreset.label})...`, 50)
 
-  const firstSegment = await loadVideoElement(videoBlobs[0]);
-  const firstVideo = firstSegment.video;
-  const width = Math.max(1, Math.round(firstVideo.videoWidth || 1280));
-  const height = Math.max(1, Math.round(firstVideo.videoHeight || 720));
+  const firstSegment = await loadVideoElement(videoBlobs[0])
+  const firstVideo = firstSegment.video
+  const width = Math.max(1, Math.round(firstVideo.videoWidth || 1280))
+  const height = Math.max(1, Math.round(firstVideo.videoHeight || 720))
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
   if (!ctx) {
-    firstSegment.revoke();
-    throw new Error('Failed to create canvas for stitching.');
+    firstSegment.revoke()
+    throw new Error('Failed to create canvas for stitching.')
   }
 
-  const canvasStream = canvas.captureStream(qualityPreset.fps);
-  const recorderStream = new MediaStream();
-  canvasStream.getVideoTracks().forEach((track) => recorderStream.addTrack(track));
+  const canvasStream = canvas.captureStream(qualityPreset.fps)
+  const recorderStream = new MediaStream()
+  canvasStream
+    .getVideoTracks()
+    .forEach((track) => recorderStream.addTrack(track))
 
+  const windowWithAudio = window as WindowWithAudioContext
   const AudioContextCtor =
-    (window as any).AudioContext || (window as any).webkitAudioContext;
+    windowWithAudio.AudioContext || windowWithAudio.webkitAudioContext
   if (!AudioContextCtor) {
-    throw new Error('AudioContext is unavailable. Cannot export audio-preserving master in this browser.');
+    throw new Error(
+      'AudioContext is unavailable. Cannot export audio-preserving master in this browser.'
+    )
   }
-  let audioContext: AudioContext | null = null;
-  let audioDestination: MediaStreamAudioDestinationNode | null = null;
+  let audioContext: AudioContext | null = null
+  let audioDestination: MediaStreamAudioDestinationNode | null = null
 
   try {
-    audioContext = new AudioContextCtor() as AudioContext;
-    audioDestination = audioContext.createMediaStreamDestination();
+    audioContext = new AudioContextCtor() as AudioContext
+    audioDestination = audioContext.createMediaStreamDestination()
     if (audioContext.state === 'suspended') {
-      await audioContext.resume();
+      await audioContext.resume()
     }
-    const [audioTrack] = audioDestination.stream.getAudioTracks();
+    const [audioTrack] = audioDestination.stream.getAudioTracks()
     if (!audioTrack) {
-      throw new Error('Audio destination did not provide a track.');
+      throw new Error('Audio destination did not provide a track.')
     }
-    recorderStream.addTrack(audioTrack);
+    recorderStream.addTrack(audioTrack)
   } catch (error) {
-    throw new Error(`Failed to initialize audio pipeline for master export: ${String((error as any)?.message || error)}`);
+    throw new Error(
+      `Failed to initialize audio pipeline for master export: ${getErrorMessage(error)}`
+    )
   }
 
   const attachAudio: VideoAudioAttach = (video) => {
     if (!audioContext || !audioDestination) {
-      throw new Error('Audio pipeline is not ready.');
+      throw new Error('Audio pipeline is not ready.')
     }
     try {
-      const source = audioContext.createMediaElementSource(video);
-      const gainNode = audioContext.createGain();
-      gainNode.gain.value = 1;
-      source.connect(gainNode);
-      gainNode.connect(audioDestination);
+      const source = audioContext.createMediaElementSource(video)
+      const gainNode = audioContext.createGain()
+      gainNode.gain.value = 1
+      source.connect(gainNode)
+      gainNode.connect(audioDestination)
       return () => {
-        source.disconnect();
-        gainNode.disconnect();
-      };
+        source.disconnect()
+        gainNode.disconnect()
+      }
     } catch (error) {
-      throw new Error(`Failed to attach segment audio: ${String((error as any)?.message || error)}`);
+      throw new Error(
+        `Failed to attach segment audio: ${getErrorMessage(error)}`
+      )
     }
-  };
+  }
 
-  const chunks: BlobPart[] = [];
+  const chunks: BlobPart[] = []
   const recorder = new MediaRecorder(recorderStream, {
     mimeType: format.mimeType,
-    videoBitsPerSecond: qualityPreset.videoBitsPerSecond,
-  });
+    videoBitsPerSecond: qualityPreset.videoBitsPerSecond
+  })
 
   recorder.ondataavailable = (event: BlobEvent) => {
     if (event.data && event.data.size > 0) {
-      chunks.push(event.data);
+      chunks.push(event.data)
     }
-  };
+  }
 
   const stopped = new Promise<void>((resolve, reject) => {
-    recorder.onstop = () => resolve();
-    recorder.onerror = () => reject(new Error('Master video encoding failed'));
-  });
+    recorder.onstop = () => resolve()
+    recorder.onerror = () => reject(new Error('Master video encoding failed'))
+  })
 
   try {
-    recorder.start(1000);
+    recorder.start(1000)
     for (let i = 0; i < videoBlobs.length; i++) {
       onProgress?.(
         `Stitching segment (${i + 1}/${videoBlobs.length})...`,
         50 + Math.round(((i + 1) / videoBlobs.length) * 40)
-      );
+      )
 
-      const segment = i === 0 ? firstSegment : await loadVideoElement(videoBlobs[i]);
-      const video = segment.video;
+      const segment =
+        i === 0 ? firstSegment : await loadVideoElement(videoBlobs[i])
+      const video = segment.video
       try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        await renderVideoSegmentToCanvas(video, canvas, ctx, attachAudio);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        await renderVideoSegmentToCanvas(video, canvas, ctx, attachAudio)
       } finally {
-        segment.revoke();
+        segment.revoke()
       }
     }
   } catch (error) {
-    firstSegment.revoke();
+    firstSegment.revoke()
     if (recorder.state !== 'inactive') {
-      recorder.stop();
+      recorder.stop()
     }
-    recorderStream.getTracks().forEach((track) => track.stop());
+    recorderStream.getTracks().forEach((track) => track.stop())
     if (audioContext) {
-      void audioContext.close().catch(() => undefined);
+      void audioContext.close().catch(() => undefined)
     }
-    throw error;
+    throw error
   }
 
   if (recorder.state !== 'inactive') {
-    recorder.stop();
+    recorder.stop()
   }
-  await stopped;
-  recorderStream.getTracks().forEach((track) => track.stop());
+  await stopped
+  recorderStream.getTracks().forEach((track) => track.stop())
   if (audioContext) {
-    await audioContext.close().catch(() => undefined);
+    await audioContext.close().catch(() => undefined)
   }
 
-  const masterBlob = new Blob(chunks, { type: format.mimeType });
+  const masterBlob = new Blob(chunks, { type: format.mimeType })
   if (masterBlob.size === 0) {
-    throw new Error('Master video generation failed: empty output.');
+    throw new Error('Master video generation failed: empty output.')
   }
 
   return {
     blob: masterBlob,
-    extension: format.extension,
-  };
-};
+    extension: format.extension
+  }
+}
 
 const downloadMasterVideoAsZip = async (
   project: ProjectState,
   completedShots: ProjectState['shots'],
   onProgress?: ProgressReporter
 ): Promise<void> => {
-  onProgress?.('Environment does not support single-file stitch. Exporting segments ZIP...', 50);
+  onProgress?.(
+    'Environment does not support single-file stitch. Exporting segments ZIP...',
+    50
+  )
 
-  const JSZip = (await import('jszip')).default;
-  const zip = new JSZip();
+  const JSZip = (await import('jszip')).default
+  const zip = new JSZip()
 
   for (let i = 0; i < completedShots.length; i++) {
-    const shot = completedShots[i];
-    const videoUrl = shot.interval!.videoUrl!;
-    const shotNum = String(i + 1).padStart(3, '0');
-    const fileName = `shot_${shotNum}.mp4`;
+    const shot = completedShots[i]
+    const videoUrl = shot.interval!.videoUrl!
+    const shotNum = String(i + 1).padStart(3, '0')
+    const fileName = `shot_${shotNum}.mp4`
 
     try {
-      const videoBlob = await downloadFile(videoUrl);
-      zip.file(fileName, videoBlob);
+      const videoBlob = await downloadFile(videoUrl)
+      zip.file(fileName, videoBlob)
     } catch (err) {
-      console.error(`Failed to download segment ${i + 1}:`, err);
+      console.error(`Failed to download segment ${i + 1}:`, err)
     }
 
-    const progress = 50 + Math.round(((i + 1) / completedShots.length) * 35);
-    onProgress?.(`Downloading (${i + 1}/${completedShots.length})...`, progress);
+    const progress = 50 + Math.round(((i + 1) / completedShots.length) * 35)
+    onProgress?.(`Downloading (${i + 1}/${completedShots.length})...`, progress)
   }
 
-  onProgress?.('Generating ZIP file...', 88);
+  onProgress?.('Generating ZIP file...', 88)
 
-  const zipBlob = await zip.generateAsync(
-    { type: 'blob' },
-    (metadata) => {
-      const progress = 88 + Math.round(metadata.percent / 8);
-      onProgress?.('Compressing...', progress);
-    }
-  );
+  const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+    const progress = 88 + Math.round(metadata.percent / 8)
+    onProgress?.('Compressing...', progress)
+  })
 
-  onProgress?.('Preparing download...', 98);
+  onProgress?.('Preparing download...', 98)
 
-  const url = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${createProjectTitle(project)}_segments.zip`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
+  const url = URL.createObjectURL(zipBlob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${createProjectTitle(project)}_segments.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 /**
  * Export timeline videos.
@@ -416,62 +452,74 @@ export async function downloadMasterVideo(
   options?: MasterExportOptions
 ): Promise<void> {
   try {
-    const mode = options?.mode || 'master-video';
-    const quality = options?.quality || 'balanced';
+    const mode = options?.mode || 'master-video'
+    const quality = options?.quality || 'balanced'
 
     // 1. Collect completed shots that already have video output.
-    const completedShots = project.shots.filter(shot => shot.interval?.videoUrl);
-    
+    const completedShots = project.shots.filter(
+      (shot) => shot.interval?.videoUrl
+    )
+
     if (completedShots.length === 0) {
-      throw new Error('No video segments available for export');
+      throw new Error('No video segments available for export')
     }
 
     if (mode === 'segments-zip') {
-      await downloadMasterVideoAsZip(project, completedShots, onProgress);
-      onProgress?.('Completed (segments ZIP)', 100);
-      return;
+      await downloadMasterVideoAsZip(project, completedShots, onProgress)
+      onProgress?.('Completed (segments ZIP)', 100)
+      return
     }
 
-    onProgress?.('Downloading video segments...', 5);
-    const videoBlobs: Blob[] = [];
+    onProgress?.('Downloading video segments...', 5)
+    const videoBlobs: Blob[] = []
     for (let i = 0; i < completedShots.length; i++) {
-      const shot = completedShots[i];
-      const videoUrl = shot.interval!.videoUrl!;
-      const videoBlob = await downloadFile(videoUrl);
-      videoBlobs.push(videoBlob);
+      const shot = completedShots[i]
+      const videoUrl = shot.interval!.videoUrl!
+      const videoBlob = await downloadFile(videoUrl)
+      videoBlobs.push(videoBlob)
 
-      const progress = 5 + Math.round(((i + 1) / completedShots.length) * 40);
-      onProgress?.(`Downloading (${i + 1}/${completedShots.length})...`, progress);
+      const progress = 5 + Math.round(((i + 1) / completedShots.length) * 40)
+      onProgress?.(
+        `Downloading (${i + 1}/${completedShots.length})...`,
+        progress
+      )
     }
 
     if (!canStitchMasterVideo()) {
-      await downloadMasterVideoAsZip(project, completedShots, onProgress);
-      onProgress?.('Completed (exported segments ZIP)', 100);
-      return;
+      await downloadMasterVideoAsZip(project, completedShots, onProgress)
+      onProgress?.('Completed (exported segments ZIP)', 100)
+      return
     }
 
     try {
-      const stitched = await stitchVideoBlobsToMaster(videoBlobs, quality, onProgress);
-      onProgress?.('Building master file...', 95);
+      const stitched = await stitchVideoBlobsToMaster(
+        videoBlobs,
+        quality,
+        onProgress
+      )
+      onProgress?.('Building master file...', 95)
 
-      const url = URL.createObjectURL(stitched.blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${createProjectTitle(project)}_master.${stitched.extension}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(stitched.blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${createProjectTitle(project)}_master.${stitched.extension}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
 
-      onProgress?.('Completed!', 100);
+      onProgress?.('Completed!', 100)
     } catch (stitchError) {
-      console.warn('Master stitch failed, fallback to segments ZIP export:', stitchError);
-      await downloadMasterVideoAsZip(project, completedShots, onProgress);
-      onProgress?.('Completed (exported segments ZIP)', 100);
+      console.warn(
+        'Master stitch failed, fallback to segments ZIP export:',
+        stitchError
+      )
+      await downloadMasterVideoAsZip(project, completedShots, onProgress)
+      onProgress?.('Completed (exported segments ZIP)', 100)
     }
   } catch (error) {
-    console.error('Master export failed:', error);
-    throw error;
+    console.error('Master export failed:', error)
+    throw error
   }
 }
 
@@ -481,8 +529,8 @@ export async function downloadMasterVideo(
  */
 export function estimateTotalDuration(project: ProjectState): number {
   return project.shots.reduce((acc, shot) => {
-    return acc + (shot.interval?.duration || 10);
-  }, 0);
+    return acc + (shot.interval?.duration || 10)
+  }, 0)
 }
 
 /**
@@ -494,12 +542,12 @@ export async function downloadSourceAssets(
 ): Promise<void> {
   try {
     // Lazy-load JSZip.
-    onProgress?.('Loading ZIP library...', 0);
-    const JSZip = (await import('jszip')).default;
-    const zip = new JSZip();
+    onProgress?.('Loading ZIP library...', 0)
+    const JSZip = (await import('jszip')).default
+    const zip = new JSZip()
 
     // Collect all downloadable assets.
-    const assets: { url: string; path: string }[] = [];
+    const assets: { url: string; path: string }[] = []
 
     // 1. Character reference images.
     if (project.scriptData?.characters) {
@@ -507,8 +555,8 @@ export async function downloadSourceAssets(
         if (char.referenceImage) {
           assets.push({
             url: char.referenceImage,
-            path: `characters/${char.name.replace(/[\/\\?%*:|"<>]/g, '_')}_base.jpg`
-          });
+            path: `characters/${char.name.replace(/[/\\?%*:|"<>]/g, '_')}_base.jpg`
+          })
         }
         // Character variation images.
         if (char.variations) {
@@ -516,8 +564,8 @@ export async function downloadSourceAssets(
             if (variation.referenceImage) {
               assets.push({
                 url: variation.referenceImage,
-                path: `characters/${char.name.replace(/[\/\\?%*:|"<>]/g, '_')}_${variation.name.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`
-              });
+                path: `characters/${char.name.replace(/[/\\?%*:|"<>]/g, '_')}_${variation.name.replace(/[/\\?%*:|"<>]/g, '_')}.jpg`
+              })
             }
           }
         }
@@ -530,8 +578,8 @@ export async function downloadSourceAssets(
         if (scene.referenceImage) {
           assets.push({
             url: scene.referenceImage,
-            path: `scenes/${scene.location.replace(/[\/\\?%*:|"<>]/g, '_')}.jpg`
-          });
+            path: `scenes/${scene.location.replace(/[/\\?%*:|"<>]/g, '_')}.jpg`
+          })
         }
       }
     }
@@ -539,16 +587,16 @@ export async function downloadSourceAssets(
     // 3. Shot keyframe images.
     if (project.shots) {
       for (let i = 0; i < project.shots.length; i++) {
-        const shot = project.shots[i];
-        const shotNum = String(i + 1).padStart(3, '0');
-        
+        const shot = project.shots[i]
+        const shotNum = String(i + 1).padStart(3, '0')
+
         if (shot.keyframes) {
           for (const keyframe of shot.keyframes) {
             if (keyframe.imageUrl) {
               assets.push({
                 url: keyframe.imageUrl,
                 path: `shots/shot_${shotNum}_${keyframe.type}_frame.jpg`
-              });
+              })
             }
           }
         }
@@ -558,65 +606,62 @@ export async function downloadSourceAssets(
           assets.push({
             url: shot.interval.videoUrl,
             path: `videos/shot_${shotNum}.mp4`
-          });
+          })
         }
 
         // 5. Shot dubbing audio.
         if (shot.dubbing?.audioUrl) {
-          const audioExt = inferDubbingExtension(shot);
+          const audioExt = inferDubbingExtension(shot)
           assets.push({
             url: shot.dubbing.audioUrl,
             path: `dubbing/shot_${shotNum}.${audioExt}`
-          });
+          })
         }
       }
     }
 
     if (assets.length === 0) {
-      throw new Error('No downloadable assets found');
+      throw new Error('No downloadable assets found')
     }
 
-    onProgress?.('Downloading assets...', 5);
+    onProgress?.('Downloading assets...', 5)
 
     // Download assets and add them to ZIP.
     for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i];
+      const asset = assets[i]
       try {
-        const blob = await downloadFile(asset.url);
-        zip.file(asset.path, blob);
-        
-        const progress = 5 + Math.round((i + 1) / assets.length * 80);
-        onProgress?.(`Downloading (${i + 1}/${assets.length})...`, progress);
+        const blob = await downloadFile(asset.url)
+        zip.file(asset.path, blob)
+
+        const progress = 5 + Math.round(((i + 1) / assets.length) * 80)
+        onProgress?.(`Downloading (${i + 1}/${assets.length})...`, progress)
       } catch (error) {
-        console.error(`Failed to download asset: ${asset.path}`, error);
+        console.error(`Failed to download asset: ${asset.path}`, error)
         // Continue with remaining files instead of aborting the whole export.
       }
     }
 
-    onProgress?.('Generating ZIP file...', 90);
+    onProgress?.('Generating ZIP file...', 90)
 
     // Build ZIP blob.
-    const zipBlob = await zip.generateAsync(
-      { type: 'blob' },
-      (metadata) => {
-        const progress = 90 + Math.round(metadata.percent / 10);
-        onProgress?.('Compressing...', progress);
-      }
-    );
+    const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+      const progress = 90 + Math.round(metadata.percent / 10)
+      onProgress?.('Compressing...', progress)
+    })
 
     // Trigger browser download.
-    const url = URL.createObjectURL(zipBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${project.scriptData?.title || project.title || 'project'}_source_assets.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const url = URL.createObjectURL(zipBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.scriptData?.title || project.title || 'project'}_source_assets.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
 
-    onProgress?.('Completed!', 100);
+    onProgress?.('Completed!', 100)
   } catch (error) {
-    console.error('Source assets download failed:', error);
-    throw error;
+    console.error('Source assets download failed:', error)
+    throw error
   }
 }

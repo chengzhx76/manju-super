@@ -12,11 +12,11 @@ import {
   ChatModelConfig,
   ImageModelConfig,
   VideoModelConfig
-} from '../types';
-import { normalizeChatModelId } from './modelIdUtils';
+} from '../types'
+import { normalizeChatModelId } from './modelIdUtils'
 
 // localStorage 键名
-const STORAGE_KEY = 'bigbanana_model_config';
+const STORAGE_KEY = 'bigbanana_model_config'
 
 // 默认提供商 - api.antsk.cn
 const DEFAULT_PROVIDER: ModelProvider = {
@@ -25,7 +25,7 @@ const DEFAULT_PROVIDER: ModelProvider = {
   baseUrl: 'https://api.antsk.cn',
   isDefault: true,
   isBuiltIn: true
-};
+}
 
 // 默认模型配置
 const DEFAULT_CONFIG: ModelConfig = {
@@ -45,7 +45,7 @@ const DEFAULT_CONFIG: ModelConfig = {
     modelName: 'sora-2',
     endpoint: '/v1/videos'
   }
-};
+}
 
 // 默认状态
 const DEFAULT_STATE: ModelManagerState = {
@@ -53,39 +53,42 @@ const DEFAULT_STATE: ModelManagerState = {
   currentConfig: DEFAULT_CONFIG,
   defaultAspectRatio: '16:9',
   defaultVideoDuration: 8
-};
+}
 
 // 运行时状态缓存
-let runtimeState: ModelManagerState | null = null;
+let runtimeState: ModelManagerState | null = null
 
 /**
  * 从 localStorage 加载配置
  */
 export const loadModelConfig = (): ModelManagerState => {
   if (runtimeState) {
-    return runtimeState;
+    return runtimeState
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
-      const parsed = JSON.parse(stored) as ModelManagerState;
-      let shouldPersistMigration = false;
+      const parsed = JSON.parse(stored) as ModelManagerState
+      let shouldPersistMigration = false
       // 确保默认提供商始终存在
-      const hasDefaultProvider = parsed.providers.some(p => p.id === 'antsk');
+      const hasDefaultProvider = parsed.providers.some((p) => p.id === 'antsk')
       if (!hasDefaultProvider) {
-        parsed.providers.unshift(DEFAULT_PROVIDER);
-        shouldPersistMigration = true;
+        parsed.providers.unshift(DEFAULT_PROVIDER)
+        shouldPersistMigration = true
       }
 
-      const currentChatModelName = parsed.currentConfig?.chatModel?.modelName;
-      const normalizedChatModelName = normalizeChatModelId(currentChatModelName);
-      if (currentChatModelName && normalizedChatModelName !== currentChatModelName) {
-        parsed.currentConfig.chatModel.modelName = normalizedChatModelName!;
-        shouldPersistMigration = true;
+      const currentChatModelName = parsed.currentConfig?.chatModel?.modelName
+      const normalizedChatModelName = normalizeChatModelId(currentChatModelName)
+      if (
+        currentChatModelName &&
+        normalizedChatModelName !== currentChatModelName
+      ) {
+        parsed.currentConfig.chatModel.modelName = normalizedChatModelName!
+        shouldPersistMigration = true
       }
       // 迁移旧的 Veo 同步模型名到 Veo Fast（异步）
-      const videoModelName = parsed.currentConfig?.videoModel?.modelName || '';
+      const videoModelName = parsed.currentConfig?.videoModel?.modelName || ''
       if (
         videoModelName === 'veo' ||
         videoModelName === 'veo-3.1' ||
@@ -94,286 +97,319 @@ export const loadModelConfig = (): ModelManagerState => {
         videoModelName.startsWith('veo_3_1_') ||
         videoModelName.startsWith('veo_3_0_r2v')
       ) {
-        parsed.currentConfig.videoModel.modelName = 'veo_3_1-fast';
-        parsed.currentConfig.videoModel.type = 'sora';
-        parsed.currentConfig.videoModel.endpoint = '/v1/videos';
-        shouldPersistMigration = true;
+        parsed.currentConfig.videoModel.modelName = 'veo_3_1-fast'
+        parsed.currentConfig.videoModel.type = 'sora'
+        parsed.currentConfig.videoModel.endpoint = '/v1/videos'
+        shouldPersistMigration = true
       }
 
       if (shouldPersistMigration) {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch (e) { /* ignore */ }
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed))
+        } catch (e) {
+          /* ignore */
+        }
       }
-      runtimeState = parsed;
-      return parsed;
+      runtimeState = parsed
+      return parsed
     }
   } catch (e) {
-    console.error('加载模型配置失败:', e);
+    console.error('加载模型配置失败:', e)
   }
 
-  runtimeState = { ...DEFAULT_STATE };
-  return runtimeState;
-};
+  runtimeState = { ...DEFAULT_STATE }
+  return runtimeState
+}
 
 /**
  * 保存配置到 localStorage
  */
 export const saveModelConfig = (state: ModelManagerState): void => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    runtimeState = state;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    runtimeState = state
   } catch (e) {
-    console.error('保存模型配置失败:', e);
+    console.error('保存模型配置失败:', e)
   }
-};
+}
 
 /**
  * 获取当前模型配置状态
  */
 export const getModelManagerState = (): ModelManagerState => {
-  return loadModelConfig();
-};
+  return loadModelConfig()
+}
 
 /**
  * 获取所有提供商列表
  */
 export const getProviders = (): ModelProvider[] => {
-  return loadModelConfig().providers;
-};
+  return loadModelConfig().providers
+}
 
 /**
  * 根据 ID 获取提供商
  */
 export const getProviderById = (id: string): ModelProvider | undefined => {
-  return getProviders().find(p => p.id === id);
-};
+  return getProviders().find((p) => p.id === id)
+}
 
 /**
  * 获取默认提供商
  */
 export const getDefaultProvider = (): ModelProvider => {
-  return getProviders().find(p => p.isDefault) || DEFAULT_PROVIDER;
-};
+  return getProviders().find((p) => p.isDefault) || DEFAULT_PROVIDER
+}
 
 /**
  * 添加新的提供商
  */
-export const addProvider = (provider: Omit<ModelProvider, 'id' | 'isBuiltIn'>): ModelProvider => {
-  const state = loadModelConfig();
+export const addProvider = (
+  provider: Omit<ModelProvider, 'id' | 'isBuiltIn'>
+): ModelProvider => {
+  const state = loadModelConfig()
   const newProvider: ModelProvider = {
     ...provider,
     id: `provider_${Date.now()}`,
     isBuiltIn: false
-  };
-  state.providers.push(newProvider);
-  saveModelConfig(state);
-  return newProvider;
-};
+  }
+  state.providers.push(newProvider)
+  saveModelConfig(state)
+  return newProvider
+}
 
 /**
  * 更新提供商
  */
-export const updateProvider = (id: string, updates: Partial<ModelProvider>): boolean => {
-  const state = loadModelConfig();
-  const index = state.providers.findIndex(p => p.id === id);
-  if (index === -1) return false;
+export const updateProvider = (
+  id: string,
+  updates: Partial<ModelProvider>
+): boolean => {
+  const state = loadModelConfig()
+  const index = state.providers.findIndex((p) => p.id === id)
+  if (index === -1) return false
 
   // 不允许修改内置提供商的某些属性
   if (state.providers[index].isBuiltIn) {
-    delete updates.id;
-    delete updates.isBuiltIn;
-    delete updates.baseUrl;
+    delete updates.id
+    delete updates.isBuiltIn
+    delete updates.baseUrl
   }
 
-  state.providers[index] = { ...state.providers[index], ...updates };
-  saveModelConfig(state);
-  return true;
-};
+  state.providers[index] = { ...state.providers[index], ...updates }
+  saveModelConfig(state)
+  return true
+}
 
 /**
  * 删除提供商
  */
 export const deleteProvider = (id: string): boolean => {
-  const state = loadModelConfig();
-  const provider = state.providers.find(p => p.id === id);
+  const state = loadModelConfig()
+  const provider = state.providers.find((p) => p.id === id)
 
   // 不允许删除内置提供商
-  if (!provider || provider.isBuiltIn) return false;
+  if (!provider || provider.isBuiltIn) return false
 
-  state.providers = state.providers.filter(p => p.id !== id);
+  state.providers = state.providers.filter((p) => p.id !== id)
 
   // 如果删除的是当前使用的提供商，切换回默认
   if (state.currentConfig.chatModel.providerId === id) {
-    state.currentConfig.chatModel.providerId = 'antsk';
+    state.currentConfig.chatModel.providerId = 'antsk'
   }
   if (state.currentConfig.imageModel.providerId === id) {
-    state.currentConfig.imageModel.providerId = 'antsk';
+    state.currentConfig.imageModel.providerId = 'antsk'
   }
   if (state.currentConfig.videoModel.providerId === id) {
-    state.currentConfig.videoModel.providerId = 'antsk';
+    state.currentConfig.videoModel.providerId = 'antsk'
   }
 
-  saveModelConfig(state);
-  return true;
-};
+  saveModelConfig(state)
+  return true
+}
 
 /**
  * 获取当前模型配置
  */
 export const getCurrentConfig = (): ModelConfig => {
-  return loadModelConfig().currentConfig;
-};
+  return loadModelConfig().currentConfig
+}
 
 /**
  * 更新对话模型配置
  */
-export const updateChatModelConfig = (config: Partial<ChatModelConfig>): void => {
-  const state = loadModelConfig();
-  state.currentConfig.chatModel = { ...state.currentConfig.chatModel, ...config };
-  saveModelConfig(state);
-};
+export const updateChatModelConfig = (
+  config: Partial<ChatModelConfig>
+): void => {
+  const state = loadModelConfig()
+  state.currentConfig.chatModel = {
+    ...state.currentConfig.chatModel,
+    ...config
+  }
+  saveModelConfig(state)
+}
 
 /**
  * 更新画图模型配置
  */
-export const updateImageModelConfig = (config: Partial<ImageModelConfig>): void => {
-  const state = loadModelConfig();
-  state.currentConfig.imageModel = { ...state.currentConfig.imageModel, ...config };
-  saveModelConfig(state);
-};
+export const updateImageModelConfig = (
+  config: Partial<ImageModelConfig>
+): void => {
+  const state = loadModelConfig()
+  state.currentConfig.imageModel = {
+    ...state.currentConfig.imageModel,
+    ...config
+  }
+  saveModelConfig(state)
+}
 
 /**
  * 更新视频模型配置
  */
-export const updateVideoModelConfig = (config: Partial<VideoModelConfig>): void => {
-  const state = loadModelConfig();
-  state.currentConfig.videoModel = { ...state.currentConfig.videoModel, ...config };
-  saveModelConfig(state);
-};
+export const updateVideoModelConfig = (
+  config: Partial<VideoModelConfig>
+): void => {
+  const state = loadModelConfig()
+  state.currentConfig.videoModel = {
+    ...state.currentConfig.videoModel,
+    ...config
+  }
+  saveModelConfig(state)
+}
 
 /**
  * 获取当前对话模型的完整 API URL
  */
 export const getChatApiUrl = (): string => {
-  const config = getCurrentConfig();
-  const provider = getProviderById(config.chatModel.providerId) || getDefaultProvider();
-  const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-  const endpoint = config.chatModel.endpoint || '/v1/chat/completions';
-  return `${baseUrl}${endpoint}`;
-};
+  const config = getCurrentConfig()
+  const provider =
+    getProviderById(config.chatModel.providerId) || getDefaultProvider()
+  const baseUrl = provider.baseUrl.replace(/\/+$/, '')
+  const endpoint = config.chatModel.endpoint || '/v1/chat/completions'
+  return `${baseUrl}${endpoint}`
+}
 
 /**
  * 获取当前画图模型的完整 API URL
  */
 export const getImageApiUrl = (): string => {
-  const config = getCurrentConfig();
-  const provider = getProviderById(config.imageModel.providerId) || getDefaultProvider();
-  const baseUrl = provider.baseUrl.replace(/\/+$/, '');
-  const modelName = config.imageModel.modelName || 'gemini-3-pro-image-preview';
-  const endpoint = config.imageModel.endpoint || `/v1beta/models/${modelName}:generateContent`;
-  return `${baseUrl}${endpoint}`;
-};
+  const config = getCurrentConfig()
+  const provider =
+    getProviderById(config.imageModel.providerId) || getDefaultProvider()
+  const baseUrl = provider.baseUrl.replace(/\/+$/, '')
+  const modelName = config.imageModel.modelName || 'gemini-3-pro-image-preview'
+  const endpoint =
+    config.imageModel.endpoint || `/v1beta/models/${modelName}:generateContent`
+  return `${baseUrl}${endpoint}`
+}
 
 /**
  * 获取当前视频模型的完整 API URL（仅用于异步视频 API）
  */
 export const getVideoApiUrl = (): string => {
-  const config = getCurrentConfig();
-  const provider = getProviderById(config.videoModel.providerId) || getDefaultProvider();
-  const baseUrl = provider.baseUrl.replace(/\/+$/, '');
+  const config = getCurrentConfig()
+  const provider =
+    getProviderById(config.videoModel.providerId) || getDefaultProvider()
+  const baseUrl = provider.baseUrl.replace(/\/+$/, '')
 
   if (config.videoModel.type === 'sora') {
-    return `${baseUrl}/v1/videos`;
+    return `${baseUrl}/v1/videos`
   } else {
-    return `${baseUrl}/v1/chat/completions`;
+    return `${baseUrl}/v1/chat/completions`
   }
-};
+}
 
 /**
  * 获取当前提供商的基础 URL
  */
-export const getApiBaseUrl = (type: 'chat' | 'image' | 'video' = 'chat'): string => {
-  const config = getCurrentConfig();
-  let providerId: string;
+export const getApiBaseUrl = (
+  type: 'chat' | 'image' | 'video' = 'chat'
+): string => {
+  const config = getCurrentConfig()
+  let providerId: string
 
   switch (type) {
     case 'chat':
-      providerId = config.chatModel.providerId;
-      break;
+      providerId = config.chatModel.providerId
+      break
     case 'image':
-      providerId = config.imageModel.providerId;
-      break;
+      providerId = config.imageModel.providerId
+      break
     case 'video':
-      providerId = config.videoModel.providerId;
-      break;
+      providerId = config.videoModel.providerId
+      break
     default:
-      providerId = 'antsk';
+      providerId = 'antsk'
   }
 
-  const provider = getProviderById(providerId) || getDefaultProvider();
-  return provider.baseUrl.replace(/\/+$/, '');
-};
+  const provider = getProviderById(providerId) || getDefaultProvider()
+  return provider.baseUrl.replace(/\/+$/, '')
+}
 
 /**
  * 获取提供商的 API Key（如果有独立 Key 则使用，否则返回 undefined）
  */
 export const getProviderApiKey = (providerId: string): string | undefined => {
-  const provider = getProviderById(providerId);
-  return provider?.apiKey;
-};
+  const provider = getProviderById(providerId)
+  return provider?.apiKey
+}
 
 /**
  * 获取默认横竖屏比例
  */
 export const getDefaultAspectRatio = (): AspectRatio => {
-  return loadModelConfig().defaultAspectRatio;
-};
+  return loadModelConfig().defaultAspectRatio
+}
 
 /**
  * 设置默认横竖屏比例
  */
 export const setDefaultAspectRatio = (ratio: AspectRatio): void => {
-  const state = loadModelConfig();
-  state.defaultAspectRatio = ratio;
-  saveModelConfig(state);
-};
+  const state = loadModelConfig()
+  state.defaultAspectRatio = ratio
+  saveModelConfig(state)
+}
 
 /**
  * 获取默认视频时长
  */
 export const getDefaultVideoDuration = (): VideoDuration => {
-  return loadModelConfig().defaultVideoDuration;
-};
+  return loadModelConfig().defaultVideoDuration
+}
 
 /**
  * 设置默认视频时长
  */
 export const setDefaultVideoDuration = (duration: VideoDuration): void => {
-  const state = loadModelConfig();
-  state.defaultVideoDuration = duration;
-  saveModelConfig(state);
-};
+  const state = loadModelConfig()
+  state.defaultVideoDuration = duration
+  saveModelConfig(state)
+}
 
 /**
  * 获取视频模型类型
  */
 export const getVideoModelType = (): 'sora' | 'veo' => {
-  return getCurrentConfig().videoModel.type;
-};
+  return getCurrentConfig().videoModel.type
+}
 
 /**
  * 根据横竖屏比例获取 Veo 模型名称
  * @param hasReferenceImage 是否有参考图
  * @param aspectRatio 横竖屏比例
  */
-export const getVeoModelName = (hasReferenceImage: boolean, aspectRatio: AspectRatio): string => {
-  const orientation = aspectRatio === '9:16' ? 'portrait' : 'landscape';
+export const getVeoModelName = (
+  hasReferenceImage: boolean,
+  aspectRatio: AspectRatio
+): string => {
+  const orientation = aspectRatio === '9:16' ? 'portrait' : 'landscape'
 
   if (hasReferenceImage) {
-    return `veo_3_1_i2v_s_fast_fl_${orientation}`;
+    return `veo_3_1_i2v_s_fast_fl_${orientation}`
   } else {
-    return `veo_3_1_t2v_fast_${orientation}`;
+    return `veo_3_1_t2v_fast_${orientation}`
   }
-};
+}
 
 /**
  * 根据横竖屏比例获取 Sora 视频尺寸
@@ -383,31 +419,50 @@ export const getSoraVideoSize = (aspectRatio: AspectRatio): string => {
     '16:9': '1280x720',
     '9:16': '720x1280',
     '1:1': '720x720'
-  };
-  return sizeMap[aspectRatio];
-};
+  }
+  return sizeMap[aspectRatio]
+}
 
 /**
  * 重置为默认配置
  */
 export const resetToDefault = (): void => {
-  runtimeState = null;
-  localStorage.removeItem(STORAGE_KEY);
-  loadModelConfig(); // 重新加载默认值
-};
+  runtimeState = null
+  localStorage.removeItem(STORAGE_KEY)
+  loadModelConfig() // 重新加载默认值
+}
 
 /**
  * 预定义的对话模型列表
  */
 export const AVAILABLE_CHAT_MODELS = [
-  { name: 'GPT-5.4', value: 'gpt-5.4', description: '高性价比，适合长文本处理' },
-  { name: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6', description: '速度与智能平衡，代码/Agent 友好' },
-];
+  {
+    name: 'GPT-5.4',
+    value: 'gpt-5.4',
+    description: '高性价比，适合长文本处理'
+  },
+  {
+    name: 'Claude Sonnet 4.6',
+    value: 'claude-sonnet-4-6',
+    description: '速度与智能平衡，代码/Agent 友好'
+  }
+]
 
 /**
  * 预定义的视频模型列表
  */
 export const AVAILABLE_VIDEO_MODELS = [
-  { name: 'Sora-2', value: 'sora-2', type: 'sora' as const, description: '异步模式，支持 4/8/12 秒' },
-  { name: 'Doubao Seedance 1.5 Pro (内置)', value: 'doubao-seedance-1-5-pro', type: 'sora' as const, description: 'Async mode with the same request style as Sora-2, supports 4/8/12 seconds.' },
-];
+  {
+    name: 'Sora-2',
+    value: 'sora-2',
+    type: 'sora' as const,
+    description: '异步模式，支持 4/8/12 秒'
+  },
+  {
+    name: 'Doubao Seedance 1.5 Pro (内置)',
+    value: 'doubao-seedance-1-5-pro',
+    type: 'sora' as const,
+    description:
+      'Async mode with the same request style as Sora-2, supports 4/8/12 seconds.'
+  }
+]

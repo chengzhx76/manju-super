@@ -3,19 +3,30 @@
  * 处理 OpenAI 兼容的 Chat Completions API
  */
 
-import { ChatModelDefinition, ChatOptions, ChatModelParams } from '../../types/model';
-import { getApiKeyForModel, getApiBaseUrlForModel, getActiveChatModel } from '../modelRegistry';
-import { DEFAULT_CHAT_VERIFY_MODEL } from '../modelIdUtils';
+import {
+  ChatModelDefinition,
+  ChatOptions,
+  ChatModelParams
+} from '../../types/model'
+import {
+  getApiKeyForModel,
+  getApiBaseUrlForModel,
+  getActiveChatModel
+} from '../modelRegistry'
+import { DEFAULT_CHAT_VERIFY_MODEL } from '../modelIdUtils'
 
 /**
  * API Key 错误类
  */
 export class ApiKeyError extends Error {
   constructor(message: string) {
-    super(message);
-    this.name = 'ApiKeyError';
+    super(message)
+    this.name = 'ApiKeyError'
   }
 }
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 /**
  * 重试操作
@@ -25,43 +36,48 @@ const retryOperation = async <T>(
   maxRetries: number = 3,
   delay: number = 1000
 ): Promise<T> => {
-  let lastError: Error | null = null;
-  
+  let lastError: unknown = null
+
   for (let i = 0; i < maxRetries; i++) {
     try {
-      return await operation();
-    } catch (error: any) {
-      lastError = error;
+      return await operation()
+    } catch (error: unknown) {
+      lastError = error
+      const message = getErrorMessage(error)
       // 400/401/403 错误不重试
-      if (error.message?.includes('400') || 
-          error.message?.includes('401') || 
-          error.message?.includes('403')) {
-        throw error;
+      if (
+        message.includes('400') ||
+        message.includes('401') ||
+        message.includes('403')
+      ) {
+        throw error
       }
       if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+        await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)))
       }
     }
   }
-  
-  throw lastError;
-};
+
+  throw (lastError instanceof Error
+    ? lastError
+    : new Error('请求失败，且未返回可识别错误信息'))
+}
 
 /**
  * 清理 JSON 响应
  */
 const cleanJsonResponse = (response: string): string => {
-  if (!response) return '';
-  let cleaned = response.trim();
-  const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (!response) return ''
+  let cleaned = response.trim()
+  const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fencedMatch) {
-    cleaned = fencedMatch[1];
+    cleaned = fencedMatch[1]
   } else {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '');
-    cleaned = cleaned.replace(/```\s*$/, '');
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '')
+    cleaned = cleaned.replace(/```\s*$/, '')
   }
-  return cleaned.trim();
-};
+  return cleaned.trim()
+}
 
 /**
  * 调用对话模型 API
@@ -71,153 +87,156 @@ export const callChatApi = async (
   model?: ChatModelDefinition
 ): Promise<string> => {
   // 获取当前激活的模型
-  const activeModel = model || getActiveChatModel();
+  const activeModel = model || getActiveChatModel()
   if (!activeModel) {
-    throw new Error('没有可用的对话模型');
+    throw new Error('没有可用的对话模型')
   }
 
   // 获取 API 配置
-  const apiKey = getApiKeyForModel(activeModel.id);
+  const apiKey = getApiKeyForModel(activeModel.id)
   if (!apiKey) {
-    throw new ApiKeyError('API Key 缺失，请在设置中配置 API Key');
+    throw new ApiKeyError('API Key 缺失，请在设置中配置 API Key')
   }
-  
-  const apiBase = getApiBaseUrlForModel(activeModel.id);
-  const endpoint = activeModel.endpoint || '/v1/chat/completions';
-  const apiModel = activeModel.apiModel || activeModel.id;
-  
+
+  const apiBase = getApiBaseUrlForModel(activeModel.id)
+  const endpoint = activeModel.endpoint || '/v1/chat/completions'
+  const apiModel = activeModel.apiModel || activeModel.id
+
   // 合并参数
   const params: ChatModelParams = {
     ...activeModel.params,
-    ...options.overrideParams,
-  };
-  
-  // 构建请求体
-  const messages: any[] = [];
-  
-  if (options.systemPrompt) {
-    messages.push({ role: 'system', content: options.systemPrompt });
+    ...options.overrideParams
   }
-  
-  messages.push({ role: 'user', content: options.prompt });
-  
-  const requestBody: any = {
+
+  // 构建请求体
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = []
+
+  if (options.systemPrompt) {
+    messages.push({ role: 'system', content: options.systemPrompt })
+  }
+
+  messages.push({ role: 'user', content: options.prompt })
+
+  const requestBody: Record<string, unknown> = {
     model: apiModel,
     messages,
-    temperature: params.temperature,
-  };
-  if (params.maxTokens !== undefined) {
-    requestBody.max_tokens = params.maxTokens;
+    temperature: params.temperature
   }
-  
+  if (params.maxTokens !== undefined) {
+    requestBody.max_tokens = params.maxTokens
+  }
+
   if (params.topP !== undefined) {
-    requestBody.top_p = params.topP;
+    requestBody.top_p = params.topP
   }
   if (params.frequencyPenalty !== undefined) {
-    requestBody.frequency_penalty = params.frequencyPenalty;
+    requestBody.frequency_penalty = params.frequencyPenalty
   }
   if (params.presencePenalty !== undefined) {
-    requestBody.presence_penalty = params.presencePenalty;
+    requestBody.presence_penalty = params.presencePenalty
   }
-  
+
   // JSON 格式响应
   if (options.responseFormat === 'json') {
-    requestBody.response_format = { type: 'json_object' };
+    requestBody.response_format = { type: 'json_object' }
   }
-  
+
   // 超时控制
-  const timeout = options.timeout || 600000; // 默认 10 分钟
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
+  const timeout = options.timeout || 600000 // 默认 10 分钟
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
   try {
     const response = await retryOperation(async () => {
       const res = await fetch(`${apiBase}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`
         },
         body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-      
+        signal: controller.signal
+      })
+
       if (!res.ok) {
-        let errorMessage = `HTTP 错误: ${res.status}`;
+        let errorMessage = `HTTP 错误: ${res.status}`
         try {
-          const errorData = await res.json();
-          errorMessage = errorData.error?.message || errorMessage;
+          const errorData = await res.json()
+          errorMessage = errorData.error?.message || errorMessage
         } catch (e) {
-          const errorText = await res.text();
-          if (errorText) errorMessage = errorText;
+          const errorText = await res.text()
+          if (errorText) errorMessage = errorText
         }
-        throw new Error(errorMessage);
+        throw new Error(errorMessage)
       }
-      
-      return res;
-    });
-    
-    clearTimeout(timeoutId);
-    
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    
+
+      return res
+    })
+
+    clearTimeout(timeoutId)
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content || ''
+
     // 如果是 JSON 格式，清理响应
     if (options.responseFormat === 'json') {
-      return cleanJsonResponse(content);
+      return cleanJsonResponse(content)
     }
-    
-    return content;
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    
-    if (error.name === 'AbortError') {
-      throw new Error(`请求超时 (${timeout / 1000}秒)`);
+
+    return content
+  } catch (error: unknown) {
+    clearTimeout(timeoutId)
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`请求超时 (${timeout / 1000}秒)`)
     }
-    
-    throw error;
+
+    throw error
   }
-};
+}
 
 /**
  * 验证 API Key
  */
-export const verifyApiKey = async (apiKey: string, baseUrl?: string): Promise<{ success: boolean; message: string }> => {
+export const verifyApiKey = async (
+  apiKey: string,
+  baseUrl?: string
+): Promise<{ success: boolean; message: string }> => {
   try {
-    const url = baseUrl || 'https://api.antsk.cn';
-    
+    const url = baseUrl || 'https://api.antsk.cn'
+
     const response = await fetch(`${url}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: DEFAULT_CHAT_VERIFY_MODEL,
         messages: [{ role: 'user', content: '仅返回1' }],
         temperature: 0.1,
-        max_tokens: 5,
-      }),
-    });
+        max_tokens: 5
+      })
+    })
 
     if (!response.ok) {
-      let errorMessage = `验证失败: ${response.status}`;
+      let errorMessage = `验证失败: ${response.status}`
       try {
-        const errorData = await response.json();
-        errorMessage = errorData.error?.message || errorMessage;
+        const errorData = await response.json()
+        errorMessage = errorData.error?.message || errorMessage
       } catch (e) {
         // ignore
       }
-      return { success: false, message: errorMessage };
+      return { success: false, message: errorMessage }
     }
 
-    const data = await response.json();
+    const data = await response.json()
     if (data.choices?.[0]?.message?.content !== undefined) {
-      return { success: true, message: 'API Key 验证成功' };
+      return { success: true, message: 'API Key 验证成功' }
     } else {
-      return { success: false, message: '返回格式异常' };
+      return { success: false, message: '返回格式异常' }
     }
-  } catch (error: any) {
-    return { success: false, message: error.message || '网络错误' };
+  } catch (error: unknown) {
+    return { success: false, message: getErrorMessage(error) || '网络错误' }
   }
-};
+}

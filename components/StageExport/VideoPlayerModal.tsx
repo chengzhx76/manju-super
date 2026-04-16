@@ -1,20 +1,20 @@
-import React from 'react';
-import { Play, Pause, SkipForward, SkipBack, X } from 'lucide-react';
-import { Shot, ProjectState } from '../../types';
-import { STYLES } from './constants';
-import { useResolvedVideoUrl } from '../../hooks/useResolvedVideoUrl';
+import React from 'react'
+import { Play, Pause, SkipForward, SkipBack, X } from 'lucide-react'
+import { Shot, ProjectState } from '../../types'
+import { STYLES } from './constants'
+import { useResolvedVideoUrl } from '../../hooks/useResolvedVideoUrl'
 
 interface Props {
-  completedShots: Shot[];
-  currentShotIndex: number;
-  isPlaying: boolean;
-  project: ProjectState;
-  onClose: () => void;
-  onPlayPause: () => void;
-  onPrevShot: () => void;
-  onNextShot: () => void;
-  onShotChange: (index: number) => void;
-  videoRef: React.RefObject<HTMLVideoElement>;
+  completedShots: Shot[]
+  currentShotIndex: number
+  isPlaying: boolean
+  project: ProjectState
+  onClose: () => void
+  onPlayPause: () => void
+  onPrevShot: () => void
+  onNextShot: () => void
+  onShotChange: (index: number) => void
+  videoRef: React.RefObject<HTMLVideoElement>
 }
 
 const VideoPlayerModal: React.FC<Props> = ({
@@ -29,9 +29,11 @@ const VideoPlayerModal: React.FC<Props> = ({
   onShotChange,
   videoRef
 }) => {
-  const currentShot = completedShots[currentShotIndex];
-  const shotOriginalIndex = project.shots.findIndex(s => s.id === currentShot.id);
-  const resolvedVideoSrc = useResolvedVideoUrl(currentShot.interval?.videoUrl);
+  const currentShot = completedShots[currentShotIndex]
+  const shotOriginalIndex = project.shots.findIndex(
+    (s) => s.id === currentShot.id
+  )
+  const resolvedVideoSrc = useResolvedVideoUrl(currentShot.interval?.videoUrl)
 
   return (
     <div className={STYLES.videoModal.overlay}>
@@ -40,7 +42,9 @@ const VideoPlayerModal: React.FC<Props> = ({
         <div className="p-4 border-b border-[var(--border-primary)] bg-[var(--bg-surface)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <Play className="w-5 h-5 text-[var(--accent)]" />
-            <h3 className="text-lg font-bold text-[var(--text-primary)]">视频预览</h3>
+            <h3 className="text-lg font-bold text-[var(--text-primary)]">
+              视频预览
+            </h3>
             <span className="px-2 py-0.5 bg-[var(--bg-elevated)] border border-[var(--border-secondary)] text-[var(--text-tertiary)] text-[10px] rounded uppercase font-mono tracking-wider">
               镜头 {shotOriginalIndex + 1} / {project.shots.length}
             </span>
@@ -65,11 +69,11 @@ const VideoPlayerModal: React.FC<Props> = ({
             playsInline
             onEnded={() => {
               if (currentShotIndex < completedShots.length - 1) {
-                onShotChange(currentShotIndex + 1);
+                onShotChange(currentShotIndex + 1)
               }
             }}
           />
-          
+
           {/* Play/Pause Overlay Button */}
           <button
             onClick={onPlayPause}
@@ -85,9 +89,13 @@ const VideoPlayerModal: React.FC<Props> = ({
 
         {/* Shot Info */}
         <div className="p-4 border-t border-[var(--border-primary)] bg-[var(--bg-surface)]">
-          <p className="text-sm text-[var(--text-secondary)] mb-2 line-clamp-2">{currentShot.actionSummary}</p>
+          <p className="text-sm text-[var(--text-secondary)] mb-2 line-clamp-2">
+            {currentShot.actionSummary}
+          </p>
           {currentShot.dialogue && (
-            <p className="text-xs text-[var(--accent-text)] italic">"{currentShot.dialogue}"</p>
+            <p className="text-xs text-[var(--accent-text)] italic">
+              "{currentShot.dialogue}"
+            </p>
           )}
         </div>
 
@@ -105,7 +113,11 @@ const VideoPlayerModal: React.FC<Props> = ({
               onClick={onPlayPause}
               className="w-12 h-10 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--text-primary)] flex items-center justify-center transition-colors"
             >
-              {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+              {isPlaying ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5 ml-0.5" />
+              )}
             </button>
             <button
               onClick={onNextShot}
@@ -135,7 +147,7 @@ const VideoPlayerModal: React.FC<Props> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default VideoPlayerModal;
+export default VideoPlayerModal

@@ -1,22 +1,22 @@
-import React from 'react';
-import { X, Edit2, Check, Sparkles, Loader2 } from 'lucide-react';
+import React from 'react'
+import { X, Edit2, Check, Sparkles, Loader2 } from 'lucide-react'
 
 interface EditModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: () => void;
-  title: string;
-  icon?: React.ReactNode;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  textareaClassName?: string;
-  showAIGenerate?: boolean;
-  onAIGenerate?: () => Promise<void>;
-  isAIGenerating?: boolean;
-  aiInstruction?: string;
-  onAIInstructionChange?: (value: string) => void;
-  aiInstructionPlaceholder?: string;
+  isOpen: boolean
+  onClose: () => void
+  onSave: () => void
+  title: string
+  icon?: React.ReactNode
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  textareaClassName?: string
+  showAIGenerate?: boolean
+  onAIGenerate?: () => Promise<void>
+  isAIGenerating?: boolean
+  aiInstruction?: string
+  onAIInstructionChange?: (value: string) => void
+  aiInstructionPlaceholder?: string
 }
 
 const EditModal: React.FC<EditModalProps> = ({
@@ -34,15 +34,15 @@ const EditModal: React.FC<EditModalProps> = ({
   isAIGenerating = false,
   aiInstruction = '',
   onAIInstructionChange,
-  aiInstructionPlaceholder = '可选：输入你希望 AI 调整或强化的要求（如节奏、情绪、动作重点）',
+  aiInstructionPlaceholder = '可选：输入你希望 AI 调整或强化的要求（如节奏、情绪、动作重点）'
 }) => {
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   const handleAIGenerate = async () => {
     if (onAIGenerate && !isAIGenerating) {
-      await onAIGenerate();
+      await onAIGenerate()
     }
-  };
+  }
 
   return (
     <div
@@ -138,7 +138,7 @@ const EditModal: React.FC<EditModalProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default EditModal;
+export default EditModal

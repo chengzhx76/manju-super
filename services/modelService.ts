@@ -8,20 +8,24 @@ import {
   ImageGenerateOptions,
   VideoGenerateOptions,
   AspectRatio,
-  VideoDuration,
-} from '../types/model';
+  VideoDuration
+} from '../types/model'
 
-import { callChatApi, verifyApiKey as verifyChatApiKey, ApiKeyError } from './adapters/chatAdapter';
-import { callImageApi } from './adapters/imageAdapter';
-import { callVideoApi } from './adapters/videoAdapter';
+import {
+  callChatApi,
+  verifyApiKey as verifyChatApiKey,
+  ApiKeyError
+} from './adapters/chatAdapter'
+import { callImageApi } from './adapters/imageAdapter'
+import { callVideoApi } from './adapters/videoAdapter'
 import {
   getGlobalApiKey,
   setGlobalApiKey as setRegistryApiKey,
-  getActiveVideoModel,
-} from './modelRegistry';
+  getActiveVideoModel
+} from './modelRegistry'
 
 // 导出 ApiKeyError 供外部使用
-export { ApiKeyError };
+export { ApiKeyError }
 
 // ============================================
 // 基础模型调用
@@ -33,35 +37,41 @@ export { ApiKeyError };
  * @returns AI 生成的文本
  */
 export const chat = async (options: ChatOptions): Promise<string> => {
-  return callChatApi(options);
-};
+  return callChatApi(options)
+}
 
 /**
  * 调用对话模型（JSON 格式响应）
  * @param options 调用参数
  * @returns AI 生成的 JSON 字符串
  */
-export const chatJson = async (options: Omit<ChatOptions, 'responseFormat'>): Promise<string> => {
-  return callChatApi({ ...options, responseFormat: 'json' });
-};
+export const chatJson = async (
+  options: Omit<ChatOptions, 'responseFormat'>
+): Promise<string> => {
+  return callChatApi({ ...options, responseFormat: 'json' })
+}
 
 /**
  * 生成图片
  * @param options 生成参数
  * @returns Base64 格式的图片数据
  */
-export const generateImage = async (options: ImageGenerateOptions): Promise<string> => {
-  return callImageApi(options);
-};
+export const generateImage = async (
+  options: ImageGenerateOptions
+): Promise<string> => {
+  return callImageApi(options)
+}
 
 /**
  * 生成视频
  * @param options 生成参数
  * @returns Base64 格式的视频数据
  */
-export const generateVideo = async (options: VideoGenerateOptions): Promise<string> => {
-  return callVideoApi(options);
-};
+export const generateVideo = async (
+  options: VideoGenerateOptions
+): Promise<string> => {
+  return callVideoApi(options)
+}
 
 // ============================================
 // 高级业务函数
@@ -71,82 +81,86 @@ export const generateVideo = async (options: VideoGenerateOptions): Promise<stri
  * 解析剧本为结构化数据
  */
 export const parseScript = async (options: {
-  rawText: string;
-  language: string;
-  visualStyle: string;
-}): Promise<any> => {
-  const prompt = buildScriptParsePrompt(options.rawText, options.language, options.visualStyle);
-  const result = await chatJson({ prompt, timeout: 600000 });
-  return JSON.parse(result);
-};
+  rawText: string
+  language: string
+  visualStyle: string
+}): Promise<Record<string, unknown>> => {
+  const prompt = buildScriptParsePrompt(
+    options.rawText,
+    options.language,
+    options.visualStyle
+  )
+  const result = await chatJson({ prompt, timeout: 600000 })
+  return JSON.parse(result)
+}
 
 /**
  * 生成分镜列表
  */
 export const generateShots = async (options: {
-  scriptData: any;
-}): Promise<any[]> => {
-  const prompt = buildShotGenerationPrompt(options.scriptData);
-  const result = await chatJson({ prompt, timeout: 600000 });
-  const parsed = JSON.parse(result);
-  return parsed.shots || [];
-};
+  scriptData: unknown
+}): Promise<Record<string, unknown>[]> => {
+  const prompt = buildShotGenerationPrompt(options.scriptData)
+  const result = await chatJson({ prompt, timeout: 600000 })
+  const parsed = JSON.parse(result)
+  return parsed.shots || []
+}
 
 /**
  * 生成视觉提示词
  */
 export const generateVisualPrompts = async (options: {
-  type: 'character' | 'scene';
-  data: any;
-  genre: string;
-  visualStyle: string;
-  language: string;
+  type: 'character' | 'scene'
+  data: Record<string, unknown>
+  genre: string
+  visualStyle: string
+  language: string
 }): Promise<{ visualPrompt: string; negativePrompt: string }> => {
-  const prompt = buildVisualPromptGenerationPrompt(options);
-  const result = await chatJson({ prompt });
-  return JSON.parse(result);
-};
+  const prompt = buildVisualPromptGenerationPrompt(options)
+  const result = await chatJson({ prompt })
+  return JSON.parse(result)
+}
 
 /**
  * 优化关键帧提示词
  */
 export const optimizeKeyframePrompt = async (options: {
-  frameType: 'start' | 'end';
-  actionSummary: string;
-  cameraMovement: string;
-  sceneInfo: string;
-  characterInfo: string;
-  visualStyle: string;
+  frameType: 'start' | 'end'
+  actionSummary: string
+  cameraMovement: string
+  sceneInfo: string
+  characterInfo: string
+  visualStyle: string
 }): Promise<string> => {
-  const prompt = buildKeyframeOptimizationPrompt(options);
-  return chat({ prompt });
-};
+  const prompt = buildKeyframeOptimizationPrompt(options)
+  return chat({ prompt })
+}
 
 /**
  * 生成动作建议
  */
 export const generateActionSuggestion = async (options: {
-  startFramePrompt: string;
-  endFramePrompt: string;
-  cameraMovement: string;
+  startFramePrompt: string
+  endFramePrompt: string
+  cameraMovement: string
 }): Promise<string> => {
-  const prompt = buildActionSuggestionPrompt(options);
-  return chat({ prompt });
-};
+  const prompt = buildActionSuggestionPrompt(options)
+  return chat({ prompt })
+}
 
 /**
  * 拆分镜头
  */
 export const splitShot = async (options: {
-  shot: any;
-  sceneInfo: string;
-  characterNames: string[];
-  visualStyle: string;
-}): Promise<{ subShots: any[] }> => {
-  const prompt = buildShotSplitPrompt(options);
-  const result = await chatJson({ prompt });
-  return JSON.parse(result);
-};
+  shot: Record<string, unknown>
+  sceneInfo: string
+  characterNames: string[]
+  visualStyle: string
+}): Promise<{ subShots: Record<string, unknown>[] }> => {
+  const prompt = buildShotSplitPrompt(options)
+  const result = await chatJson({ prompt })
+  return JSON.parse(result)
+}
 
 // ============================================
 // API Key 管理
@@ -155,23 +169,26 @@ export const splitShot = async (options: {
 /**
  * 验证 API Key
  */
-export const verifyApiKey = async (apiKey: string, baseUrl?: string): Promise<{ success: boolean; message: string }> => {
-  return verifyChatApiKey(apiKey, baseUrl);
-};
+export const verifyApiKey = async (
+  apiKey: string,
+  baseUrl?: string
+): Promise<{ success: boolean; message: string }> => {
+  return verifyChatApiKey(apiKey, baseUrl)
+}
 
 /**
  * 获取全局 API Key
  */
 export const getApiKey = (): string | undefined => {
-  return getGlobalApiKey();
-};
+  return getGlobalApiKey()
+}
 
 /**
  * 设置全局 API Key
  */
 export const setApiKey = (apiKey: string): void => {
-  setRegistryApiKey(apiKey);
-};
+  setRegistryApiKey(apiKey)
+}
 
 // ============================================
 // 辅助函数
@@ -181,34 +198,38 @@ export const setApiKey = (apiKey: string): void => {
  * 获取当前视频模型的支持参数
  */
 export const getVideoModelCapabilities = (): {
-  supportedAspectRatios: AspectRatio[];
-  supportedDurations: VideoDuration[];
-  defaultAspectRatio: AspectRatio;
-  defaultDuration: VideoDuration;
+  supportedAspectRatios: AspectRatio[]
+  supportedDurations: VideoDuration[]
+  defaultAspectRatio: AspectRatio
+  defaultDuration: VideoDuration
 } => {
-  const model = getActiveVideoModel();
+  const model = getActiveVideoModel()
   if (!model) {
     return {
       supportedAspectRatios: ['16:9', '9:16', '1:1'],
       supportedDurations: [4, 8, 12],
       defaultAspectRatio: '16:9',
-      defaultDuration: 8,
-    };
+      defaultDuration: 8
+    }
   }
-  
+
   return {
     supportedAspectRatios: model.params.supportedAspectRatios,
     supportedDurations: model.params.supportedDurations,
     defaultAspectRatio: model.params.defaultAspectRatio,
-    defaultDuration: model.params.defaultDuration,
-  };
-};
+    defaultDuration: model.params.defaultDuration
+  }
+}
 
 // ============================================
 // 提示词构建函数（私有）
 // ============================================
 
-function buildScriptParsePrompt(rawText: string, language: string, visualStyle: string): string {
+function buildScriptParsePrompt(
+  rawText: string,
+  language: string,
+  visualStyle: string
+): string {
   return `You are a professional screenwriter assistant. Parse the following script/story into structured data.
 
 Script Text:
@@ -228,10 +249,10 @@ Return a valid JSON object with the structure:
   "characters": [{"id": "string", "name": "string", "gender": "string", "age": "string", "personality": "string", "variations": []}],
   "scenes": [{"id": "string", "location": "string", "time": "string", "atmosphere": "string"}],
   "storyParagraphs": [{"id": number, "text": "string", "sceneRefId": "string"}]
-}`;
+}`
 }
 
-function buildShotGenerationPrompt(scriptData: any): string {
+function buildShotGenerationPrompt(scriptData: unknown): string {
   return `You are a professional film director. Generate a shot list for the following script.
 
 Script Data:
@@ -259,18 +280,18 @@ Return a valid JSON object:
       "keyframes": []
     }
   ]
-}`;
+}`
 }
 
 function buildVisualPromptGenerationPrompt(options: {
-  type: 'character' | 'scene';
-  data: any;
-  genre: string;
-  visualStyle: string;
-  language: string;
+  type: 'character' | 'scene'
+  data: Record<string, unknown>
+  genre: string
+  visualStyle: string
+  language: string
 }): string {
-  const { type, data, genre, visualStyle, language } = options;
-  
+  const { type, data, genre, visualStyle, language } = options
+
   if (type === 'character') {
     return `Generate a detailed visual prompt for this character:
 Name: ${data.name}
@@ -286,7 +307,7 @@ Return JSON:
 {
   "visualPrompt": "detailed description for image generation",
   "negativePrompt": "elements to avoid"
-}`;
+}`
   } else {
     return `Generate a detailed visual prompt for this scene:
 Location: ${data.location}
@@ -301,17 +322,17 @@ Return JSON:
 {
   "visualPrompt": "detailed description for image generation",
   "negativePrompt": "elements to avoid"
-}`;
+}`
   }
 }
 
 function buildKeyframeOptimizationPrompt(options: {
-  frameType: 'start' | 'end';
-  actionSummary: string;
-  cameraMovement: string;
-  sceneInfo: string;
-  characterInfo: string;
-  visualStyle: string;
+  frameType: 'start' | 'end'
+  actionSummary: string
+  cameraMovement: string
+  sceneInfo: string
+  characterInfo: string
+  visualStyle: string
 }): string {
   return `Optimize this keyframe prompt for ${options.frameType} frame:
 
@@ -321,13 +342,13 @@ Scene: ${options.sceneInfo}
 Characters: ${options.characterInfo}
 Visual Style: ${options.visualStyle}
 
-Generate a detailed, cinematic prompt for image generation. Return only the prompt text.`;
+Generate a detailed, cinematic prompt for image generation. Return only the prompt text.`
 }
 
 function buildActionSuggestionPrompt(options: {
-  startFramePrompt: string;
-  endFramePrompt: string;
-  cameraMovement: string;
+  startFramePrompt: string
+  endFramePrompt: string
+  cameraMovement: string
 }): string {
   return `Suggest an action description connecting these keyframes:
 
@@ -335,14 +356,14 @@ Start Frame: ${options.startFramePrompt}
 End Frame: ${options.endFramePrompt}
 Camera Movement: ${options.cameraMovement}
 
-Generate a concise action summary describing the transition. Return only the action text.`;
+Generate a concise action summary describing the transition. Return only the action text.`
 }
 
 function buildShotSplitPrompt(options: {
-  shot: any;
-  sceneInfo: string;
-  characterNames: string[];
-  visualStyle: string;
+  shot: Record<string, unknown>
+  sceneInfo: string
+  characterNames: string[]
+  visualStyle: string
 }): string {
   return `Split this shot into multiple sub-shots:
 
@@ -360,5 +381,5 @@ Return JSON:
       "characters": ["string"]
     }
   ]
-}`;
+}`
 }

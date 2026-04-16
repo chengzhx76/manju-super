@@ -1,12 +1,15 @@
-import React from 'react';
-import { TOTAL_PAGES } from './constants';
+import React from 'react'
+import { TOTAL_PAGES } from './constants'
 
 interface ProgressDotsProps {
-  currentPage: number;
-  onPageChange: (page: number) => void;
+  currentPage: number
+  onPageChange: (page: number) => void
 }
 
-const ProgressDots: React.FC<ProgressDotsProps> = ({ currentPage, onPageChange }) => {
+const ProgressDots: React.FC<ProgressDotsProps> = ({
+  currentPage,
+  onPageChange
+}) => {
   return (
     <div className="flex items-center justify-center gap-2">
       {Array.from({ length: TOTAL_PAGES }, (_, index) => (
@@ -22,7 +25,7 @@ const ProgressDots: React.FC<ProgressDotsProps> = ({ currentPage, onPageChange }
         />
       ))}
     </div>
-  );
-};
+  )
+}
 
-export default ProgressDots;
+export default ProgressDots

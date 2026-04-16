@@ -1,10 +1,10 @@
 ﻿/**
  * StageAssets Component (Refactored)
- * 
+ *
  * This file now serves as a re-export for the modularized StageAssets component.
  * The component has been refactored into smaller, reusable modules for better
  * maintainability and code organization.
- * 
+ *
  * Structure:
  * - StageAssets/
  *   - index.tsx          (Main component logic)
@@ -18,4 +18,4 @@
  *   - WardrobeModal.tsx        (Wardrobe management modal)
  */
 
-export { default } from './StageAssets/index';
+export { default } from './StageAssets/index'

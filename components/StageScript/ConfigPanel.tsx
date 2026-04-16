@@ -1,52 +1,64 @@
-import React, { useRef } from 'react';
-import { BookOpen, Wand2, BrainCircuit, AlertCircle, ChevronRight, ImagePlus } from 'lucide-react';
-import OptionSelector from './OptionSelector';
-import { DURATION_OPTIONS, LANGUAGE_OPTIONS, VISUAL_STYLE_OPTIONS, STYLES } from './constants';
-import ModelSelector from '../ModelSelector';
-import { parseDurationToSeconds } from '../../services/durationParser';
+import React, { useRef } from 'react'
+import {
+  BookOpen,
+  Wand2,
+  BrainCircuit,
+  AlertCircle,
+  ChevronRight,
+  ImagePlus
+} from 'lucide-react'
+import OptionSelector from './OptionSelector'
+import {
+  DURATION_OPTIONS,
+  LANGUAGE_OPTIONS,
+  VISUAL_STYLE_OPTIONS,
+  STYLES
+} from './constants'
+import ModelSelector from '../ModelSelector'
+import { parseDurationToSeconds } from '../../services/durationParser'
 
 interface Props {
-  title: string;
-  duration: string;
-  language: string;
-  model: string;
-  visualStyle: string;
-  customDurationInput: string;
-  customModelInput: string;
-  customStyleInput: string;
-  isProcessing: boolean;
-  isInferringVisualStyle?: boolean;
-  error: string | null;
-  onShowModelConfig?: () => void;
-  onTitleChange: (value: string) => void;
-  onDurationChange: (value: string) => void;
-  onLanguageChange: (value: string) => void;
-  onModelChange: (value: string) => void;
-  onVisualStyleChange: (value: string) => void;
-  onCustomDurationChange: (value: string) => void;
-  onCustomModelChange: (value: string) => void;
-  onCustomStyleChange: (value: string) => void;
-  onInferVisualStyleByImage?: (file: File) => void;
-  enableQualityCheck: boolean;
-  onToggleQualityCheck: (value: boolean) => void;
-  onAnalyze: () => void;
-  analyzeButtonLabel?: string;
-  canCancelAnalyze?: boolean;
-  onCancelAnalyze?: () => void;
+  title: string
+  duration: string
+  language: string
+  model: string
+  visualStyle: string
+  customDurationInput: string
+  customModelInput: string
+  customStyleInput: string
+  isProcessing: boolean
+  isInferringVisualStyle?: boolean
+  error: string | null
+  onShowModelConfig?: () => void
+  onTitleChange: (value: string) => void
+  onDurationChange: (value: string) => void
+  onLanguageChange: (value: string) => void
+  onModelChange: (value: string) => void
+  onVisualStyleChange: (value: string) => void
+  onCustomDurationChange: (value: string) => void
+  onCustomModelChange: (value: string) => void
+  onCustomStyleChange: (value: string) => void
+  onInferVisualStyleByImage?: (file: File) => void
+  enableQualityCheck: boolean
+  onToggleQualityCheck: (value: boolean) => void
+  onAnalyze: () => void
+  analyzeButtonLabel?: string
+  canCancelAnalyze?: boolean
+  onCancelAnalyze?: () => void
 }
 
 const formatDuration = (totalSeconds: number): string => {
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const parts: string[] = [];
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const parts: string[] = []
 
-  if (hours > 0) parts.push(`${hours} 小时`);
-  if (minutes > 0) parts.push(`${minutes} 分钟`);
-  if (seconds > 0 || parts.length === 0) parts.push(`${seconds} 秒`);
+  if (hours > 0) parts.push(`${hours} 小时`)
+  if (minutes > 0) parts.push(`${minutes} 分钟`)
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds} 秒`)
 
-  return parts.join(' ');
-};
+  return parts.join(' ')
+}
 
 const ConfigPanel: React.FC<Props> = ({
   title,
@@ -77,24 +89,28 @@ const ConfigPanel: React.FC<Props> = ({
   canCancelAnalyze,
   onCancelAnalyze
 }) => {
-  const rawDurationValue = duration === 'custom' ? customDurationInput : duration;
-  const parsedDurationSeconds = parseDurationToSeconds(rawDurationValue);
-  const hasDurationInput = rawDurationValue.trim().length > 0;
-  const styleImageInputRef = useRef<HTMLInputElement | null>(null);
-  const canInferStyle = !!onInferVisualStyleByImage && !isProcessing && !isInferringVisualStyle;
+  const rawDurationValue =
+    duration === 'custom' ? customDurationInput : duration
+  const parsedDurationSeconds = parseDurationToSeconds(rawDurationValue)
+  const hasDurationInput = rawDurationValue.trim().length > 0
+  const styleImageInputRef = useRef<HTMLInputElement | null>(null)
+  const canInferStyle =
+    !!onInferVisualStyleByImage && !isProcessing && !isInferringVisualStyle
 
   const handleTriggerStyleUpload = () => {
-    styleImageInputRef.current?.click();
-  };
+    styleImageInputRef.current?.click()
+  }
 
-  const handleStyleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleStyleImageChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0]
     if (file && onInferVisualStyleByImage) {
-      onInferVisualStyleByImage(file);
+      onInferVisualStyleByImage(file)
     }
     // allow selecting the same file again
-    event.target.value = '';
-  };
+    event.target.value = ''
+  }
 
   return (
     <div className="w-96 border-r border-[var(--border-primary)] flex flex-col bg-[var(--bg-primary)]">
@@ -125,8 +141,10 @@ const ConfigPanel: React.FC<Props> = ({
               onChange={(e) => onLanguageChange(e.target.value)}
               className={STYLES.select}
             >
-              {LANGUAGE_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
               ))}
             </select>
             <div className="absolute right-3 top-3 pointer-events-none">
@@ -149,7 +167,10 @@ const ConfigPanel: React.FC<Props> = ({
         <div className="mt-2 text-[10px] leading-relaxed">
           {parsedDurationSeconds !== null ? (
             <p className="text-[var(--text-tertiary)]">
-              当前将按 <span className="font-mono text-[var(--text-secondary)]">{parsedDurationSeconds}s</span>
+              当前将按{' '}
+              <span className="font-mono text-[var(--text-secondary)]">
+                {parsedDurationSeconds}s
+              </span>
               （{formatDuration(parsedDurationSeconds)}）规划分镜。
             </p>
           ) : hasDurationInput ? (
@@ -157,7 +178,9 @@ const ConfigPanel: React.FC<Props> = ({
               时长格式无效。支持示例：90s、3m、3min、2m30s、2:30。
             </p>
           ) : (
-            <p className="text-[var(--text-muted)]">支持格式：90s、3m、3min、2m30s、2:30。</p>
+            <p className="text-[var(--text-muted)]">
+              支持格式：90s、3m、3min、2m30s、2:30。
+            </p>
           )}
         </div>
 
@@ -206,7 +229,9 @@ const ConfigPanel: React.FC<Props> = ({
                   : STYLES.button.disabled
               }`}
             >
-              <ImagePlus className={`w-3.5 h-3.5 ${isInferringVisualStyle ? 'animate-pulse' : ''}`} />
+              <ImagePlus
+                className={`w-3.5 h-3.5 ${isInferringVisualStyle ? 'animate-pulse' : ''}`}
+              />
               {isInferringVisualStyle ? '正在反推风格...' : '上传图片反推风格'}
             </button>
             <input
@@ -216,7 +241,9 @@ const ConfigPanel: React.FC<Props> = ({
               className="hidden"
               onChange={handleStyleImageChange}
             />
-            <p className="text-[10px] text-[var(--text-muted)]">上传你喜欢的风格图片，自动反推风格提示词</p>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              上传你喜欢的风格图片，自动反推风格提示词
+            </p>
           </div>
         )}
 
@@ -245,9 +272,7 @@ const ConfigPanel: React.FC<Props> = ({
           onClick={onAnalyze}
           disabled={isProcessing}
           className={`w-full py-3.5 font-bold text-xs tracking-widest uppercase rounded-lg flex items-center justify-center gap-2 transition-all shadow-lg ${
-            isProcessing
-              ? STYLES.button.disabled
-              : STYLES.button.primary
+            isProcessing ? STYLES.button.disabled : STYLES.button.primary
           }`}
         >
           {isProcessing ? (
@@ -281,7 +306,7 @@ const ConfigPanel: React.FC<Props> = ({
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ConfigPanel;
+export default ConfigPanel

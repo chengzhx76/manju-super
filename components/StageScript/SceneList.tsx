@@ -1,9 +1,9 @@
-import React from 'react';
-import { MapPin } from 'lucide-react';
-import { Scene } from '../../types';
+import React from 'react'
+import { MapPin } from 'lucide-react'
+import { Scene } from '../../types'
 
 interface Props {
-  scenes: Scene[];
+  scenes: Scene[]
 }
 
 const SceneList: React.FC<Props> = ({ scenes }) => {
@@ -14,14 +14,19 @@ const SceneList: React.FC<Props> = ({ scenes }) => {
       </h3>
       <div className="space-y-1">
         {scenes.map((s) => (
-          <div key={s.id} className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] group cursor-default p-2 rounded hover:bg-[var(--nav-hover-bg)] transition-colors">
+          <div
+            key={s.id}
+            className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] group cursor-default p-2 rounded hover:bg-[var(--nav-hover-bg)] transition-colors"
+          >
             <div className="w-1.5 h-1.5 bg-[var(--border-secondary)] rounded-full group-hover:bg-[var(--text-tertiary)] transition-colors"></div>
-            <span className="truncate group-hover:text-[var(--text-secondary)]">{s.location}</span>
+            <span className="truncate group-hover:text-[var(--text-secondary)]">
+              {s.location}
+            </span>
           </div>
         ))}
       </div>
     </section>
-  );
-};
+  )
+}
 
-export default SceneList;
+export default SceneList

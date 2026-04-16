@@ -1,16 +1,16 @@
-import React from 'react';
-import { Monitor, Smartphone, Square } from 'lucide-react';
-import { AspectRatio, VideoDuration } from '../types';
+import React from 'react'
+import { Monitor, Smartphone, Square } from 'lucide-react'
+import { AspectRatio, VideoDuration } from '../types'
 
 interface AspectRatioSelectorProps {
-  value: AspectRatio;
-  onChange: (value: AspectRatio) => void;
+  value: AspectRatio
+  onChange: (value: AspectRatio) => void
   /** 是否支持方形 (1:1)，默认 true。Veo 模型不支持方形 */
-  allowSquare?: boolean;
+  allowSquare?: boolean
   /** 紧凑模式，只显示图标 */
-  compact?: boolean;
+  compact?: boolean
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 /**
@@ -24,28 +24,35 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
   compact = false,
   disabled = false
 }) => {
-  const options: { value: AspectRatio; label: string; icon: React.ReactNode; desc: string }[] = [
-    { 
-      value: '16:9', 
-      label: '横屏', 
+  const options: {
+    value: AspectRatio
+    label: string
+    icon: React.ReactNode
+    desc: string
+  }[] = [
+    {
+      value: '16:9',
+      label: '横屏',
       icon: <Monitor className="w-4 h-4" />,
       desc: '1280x720'
     },
-    { 
-      value: '9:16', 
-      label: '竖屏', 
+    {
+      value: '9:16',
+      label: '竖屏',
       icon: <Smartphone className="w-4 h-4" />,
       desc: '720x1280'
     },
-    { 
-      value: '1:1', 
-      label: '方形', 
+    {
+      value: '1:1',
+      label: '方形',
       icon: <Square className="w-4 h-4" />,
       desc: '720x720'
-    },
-  ];
+    }
+  ]
 
-  const filteredOptions = allowSquare ? options : options.filter(o => o.value !== '1:1');
+  const filteredOptions = allowSquare
+    ? options
+    : options.filter((o) => o.value !== '1:1')
 
   return (
     <div className="flex gap-1">
@@ -56,9 +63,10 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
           disabled={disabled}
           className={`
             flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all
-            ${value === option.value
-              ? 'bg-[var(--accent)] text-[var(--text-primary)]'
-              : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
+            ${
+              value === option.value
+                ? 'bg-[var(--accent)] text-[var(--text-primary)]'
+                : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -69,14 +77,14 @@ export const AspectRatioSelector: React.FC<AspectRatioSelectorProps> = ({
         </button>
       ))}
     </div>
-  );
-};
+  )
+}
 
 interface VideoDurationSelectorProps {
-  value: VideoDuration;
-  onChange: (value: VideoDuration) => void;
+  value: VideoDuration
+  onChange: (value: VideoDuration) => void
   /** 是否禁用 */
-  disabled?: boolean;
+  disabled?: boolean
 }
 
 /**
@@ -88,7 +96,7 @@ export const VideoDurationSelector: React.FC<VideoDurationSelectorProps> = ({
   onChange,
   disabled = false
 }) => {
-  const durations: VideoDuration[] = [4, 8, 12];
+  const durations: VideoDuration[] = [4, 8, 12]
 
   return (
     <div className="flex gap-1">
@@ -99,9 +107,10 @@ export const VideoDurationSelector: React.FC<VideoDurationSelectorProps> = ({
           disabled={disabled}
           className={`
             px-3 py-1.5 rounded-md text-xs transition-all
-            ${value === d
-              ? 'bg-[var(--accent)] text-[var(--text-primary)]'
-              : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
+            ${
+              value === d
+                ? 'bg-[var(--accent)] text-[var(--text-primary)]'
+                : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
           `}
@@ -110,21 +119,21 @@ export const VideoDurationSelector: React.FC<VideoDurationSelectorProps> = ({
         </button>
       ))}
     </div>
-  );
-};
+  )
+}
 
 interface VideoSettingsPanelProps {
-  aspectRatio: AspectRatio;
-  onAspectRatioChange: (value: AspectRatio) => void;
-  duration: VideoDuration;
-  onDurationChange: (value: VideoDuration) => void;
+  aspectRatio: AspectRatio
+  onAspectRatioChange: (value: AspectRatio) => void
+  duration: VideoDuration
+  onDurationChange: (value: VideoDuration) => void
   /** 视频模型类型，veo 不支持方形和时长选择 */
-  modelType: 'sora' | 'veo';
-  disabled?: boolean;
+  modelType: 'sora' | 'veo'
+  disabled?: boolean
   /** 支持的横竖屏比例列表 */
-  supportedAspectRatios?: AspectRatio[];
+  supportedAspectRatios?: AspectRatio[]
   /** 支持的时长列表 */
-  supportedDurations?: VideoDuration[];
+  supportedDurations?: VideoDuration[]
 }
 
 /**
@@ -139,25 +148,27 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
   modelType,
   disabled = false,
   supportedAspectRatios,
-  supportedDurations,
+  supportedDurations
 }) => {
   // 根据模型支持的比例过滤
-  const allowSquare = supportedAspectRatios 
+  const allowSquare = supportedAspectRatios
     ? supportedAspectRatios.includes('1:1')
-    : modelType === 'sora';
-  
+    : modelType === 'sora'
+
   // 是否显示时长选择器
-  const showDuration = supportedDurations 
+  const showDuration = supportedDurations
     ? supportedDurations.length > 1
-    : modelType === 'sora';
-  
+    : modelType === 'sora'
+
   // 可用的时长列表
-  const availableDurations = supportedDurations || [4, 8, 12];
+  const availableDurations = supportedDurations || [4, 8, 12]
 
   return (
     <div className="flex items-center gap-4 flex-wrap">
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-[var(--text-tertiary)] uppercase">比例</span>
+        <span className="text-[10px] text-[var(--text-tertiary)] uppercase">
+          比例
+        </span>
         <AspectRatioSelector
           value={aspectRatio}
           onChange={onAspectRatioChange}
@@ -165,10 +176,12 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
           disabled={disabled}
         />
       </div>
-      
+
       {showDuration && (
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[var(--text-tertiary)] uppercase">时长</span>
+          <span className="text-[10px] text-[var(--text-tertiary)] uppercase">
+            时长
+          </span>
           <div className="flex gap-1">
             {availableDurations.map((d) => (
               <button
@@ -177,9 +190,10 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
                 disabled={disabled}
                 className={`
                   px-3 py-1.5 rounded-md text-xs transition-all
-                  ${duration === d
-                    ? 'bg-[var(--accent)] text-[var(--text-primary)]'
-                    : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
+                  ${
+                    duration === d
+                      ? 'bg-[var(--accent)] text-[var(--text-primary)]'
+                      : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
                   }
                   ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 `}
@@ -191,7 +205,7 @@ export const VideoSettingsPanel: React.FC<VideoSettingsPanelProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default AspectRatioSelector;
+export default AspectRatioSelector

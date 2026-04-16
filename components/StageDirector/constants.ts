@@ -1,41 +1,59 @@
-import { VISUAL_STYLE_PROMPTS as AI_VISUAL_STYLE_PROMPTS } from '../../services/ai/promptConstants';
-import type { StoryboardGridLayoutMeta, StoryboardGridPanelCount } from '../../types';
+import { VISUAL_STYLE_PROMPTS as AI_VISUAL_STYLE_PROMPTS } from '../../services/ai/promptConstants'
+import type {
+  StoryboardGridLayoutMeta,
+  StoryboardGridPanelCount
+} from '../../types'
 import {
   NINE_GRID_SPLIT_PROMPT as SHARED_NINE_GRID_SPLIT_PROMPT,
-  NINE_GRID_IMAGE_PROMPT_TEMPLATE as SHARED_NINE_GRID_IMAGE_PROMPT_TEMPLATE,
-} from '../../services/ai/storyboardPromptTemplates';
+  NINE_GRID_IMAGE_PROMPT_TEMPLATE as SHARED_NINE_GRID_IMAGE_PROMPT_TEMPLATE
+} from '../../services/ai/storyboardPromptTemplates'
 
 // UI样式常量
 export const STYLES = {
   // 容器样式
-  mainContainer: "flex flex-col h-full bg-[var(--bg-secondary)] relative overflow-hidden",
-  toolbar: "h-16 border-b border-[var(--border-primary)] bg-[var(--bg-elevated)] px-6 flex items-center justify-between shrink-0",
-  workbench: "w-[480px] bg-[var(--bg-deep)] flex flex-col h-full shadow-2xl animate-in slide-in-from-right-10 duration-300 relative z-20",
-  workbenchHeader: "h-16 px-6 border-b border-[var(--border-primary)] flex items-center justify-between bg-[var(--bg-surface)] shrink-0",
-  workbenchContent: "flex-1 overflow-y-auto p-6 space-y-8",
-  
+  mainContainer:
+    'flex flex-col h-full bg-[var(--bg-secondary)] relative overflow-hidden',
+  toolbar:
+    'h-16 border-b border-[var(--border-primary)] bg-[var(--bg-elevated)] px-6 flex items-center justify-between shrink-0',
+  workbench:
+    'w-[480px] bg-[var(--bg-deep)] flex flex-col h-full shadow-2xl animate-in slide-in-from-right-10 duration-300 relative z-20',
+  workbenchHeader:
+    'h-16 px-6 border-b border-[var(--border-primary)] flex items-center justify-between bg-[var(--bg-surface)] shrink-0',
+  workbenchContent: 'flex-1 overflow-y-auto p-6 space-y-8',
+
   // 卡片样式
-  card: "group relative flex flex-col bg-[var(--bg-elevated)] border rounded-xl overflow-hidden cursor-pointer transition-all duration-200",
-  cardActive: "border-[var(--accent)] ring-1 ring-[var(--accent-border)] shadow-xl scale-[0.98]",
-  cardInactive: "border-[var(--border-primary)] hover:border-[var(--border-secondary)] hover:shadow-lg",
-  
+  card: 'group relative flex flex-col bg-[var(--bg-elevated)] border rounded-xl overflow-hidden cursor-pointer transition-all duration-200',
+  cardActive:
+    'border-[var(--accent)] ring-1 ring-[var(--accent-border)] shadow-xl scale-[0.98]',
+  cardInactive:
+    'border-[var(--border-primary)] hover:border-[var(--border-secondary)] hover:shadow-lg',
+
   // 按钮样式
-  primaryButton: "px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 shadow-lg shadow-[var(--btn-primary-shadow)]",
-  secondaryButton: "px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-primary)] rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2",
-  iconButton: "p-2 hover:bg-[var(--bg-hover)] rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors",
-  
+  primaryButton:
+    'px-4 py-2 bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 shadow-lg shadow-[var(--btn-primary-shadow)]',
+  secondaryButton:
+    'px-4 py-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-primary)] rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2',
+  iconButton:
+    'p-2 hover:bg-[var(--bg-hover)] rounded text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors',
+
   // 模态框样式
-  modalOverlay: "fixed inset-0 z-50 bg-[var(--overlay-heavy)] backdrop-blur-sm flex items-center justify-center p-4",
-  modalContainer: "bg-[var(--bg-elevated)] border border-[var(--border-secondary)] rounded-xl p-6 max-w-2xl w-full space-y-4 shadow-2xl",
-  modalTextarea: "w-full h-64 bg-[var(--bg-base)] text-[var(--text-primary)] border border-[var(--border-secondary)] rounded-lg p-4 text-sm outline-none focus:border-[var(--accent)] transition-colors resize-none",
-  
+  modalOverlay:
+    'fixed inset-0 z-50 bg-[var(--overlay-heavy)] backdrop-blur-sm flex items-center justify-center p-4',
+  modalContainer:
+    'bg-[var(--bg-elevated)] border border-[var(--border-secondary)] rounded-xl p-6 max-w-2xl w-full space-y-4 shadow-2xl',
+  modalTextarea:
+    'w-full h-64 bg-[var(--bg-base)] text-[var(--text-primary)] border border-[var(--border-secondary)] rounded-lg p-4 text-sm outline-none focus:border-[var(--accent)] transition-colors resize-none',
+
   // 内容区域
-  sectionHeader: "flex items-center gap-2 border-b border-[var(--border-primary)] pb-2",
-  contentBox: "bg-[var(--bg-surface)] p-5 rounded-xl border border-[var(--border-primary)]",
-};
+  sectionHeader:
+    'flex items-center gap-2 border-b border-[var(--border-primary)] pb-2',
+  contentBox:
+    'bg-[var(--bg-surface)] p-5 rounded-xl border border-[var(--border-primary)]'
+}
 
 // 视觉风格配置
-export const VISUAL_STYLE_PROMPTS: Record<string, string> = AI_VISUAL_STYLE_PROMPTS;
+export const VISUAL_STYLE_PROMPTS: Record<string, string> =
+  AI_VISUAL_STYLE_PROMPTS
 
 // 视频提示词模板
 export const VIDEO_PROMPT_TEMPLATES = {
@@ -53,7 +71,7 @@ export const VIDEO_PROMPT_TEMPLATES = {
 - 细节：保持角色外观和场景环境的全程一致性
 - 音频：可使用中文配音/旁白
 - 文字限制：禁止字幕和任何画面文字（包括片头片尾字卡、屏幕UI文字）`,
-    
+
     english: `Generate a video based on the provided reference image.
 
 Action Description: {actionSummary}
@@ -68,7 +86,7 @@ Technical Requirements:
 - Audio: Voiceover/narration in {language} is allowed
 - Text constraints: No subtitles and no on-screen text (including title cards and UI text overlays)`
   },
-  
+
   // 网格分镜模式的视频提示词（异步模型专用，精简版，避免超过8192字符限制）
   // 保留面板顺序与镜头意图，但 description 会按预算压缩
   sora2NineGrid: {
@@ -110,13 +128,13 @@ Voiceover in {language} is allowed, but no subtitles or any on-screen text.`
 音频：可使用{language}配音/旁白
 文字限制：禁止字幕和任何画面文字`
   }
-};
+}
 
 // 默认配置
 export const DEFAULTS = {
   videoModel: 'sora-2' as const,
-  batchGenerateDelay: 3000, // 批量生成延迟（毫秒）
-};
+  batchGenerateDelay: 3000 // 批量生成延迟（毫秒）
+}
 
 // ============================================
 // 九宫格分镜预览相关常量（高级功能）
@@ -124,7 +142,11 @@ export const DEFAULTS = {
 
 export const STORYBOARD_GRID_LAYOUTS: Record<
   StoryboardGridPanelCount,
-  StoryboardGridLayoutMeta & { label: string; shortLabel: string; positionLabels: string[] }
+  StoryboardGridLayoutMeta & {
+    label: string
+    shortLabel: string
+    positionLabels: string[]
+  }
 > = {
   4: {
     panelCount: 4,
@@ -136,8 +158,8 @@ export const STORYBOARD_GRID_LAYOUTS: Record<
       '左上 (Top-Left)',
       '右上 (Top-Right)',
       '左下 (Bottom-Left)',
-      '右下 (Bottom-Right)',
-    ],
+      '右下 (Bottom-Right)'
+    ]
   },
   6: {
     panelCount: 6,
@@ -151,8 +173,8 @@ export const STORYBOARD_GRID_LAYOUTS: Record<
       '右上 (Top-Right)',
       '左下 (Bottom-Left)',
       '中下 (Bottom-Center)',
-      '右下 (Bottom-Right)',
-    ],
+      '右下 (Bottom-Right)'
+    ]
   },
   9: {
     panelCount: 9,
@@ -169,42 +191,63 @@ export const STORYBOARD_GRID_LAYOUTS: Record<
       '右中 (Middle-Right)',
       '左下 (Bottom-Left)',
       '中下 (Bottom-Center)',
-      '右下 (Bottom-Right)',
-    ],
-  },
-};
+      '右下 (Bottom-Right)'
+    ]
+  }
+}
 
-export const DEFAULT_STORYBOARD_PANEL_COUNT: StoryboardGridPanelCount = 9;
+export const DEFAULT_STORYBOARD_PANEL_COUNT: StoryboardGridPanelCount = 9
 
 export const resolveStoryboardGridLayout = (
   panelCount?: number,
   fallbackPanelLength?: number
 ) => {
-  const candidate = panelCount ?? fallbackPanelLength;
+  const candidate = panelCount ?? fallbackPanelLength
   if (candidate === 4 || candidate === 6 || candidate === 9) {
-    return STORYBOARD_GRID_LAYOUTS[candidate];
+    return STORYBOARD_GRID_LAYOUTS[candidate]
   }
-  return STORYBOARD_GRID_LAYOUTS[DEFAULT_STORYBOARD_PANEL_COUNT];
-};
+  return STORYBOARD_GRID_LAYOUTS[DEFAULT_STORYBOARD_PANEL_COUNT]
+}
 
 export const getStoryboardPositionLabel = (
   panelIndex: number,
   panelCount?: number,
   fallbackPanelLength?: number
 ): string => {
-  const layout = resolveStoryboardGridLayout(panelCount, fallbackPanelLength);
-  return layout.positionLabels[panelIndex] || `面板 ${panelIndex + 1}`;
-};
+  const layout = resolveStoryboardGridLayout(panelCount, fallbackPanelLength)
+  return layout.positionLabels[panelIndex] || `面板 ${panelIndex + 1}`
+}
 
 export const NINE_GRID = {
   // 典型景别列表
-  defaultShotSizes: ['远景', '全景', '中全景', '中景', '中近景', '近景', '特写', '大特写', '极端特写'],
+  defaultShotSizes: [
+    '远景',
+    '全景',
+    '中全景',
+    '中景',
+    '中近景',
+    '近景',
+    '特写',
+    '大特写',
+    '极端特写'
+  ],
   // 典型机位角度列表
-  defaultCameraAngles: ['俯拍', '平视', '仰拍', '侧面', '正面', '背面', '斜拍', '鸟瞰', '低角度'],
-};
+  defaultCameraAngles: [
+    '俯拍',
+    '平视',
+    '仰拍',
+    '侧面',
+    '正面',
+    '背面',
+    '斜拍',
+    '鸟瞰',
+    '低角度'
+  ]
+}
 
 // 九宫格 AI 拆分提示词模板（共享，Chat 模型使用）
-export const NINE_GRID_SPLIT_PROMPT = SHARED_NINE_GRID_SPLIT_PROMPT;
+export const NINE_GRID_SPLIT_PROMPT = SHARED_NINE_GRID_SPLIT_PROMPT
 
 // 九宫格图片生成提示词模板（共享，Gemini Image 使用）
-export const NINE_GRID_IMAGE_PROMPT_TEMPLATE = SHARED_NINE_GRID_IMAGE_PROMPT_TEMPLATE;
+export const NINE_GRID_IMAGE_PROMPT_TEMPLATE =
+  SHARED_NINE_GRID_IMAGE_PROMPT_TEMPLATE

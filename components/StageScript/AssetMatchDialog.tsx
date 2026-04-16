@@ -1,30 +1,54 @@
-import React, { useState } from 'react';
-import { X, Users, MapPin, Package, Check, ArrowRight, Link2, Plus } from 'lucide-react';
-import { AssetMatchResult, AssetMatchItem } from '../../services/assetMatchService';
-import { Character, Scene, Prop } from '../../types';
+import React, { useState } from 'react'
+import {
+  X,
+  Users,
+  MapPin,
+  Package,
+  Check,
+  ArrowRight,
+  Link2,
+  Plus
+} from 'lucide-react'
+import {
+  AssetMatchResult,
+  AssetMatchItem
+} from '../../services/assetMatchService'
+import { Character, Scene, Prop } from '../../types'
 
 interface Props {
-  matches: AssetMatchResult;
-  onConfirm: (finalMatches: AssetMatchResult) => void;
-  onCancel: () => void;
+  matches: AssetMatchResult
+  onConfirm: (finalMatches: AssetMatchResult) => void
+  onCancel: () => void
 }
 
-const MatchRow: React.FC<{
-  item: AssetMatchItem<any>;
-  getAiLabel: (a: any) => string;
-  getLibLabel: (a: any) => string;
-  getLibImage: (a: any) => string | undefined;
-  onToggle: () => void;
-}> = ({ item, getAiLabel, getLibLabel, getLibImage, onToggle }) => {
-  const hasMatch = !!item.libraryAsset;
-  const hasImage = hasMatch && !!getLibImage(item.libraryAsset!);
+type MatchAsset = Character | Scene | Prop
+
+interface MatchRowProps<T extends MatchAsset> {
+  item: AssetMatchItem<T>
+  getAiLabel: (a: T) => string
+  getLibLabel: (a: T) => string
+  getLibImage: (a: T) => string | undefined
+  onToggle: () => void
+}
+
+const MatchRow = <T extends MatchAsset>({
+  item,
+  getAiLabel,
+  getLibLabel,
+  getLibImage,
+  onToggle
+}: MatchRowProps<T>) => {
+  const hasMatch = !!item.libraryAsset
+  const hasImage = hasMatch && !!getLibImage(item.libraryAsset!)
 
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all ${
-      hasMatch && item.reuse
-        ? 'bg-[var(--accent-bg)] border-[var(--accent-border)]'
-        : 'bg-[var(--bg-surface)] border-[var(--border-primary)]'
-    }`}>
+    <div
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg border transition-all ${
+        hasMatch && item.reuse
+          ? 'bg-[var(--accent-bg)] border-[var(--accent-border)]'
+          : 'bg-[var(--bg-surface)] border-[var(--border-primary)]'
+      }`}
+    >
       <div className="flex-1 min-w-0">
         <div className="text-xs font-bold text-[var(--text-primary)] truncate">
           {getAiLabel(item.aiAsset)}
@@ -40,7 +64,11 @@ const MatchRow: React.FC<{
           <div className="flex items-center gap-2 flex-shrink-0">
             {hasImage && (
               <div className="w-8 h-8 rounded overflow-hidden bg-[var(--bg-elevated)] flex-shrink-0">
-                <img src={getLibImage(item.libraryAsset!)} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={getLibImage(item.libraryAsset!)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
               </div>
             )}
             <div className="min-w-0">
@@ -61,76 +89,93 @@ const MatchRow: React.FC<{
             }`}
           >
             {item.reuse ? (
-              <span className="flex items-center gap-1"><Link2 className="w-3 h-3" />复用</span>
+              <span className="flex items-center gap-1">
+                <Link2 className="w-3 h-3" />
+                复用
+              </span>
             ) : (
-              <span className="flex items-center gap-1"><Plus className="w-3 h-3" />新建</span>
+              <span className="flex items-center gap-1">
+                <Plus className="w-3 h-3" />
+                新建
+              </span>
             )}
           </button>
         </>
       ) : (
         <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest flex items-center gap-1 flex-shrink-0">
-          <Plus className="w-3 h-3" />新建
+          <Plus className="w-3 h-3" />
+          新建
         </span>
       )}
     </div>
-  );
-};
+  )
+}
 
-const AssetMatchDialog: React.FC<Props> = ({ matches, onConfirm, onCancel }) => {
+const AssetMatchDialog: React.FC<Props> = ({
+  matches,
+  onConfirm,
+  onCancel
+}) => {
   const [local, setLocal] = useState<AssetMatchResult>(() => ({
     ...matches,
-    characters: matches.characters.map(m => ({ ...m })),
-    scenes: matches.scenes.map(m => ({ ...m })),
-    props: matches.props.map(m => ({ ...m })),
-  }));
+    characters: matches.characters.map((m) => ({ ...m })),
+    scenes: matches.scenes.map((m) => ({ ...m })),
+    props: matches.props.map((m) => ({ ...m }))
+  }))
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onCancel();
-  };
+    if (e.target === e.currentTarget) onCancel()
+  }
 
   const toggleChar = (idx: number) => {
-    setLocal(prev => {
-      const next = { ...prev, characters: [...prev.characters] };
-      next.characters[idx] = { ...next.characters[idx], reuse: !next.characters[idx].reuse };
-      return next;
-    });
-  };
+    setLocal((prev) => {
+      const next = { ...prev, characters: [...prev.characters] }
+      next.characters[idx] = {
+        ...next.characters[idx],
+        reuse: !next.characters[idx].reuse
+      }
+      return next
+    })
+  }
 
   const toggleScene = (idx: number) => {
-    setLocal(prev => {
-      const next = { ...prev, scenes: [...prev.scenes] };
-      next.scenes[idx] = { ...next.scenes[idx], reuse: !next.scenes[idx].reuse };
-      return next;
-    });
-  };
+    setLocal((prev) => {
+      const next = { ...prev, scenes: [...prev.scenes] }
+      next.scenes[idx] = { ...next.scenes[idx], reuse: !next.scenes[idx].reuse }
+      return next
+    })
+  }
 
   const toggleProp = (idx: number) => {
-    setLocal(prev => {
-      const next = { ...prev, props: [...prev.props] };
-      next.props[idx] = { ...next.props[idx], reuse: !next.props[idx].reuse };
-      return next;
-    });
-  };
+    setLocal((prev) => {
+      const next = { ...prev, props: [...prev.props] }
+      next.props[idx] = { ...next.props[idx], reuse: !next.props[idx].reuse }
+      return next
+    })
+  }
 
   const reuseCount =
-    local.characters.filter(m => m.reuse && m.libraryAsset).length +
-    local.scenes.filter(m => m.reuse && m.libraryAsset).length +
-    local.props.filter(m => m.reuse && m.libraryAsset).length;
+    local.characters.filter((m) => m.reuse && m.libraryAsset).length +
+    local.scenes.filter((m) => m.reuse && m.libraryAsset).length +
+    local.props.filter((m) => m.reuse && m.libraryAsset).length
 
   const matchCount =
-    local.characters.filter(m => m.libraryAsset).length +
-    local.scenes.filter(m => m.libraryAsset).length +
-    local.props.filter(m => m.libraryAsset).length;
+    local.characters.filter((m) => m.libraryAsset).length +
+    local.scenes.filter((m) => m.libraryAsset).length +
+    local.props.filter((m) => m.libraryAsset).length
 
-  const charMatches = local.characters.filter(m => m.libraryAsset);
-  const sceneMatches = local.scenes.filter(m => m.libraryAsset);
-  const propMatches = local.props.filter(m => m.libraryAsset);
-  const charNew = local.characters.filter(m => !m.libraryAsset);
-  const sceneNew = local.scenes.filter(m => !m.libraryAsset);
-  const propNew = local.props.filter(m => !m.libraryAsset);
+  const charMatches = local.characters.filter((m) => m.libraryAsset)
+  const sceneMatches = local.scenes.filter((m) => m.libraryAsset)
+  const propMatches = local.props.filter((m) => m.libraryAsset)
+  const charNew = local.characters.filter((m) => !m.libraryAsset)
+  const sceneNew = local.scenes.filter((m) => !m.libraryAsset)
+  const propNew = local.props.filter((m) => !m.libraryAsset)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-base)]/70 p-6" onClick={handleBackdropClick}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg-base)]/70 p-6"
+      onClick={handleBackdropClick}
+    >
       <div className="w-full max-w-2xl bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl overflow-hidden max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-subtle)]">
@@ -140,10 +185,14 @@ const AssetMatchDialog: React.FC<Props> = ({ matches, onConfirm, onCancel }) => 
               检测到项目库资产匹配
             </h3>
             <p className="text-[10px] text-[var(--text-muted)] mt-1">
-              找到 {matchCount} 项匹配，已选择复用 {reuseCount} 项。复用的资产将直接继承参考图和提示词。
+              找到 {matchCount} 项匹配，已选择复用 {reuseCount}{' '}
+              项。复用的资产将直接继承参考图和提示词。
             </p>
           </div>
-          <button onClick={onCancel} className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+          <button
+            onClick={onCancel}
+            className="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -163,7 +212,9 @@ const AssetMatchDialog: React.FC<Props> = ({ matches, onConfirm, onCancel }) => 
                     key={m.aiAsset.id}
                     item={m}
                     getAiLabel={(c: Character) => c.name}
-                    getLibLabel={(c: Character) => `${c.name} (v${c.version || 1})`}
+                    getLibLabel={(c: Character) =>
+                      `${c.name} (v${c.version || 1})`
+                    }
                     getLibImage={(c: Character) => c.referenceImage}
                     onToggle={() => toggleChar(i)}
                   />
@@ -235,7 +286,7 @@ const AssetMatchDialog: React.FC<Props> = ({ matches, onConfirm, onCancel }) => 
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AssetMatchDialog;
+export default AssetMatchDialog

@@ -1,26 +1,26 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import { STYLES } from './constants';
+import React, { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
+import { STYLES } from './constants'
 
 interface Option {
-  label: string;
-  value: string;
-  desc?: string;
-  previewImage?: string;
+  label: string
+  value: string
+  desc?: string
+  previewImage?: string
 }
 
 interface Props {
-  label: string;
-  icon?: React.ReactNode;
-  options: Option[];
-  value: string;
-  onChange: (value: string) => void;
-  customInput?: string;
-  onCustomInputChange?: (value: string) => void;
-  customPlaceholder?: string;
-  gridCols?: 1 | 2;
-  helpText?: string;
-  helpLink?: { text: string; url: string };
+  label: string
+  icon?: React.ReactNode
+  options: Option[]
+  value: string
+  onChange: (value: string) => void
+  customInput?: string
+  onCustomInputChange?: (value: string) => void
+  customPlaceholder?: string
+  gridCols?: 1 | 2
+  helpText?: string
+  helpLink?: { text: string; url: string }
 }
 
 const OptionSelector: React.FC<Props> = ({
@@ -36,31 +36,36 @@ const OptionSelector: React.FC<Props> = ({
   helpText,
   helpLink
 }) => {
-  const [previewValue, setPreviewValue] = useState<string | null>(null);
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewValue, setPreviewValue] = useState<string | null>(null)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const selectedPreviewOption = useMemo(
-    () => options.find((item) => item.value === previewValue && !!item.previewImage) || null,
+    () =>
+      options.find(
+        (item) => item.value === previewValue && !!item.previewImage
+      ) || null,
     [previewValue, options]
-  );
+  )
   const valuePreviewOption = useMemo(
-    () => options.find((item) => item.value === value && !!item.previewImage) || null,
+    () =>
+      options.find((item) => item.value === value && !!item.previewImage) ||
+      null,
     [value, options]
-  );
-  const activePreviewOption = selectedPreviewOption || valuePreviewOption;
-  const hasAnyPreview = options.some((item) => !!item.previewImage);
+  )
+  const activePreviewOption = selectedPreviewOption || valuePreviewOption
+  const hasAnyPreview = options.some((item) => !!item.previewImage)
 
   useEffect(() => {
     if (valuePreviewOption) {
-      setPreviewValue(valuePreviewOption.value);
+      setPreviewValue(valuePreviewOption.value)
     }
-  }, [valuePreviewOption]);
+  }, [valuePreviewOption])
 
   const handleOptionClick = (opt: Option) => {
-    onChange(opt.value);
+    onChange(opt.value)
     if (opt.previewImage) {
-      setPreviewValue(opt.value);
+      setPreviewValue(opt.value)
     }
-  };
+  }
 
   return (
     <div className="space-y-2">
@@ -105,7 +110,9 @@ const OptionSelector: React.FC<Props> = ({
                   点击放大
                 </div>
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-1.5">
-                  <p className="text-[10px] font-semibold text-white">{activePreviewOption.label}</p>
+                  <p className="text-[10px] font-semibold text-white">
+                    {activePreviewOption.label}
+                  </p>
                 </div>
               </button>
             </div>
@@ -147,7 +154,7 @@ const OptionSelector: React.FC<Props> = ({
       )}
       {value === 'custom' && onCustomInputChange && (
         <div className="pt-1">
-          <input 
+          <input
             type="text"
             value={customInput}
             onChange={(e) => onCustomInputChange(e.target.value)}
@@ -163,9 +170,9 @@ const OptionSelector: React.FC<Props> = ({
             {helpLink && (
               <>
                 {' '}
-                <a 
-                  href={helpLink.url} 
-                  target="_blank" 
+                <a
+                  href={helpLink.url}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] underline underline-offset-2 transition-colors font-medium"
                 >
@@ -177,7 +184,7 @@ const OptionSelector: React.FC<Props> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default OptionSelector;
+export default OptionSelector

@@ -1,8 +1,8 @@
-import { PromptVersion, PromptVersionSource } from '../types';
+import { PromptVersion, PromptVersionSource } from '../types'
 
-const DEFAULT_HISTORY_LIMIT = 30;
+const DEFAULT_HISTORY_LIMIT = 30
 
-const normalizePrompt = (prompt?: string): string => (prompt || '').trim();
+const normalizePrompt = (prompt?: string): string => (prompt || '').trim()
 
 export const createPromptVersion = (
   prompt: string,
@@ -13,8 +13,8 @@ export const createPromptVersion = (
   prompt,
   createdAt: Date.now(),
   source,
-  note,
-});
+  note
+})
 
 export const appendPromptVersion = (
   versions: PromptVersion[] | undefined,
@@ -23,21 +23,21 @@ export const appendPromptVersion = (
   note?: string,
   maxEntries: number = DEFAULT_HISTORY_LIMIT
 ): PromptVersion[] => {
-  const normalized = normalizePrompt(prompt);
-  if (!normalized) return versions ? [...versions] : [];
+  const normalized = normalizePrompt(prompt)
+  if (!normalized) return versions ? [...versions] : []
 
-  const next = versions ? [...versions] : [];
-  const last = next[next.length - 1];
+  const next = versions ? [...versions] : []
+  const last = next[next.length - 1]
   if (last && normalizePrompt(last.prompt) === normalized) {
-    return next;
+    return next
   }
 
-  next.push(createPromptVersion(normalized, source, note));
+  next.push(createPromptVersion(normalized, source, note))
   if (next.length > maxEntries) {
-    return next.slice(next.length - maxEntries);
+    return next.slice(next.length - maxEntries)
   }
-  return next;
-};
+  return next
+}
 
 export const updatePromptWithVersion = (
   currentPrompt: string | undefined,
@@ -46,24 +46,28 @@ export const updatePromptWithVersion = (
   source: PromptVersionSource,
   note?: string
 ): PromptVersion[] => {
-  let nextVersions = versions ? [...versions] : [];
-  const normalizedCurrent = normalizePrompt(currentPrompt);
-  const normalizedNext = normalizePrompt(nextPrompt);
+  let nextVersions = versions ? [...versions] : []
+  const normalizedCurrent = normalizePrompt(currentPrompt)
+  const normalizedNext = normalizePrompt(nextPrompt)
 
   // Backfill one baseline entry for existing projects when history is empty.
   if (nextVersions.length === 0 && normalizedCurrent) {
-    nextVersions = appendPromptVersion(nextVersions, normalizedCurrent, 'imported', 'Initial snapshot');
+    nextVersions = appendPromptVersion(
+      nextVersions,
+      normalizedCurrent,
+      'imported',
+      'Initial snapshot'
+    )
   }
 
-  if (!normalizedNext) return nextVersions;
-  return appendPromptVersion(nextVersions, normalizedNext, source, note);
-};
+  if (!normalizedNext) return nextVersions
+  return appendPromptVersion(nextVersions, normalizedNext, source, note)
+}
 
 export const findPromptVersion = (
   versions: PromptVersion[] | undefined,
   versionId: string
 ): PromptVersion | undefined => {
-  if (!versions?.length) return undefined;
-  return versions.find((version) => version.id === versionId);
-};
-
+  if (!versions?.length) return undefined
+  return versions.find((version) => version.id === versionId)
+}

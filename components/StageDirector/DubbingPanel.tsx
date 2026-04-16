@@ -1,47 +1,78 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Mic, Loader2, Trash2 } from 'lucide-react';
-import { Shot, DubbingMode } from '../../types';
-import { getAudioModels, getActiveAudioModel } from '../../services/modelRegistry';
-import { AudioModelDefinition } from '../../types/model';
+import React, { useEffect, useMemo, useState } from 'react'
+import { Mic, Loader2, Trash2 } from 'lucide-react'
+import { Shot, DubbingMode } from '../../types'
+import {
+  getAudioModels,
+  getActiveAudioModel
+} from '../../services/modelRegistry'
+import { AudioModelDefinition } from '../../types/model'
 
 interface DubbingPanelProps {
-  shot: Shot;
-  onGenerateDubbing: (mode: DubbingMode, text: string, modelId?: string) => void;
-  onClearDubbing: () => void;
+  shot: Shot
+  onGenerateDubbing: (mode: DubbingMode, text: string, modelId?: string) => void
+  onClearDubbing: () => void
 }
 
-const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, onClearDubbing }) => {
-  const audioModels = getAudioModels().filter((m) => m.isEnabled);
-  const activeAudioModel = getActiveAudioModel();
+const DubbingPanel: React.FC<DubbingPanelProps> = ({
+  shot,
+  onGenerateDubbing,
+  onClearDubbing
+}) => {
+  const audioModels = getAudioModels().filter((m) => m.isEnabled)
+  const activeAudioModel = getActiveAudioModel()
 
-  const [dubbingMode, setDubbingMode] = useState<DubbingMode>(shot.dubbing?.mode || 'narration');
+  const [dubbingMode, setDubbingMode] = useState<DubbingMode>(
+    shot.dubbing?.mode || 'narration'
+  )
   const [selectedAudioModelId, setSelectedAudioModelId] = useState<string>(
-    shot.dubbing?.modelId || activeAudioModel?.id || audioModels[0]?.id || 'gpt-audio-1.5'
-  );
-  const [dubbingText, setDubbingText] = useState<string>(shot.dubbing?.text || '');
+    shot.dubbing?.modelId ||
+      activeAudioModel?.id ||
+      audioModels[0]?.id ||
+      'gpt-audio-1.5'
+  )
+  const [dubbingText, setDubbingText] = useState<string>(
+    shot.dubbing?.text || ''
+  )
 
-  const isGeneratingDubbing = shot.dubbing?.status === 'generating';
-  const hasDubbingAudio = !!shot.dubbing?.audioUrl;
-  const resolvedDubbingModel = audioModels.find((m) => m.id === selectedAudioModelId) as AudioModelDefinition | undefined;
+  const isGeneratingDubbing = shot.dubbing?.status === 'generating'
+  const hasDubbingAudio = !!shot.dubbing?.audioUrl
+  const resolvedDubbingModel = audioModels.find(
+    (m) => m.id === selectedAudioModelId
+  ) as AudioModelDefinition | undefined
   const fallbackDubbingText = useMemo(
-    () => (dubbingMode === 'dialogue' ? (shot.dialogue || '') : (shot.actionSummary || '')).trim(),
+    () =>
+      (dubbingMode === 'dialogue'
+        ? shot.dialogue || ''
+        : shot.actionSummary || ''
+      ).trim(),
     [dubbingMode, shot.dialogue, shot.actionSummary]
-  );
-  const canGenerateDubbing = dubbingText.trim().length > 0 && !!selectedAudioModelId && !isGeneratingDubbing;
+  )
+  const canGenerateDubbing =
+    dubbingText.trim().length > 0 &&
+    !!selectedAudioModelId &&
+    !isGeneratingDubbing
 
   useEffect(() => {
-    const initialMode = shot.dubbing?.mode || 'narration';
-    const initialModelId = shot.dubbing?.modelId || activeAudioModel?.id || audioModels[0]?.id || 'gpt-audio-1.5';
-    const initialText = (shot.dubbing?.text || (initialMode === 'dialogue' ? shot.dialogue : shot.actionSummary) || '').trim();
-    setDubbingMode(initialMode);
-    setSelectedAudioModelId(initialModelId);
-    setDubbingText(initialText);
-  }, [shot.id, activeAudioModel?.id]);
+    const initialMode = shot.dubbing?.mode || 'narration'
+    const initialModelId =
+      shot.dubbing?.modelId ||
+      activeAudioModel?.id ||
+      audioModels[0]?.id ||
+      'gpt-audio-1.5'
+    const initialText = (
+      shot.dubbing?.text ||
+      (initialMode === 'dialogue' ? shot.dialogue : shot.actionSummary) ||
+      ''
+    ).trim()
+    setDubbingMode(initialMode)
+    setSelectedAudioModelId(initialModelId)
+    setDubbingText(initialText)
+  }, [shot.id, activeAudioModel?.id])
 
   const handleGenerateDubbing = () => {
-    if (!canGenerateDubbing) return;
-    onGenerateDubbing(dubbingMode, dubbingText.trim(), selectedAudioModelId);
-  };
+    if (!canGenerateDubbing) return
+    onGenerateDubbing(dubbingMode, dubbingText.trim(), selectedAudioModelId)
+  }
 
   return (
     <div className="mt-3 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-surface)] p-4 space-y-3">
@@ -51,7 +82,9 @@ const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, on
           配音模块
         </h5>
         {shot.dubbing?.status === 'completed' && (
-          <span className="text-[9px] text-[var(--success)] font-mono">● READY</span>
+          <span className="text-[9px] text-[var(--success)] font-mono">
+            ● READY
+          </span>
         )}
       </div>
 
@@ -59,9 +92,9 @@ const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, on
         <button
           type="button"
           onClick={() => {
-            setDubbingMode('narration');
+            setDubbingMode('narration')
             if (!shot.dubbing?.text || dubbingMode !== 'narration') {
-              setDubbingText((shot.actionSummary || '').trim());
+              setDubbingText((shot.actionSummary || '').trim())
             }
           }}
           className={`px-2 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors ${
@@ -76,9 +109,9 @@ const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, on
         <button
           type="button"
           onClick={() => {
-            setDubbingMode('dialogue');
+            setDubbingMode('dialogue')
             if (!shot.dubbing?.text || dubbingMode !== 'dialogue') {
-              setDubbingText((shot.dialogue || '').trim());
+              setDubbingText((shot.dialogue || '').trim())
             }
           }}
           className={`px-2 py-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors ${
@@ -133,7 +166,9 @@ const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, on
           value={dubbingText}
           onChange={(e) => setDubbingText(e.target.value)}
           rows={3}
-          placeholder={dubbingMode === 'dialogue' ? '请输入对话文本' : '请输入旁白文本'}
+          placeholder={
+            dubbingMode === 'dialogue' ? '请输入对话文本' : '请输入旁白文本'
+          }
           className="w-full bg-[var(--bg-surface)] border border-[var(--border-primary)] text-[var(--text-primary)] text-xs rounded-lg px-3 py-2 outline-none focus:border-[var(--accent)] resize-y min-h-[72px]"
           disabled={isGeneratingDubbing}
         />
@@ -168,17 +203,22 @@ const DubbingPanel: React.FC<DubbingPanelProps> = ({ shot, onGenerateDubbing, on
         )}
       </div>
 
-      {shot.dubbing?.error && <p className="text-[9px] text-[var(--error-text)]">{shot.dubbing.error}</p>}
+      {shot.dubbing?.error && (
+        <p className="text-[9px] text-[var(--error-text)]">
+          {shot.dubbing.error}
+        </p>
+      )}
 
       {hasDubbingAudio && (
         <div className="space-y-2">
           <audio src={shot.dubbing?.audioUrl} controls className="w-full" />
-          <p className="text-[9px] text-[var(--text-muted)]">配音已生成，可单独预览并用于后续导出。</p>
+          <p className="text-[9px] text-[var(--text-muted)]">
+            配音已生成，可单独预览并用于后续导出。
+          </p>
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default DubbingPanel;
-
+export default DubbingPanel

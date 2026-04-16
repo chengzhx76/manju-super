@@ -1,55 +1,74 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Users, MapPin, Package, Upload, Trash2, RotateCcw, Save, Link2 } from 'lucide-react';
-import { Character, Scene, Prop } from '../../types';
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  Users,
+  MapPin,
+  Package,
+  Upload,
+  Trash2,
+  RotateCcw,
+  Save,
+  Link2
+} from 'lucide-react'
+import { Character, Scene, Prop } from '../../types'
 
-export type LibraryAssetType = 'character' | 'scene' | 'prop';
-export type LibraryAsset = Character | Scene | Prop;
+export type LibraryAssetType = 'character' | 'scene' | 'prop'
+export type LibraryAsset = Character | Scene | Prop
 
 interface AssetLibraryEditorCardProps {
-  type: LibraryAssetType;
-  asset: LibraryAsset;
-  refCount: number;
-  onSave: (nextAsset: LibraryAsset) => void;
-  onDelete: () => void;
-  onUploadImage: (file: File) => void;
-  onPreviewImage: (imageUrl: string) => void;
+  type: LibraryAssetType
+  asset: LibraryAsset
+  refCount: number
+  onSave: (nextAsset: LibraryAsset) => void
+  onDelete: () => void
+  onUploadImage: (file: File) => void
+  onPreviewImage: (imageUrl: string) => void
 }
 
 const EDITABLE_FIELDS: Record<LibraryAssetType, string[]> = {
-  character: ['name', 'gender', 'age', 'personality', 'coreFeatures', 'visualPrompt'],
+  character: [
+    'name',
+    'gender',
+    'age',
+    'personality',
+    'coreFeatures',
+    'visualPrompt'
+  ],
   scene: ['location', 'time', 'atmosphere', 'visualPrompt'],
-  prop: ['name', 'category', 'description', 'visualPrompt'],
-};
+  prop: ['name', 'category', 'description', 'visualPrompt']
+}
 
 const getAssetTitle = (type: LibraryAssetType, asset: LibraryAsset): string => {
-  if (type === 'character') return (asset as Character).name;
-  if (type === 'scene') return (asset as Scene).location;
-  return (asset as Prop).name;
-};
+  if (type === 'character') return (asset as Character).name
+  if (type === 'scene') return (asset as Scene).location
+  return (asset as Prop).name
+}
 
-const getAssetSubtitle = (type: LibraryAssetType, asset: LibraryAsset): string => {
+const getAssetSubtitle = (
+  type: LibraryAssetType,
+  asset: LibraryAsset
+): string => {
   if (type === 'character') {
-    const character = asset as Character;
-    return `${character.gender || '-'} · ${character.age || '-'}`;
+    const character = asset as Character
+    return `${character.gender || '-'} · ${character.age || '-'}`
   }
   if (type === 'scene') {
-    const scene = asset as Scene;
-    return `${scene.time || '-'} · ${scene.atmosphere || '-'}`;
+    const scene = asset as Scene
+    return `${scene.time || '-'} · ${scene.atmosphere || '-'}`
   }
-  return (asset as Prop).category || '-';
-};
+  return (asset as Prop).category || '-'
+}
 
 const getAssetIcon = (type: LibraryAssetType) => {
-  if (type === 'character') return Users;
-  if (type === 'scene') return MapPin;
-  return Package;
-};
+  if (type === 'character') return Users
+  if (type === 'scene') return MapPin
+  return Package
+}
 
 const getTypeLabel = (type: LibraryAssetType): string => {
-  if (type === 'character') return '角色';
-  if (type === 'scene') return '场景';
-  return '道具';
-};
+  if (type === 'character') return '角色'
+  if (type === 'scene') return '场景'
+  return '道具'
+}
 
 const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
   type,
@@ -58,31 +77,32 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
   onSave,
   onDelete,
   onUploadImage,
-  onPreviewImage,
+  onPreviewImage
 }) => {
-  const [draft, setDraft] = useState<LibraryAsset>(asset);
-  const AssetIcon = getAssetIcon(type);
+  const [draft, setDraft] = useState<LibraryAsset>(asset)
+  const AssetIcon = getAssetIcon(type)
 
   useEffect(() => {
-    setDraft(asset);
-  }, [asset]);
+    setDraft(asset)
+  }, [asset])
 
   const hasChanges = useMemo(() => {
-    const fields = EDITABLE_FIELDS[type];
+    const fields = EDITABLE_FIELDS[type]
     return fields.some((field) => {
-      const oldValue = ((asset as any)[field] ?? '').toString();
-      const newValue = ((draft as any)[field] ?? '').toString();
-      return oldValue !== newValue;
-    });
-  }, [type, asset, draft]);
+      const oldValue = ((asset as any)[field] ?? '').toString()
+      const newValue = ((draft as any)[field] ?? '').toString()
+      return oldValue !== newValue
+    })
+  }, [type, asset, draft])
 
   const updateField = (field: string, value: string) => {
-    setDraft((prev) => ({ ...(prev as any), [field]: value } as LibraryAsset));
-  };
+    setDraft((prev) => ({ ...(prev as any), [field]: value }) as LibraryAsset)
+  }
 
-  const getValue = (field: string): string => ((draft as any)[field] ?? '').toString();
-  const previewImage = (draft as any).referenceImage as string | undefined;
-  const version = (draft as any).version || 1;
+  const getValue = (field: string): string =>
+    ((draft as any)[field] ?? '').toString()
+  const previewImage = (draft as any).referenceImage as string | undefined
+  const version = (draft as any).version || 1
 
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl overflow-hidden hover:border-[var(--border-secondary)] transition-colors">
@@ -97,7 +117,9 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-[var(--text-muted)]">
             <AssetIcon className="w-9 h-9 opacity-30 mb-2" />
-            <span className="text-[10px] font-mono uppercase tracking-widest">{getTypeLabel(type)}</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest">
+              {getTypeLabel(type)}
+            </span>
           </div>
         )}
         <div className="absolute left-2 top-2 px-2 py-0.5 text-[9px] font-mono rounded bg-[var(--accent-bg)] text-[var(--accent-text)] uppercase tracking-widest">
@@ -226,9 +248,9 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
               accept="image/*"
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onUploadImage(file);
-                e.currentTarget.value = '';
+                const file = e.target.files?.[0]
+                if (file) onUploadImage(file)
+                e.currentTarget.value = ''
               }}
             />
           </label>
@@ -261,7 +283,7 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AssetLibraryEditorCard;
+export default AssetLibraryEditorCard

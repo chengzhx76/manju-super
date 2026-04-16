@@ -1,62 +1,75 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, ReactRenderer } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Mention from '@tiptap/extension-mention';
-import { mergeAttributes, Node } from '@tiptap/core';
-import { TextSelection } from '@tiptap/pm/state';
-import tippy, { Instance } from 'tippy.js';
-import getSuggestion, { buildMentionItems, buildProjectLibraryMentionItems } from './suggestion';
-import MentionList from './MentionList';
-import { ProjectState, SeriesProject } from '../../../types';
-import { Clock, PlusCircle, Edit2, Film } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react'
+import {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  ReactRenderer
+} from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import Mention from '@tiptap/extension-mention'
+import { mergeAttributes, Node } from '@tiptap/core'
+import { TextSelection } from '@tiptap/pm/state'
+import tippy, { Instance } from 'tippy.js'
+import getSuggestion, {
+  buildMentionItems,
+  buildProjectLibraryMentionItems
+} from './suggestion'
+import MentionList from './MentionList'
+import { ProjectState, SeriesProject } from '../../../types'
+import { Clock, PlusCircle, Edit2, Film } from 'lucide-react'
 
 const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
   const [localValue, setLocalValue] = useState(() => {
     return typeof node.attrs.value === 'number' && node.attrs.value !== 0
       ? node.attrs.value.toString()
-      : '0.0';
-  });
+      : '0.0'
+  })
 
   useEffect(() => {
     if (typeof node.attrs.value === 'number') {
-      const valStr = node.attrs.value === 0 ? '0.0' : node.attrs.value.toString();
+      const valStr =
+        node.attrs.value === 0 ? '0.0' : node.attrs.value.toString()
       // Only sync from node if our localValue is radically different, and not while the user is typing an empty string or partial decimal.
       if (valStr !== localValue) {
-        const parsedLocal = parseFloat(localValue);
-        const parsedNode = parseFloat(valStr);
+        const parsedLocal = parseFloat(localValue)
+        const parsedNode = parseFloat(valStr)
         if (!isNaN(parsedLocal) && parsedLocal !== parsedNode) {
-          setLocalValue(valStr);
+          setLocalValue(valStr)
         } else if (localValue !== '' && !localValue.endsWith('.')) {
           // If localValue is empty string or ends with dot, user is typing, don't overwrite.
           // Otherwise, if they are different string representations of the same number (e.g., "0" vs "0.0"), we might want to sync, but let's just leave it to handleBlur.
         }
       }
     }
-  }, [node.attrs.value]);
+  }, [node.attrs.value])
 
   const handleBlur = () => {
-    let val = parseFloat(localValue);
-    if (isNaN(val)) val = 0.0;
+    let val = parseFloat(localValue)
+    if (isNaN(val)) val = 0.0
 
     // Ensure it's formatted with at least one decimal place if it's an integer
-    const formatted = Number.isInteger(val) ? val.toFixed(1) : val.toString();
-    setLocalValue(formatted);
-    updateAttributes({ value: val });
-  };
+    const formatted = Number.isInteger(val) ? val.toFixed(1) : val.toString()
+    setLocalValue(formatted)
+    updateAttributes({ value: val })
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      setLocalValue(e.target.value);
-    };
+    setLocalValue(e.target.value)
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    handleBlur();
-    editor?.commands.focus();
-  };
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    handleBlur()
+    editor?.commands.focus()
+  }
 
   return (
-    <NodeViewWrapper as="span" className="inline-flex h-6 items-center gap-0.5 bg-white border border-gray-200 rounded-full px-1.5 mx-1.5 align-middle shadow-sm text-black">
+    <NodeViewWrapper
+      as="span"
+      className="inline-flex h-6 items-center gap-0.5 bg-white border border-gray-200 rounded-full px-1.5 mx-1.5 align-middle shadow-sm text-black"
+    >
       <Clock className="w-3 h-3 text-gray-500" />
       <input
         type="number"
@@ -69,10 +82,12 @@ const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
         onKeyDown={handleKeyDown}
         className="h-5 w-7 text-center bg-transparent border-none outline-none text-[12px] leading-none font-medium p-0 m-0 hide-number-spinners duration-input"
       />
-      <span className="text-gray-500 text-[11px] leading-none font-medium pr-0.5">s</span>
+      <span className="text-gray-500 text-[11px] leading-none font-medium pr-0.5">
+        s
+      </span>
     </NodeViewWrapper>
-  );
-};
+  )
+}
 
 const DurationTag = Node.create({
   name: 'durationTag',
@@ -83,27 +98,30 @@ const DurationTag = Node.create({
   addAttributes() {
     return {
       value: {
-        default: 5.0,
-      },
-    };
+        default: 5.0
+      }
+    }
   },
 
   parseHTML() {
     return [
       {
-        tag: 'span[data-duration-tag]',
-      },
-    ];
+        tag: 'span[data-duration-tag]'
+      }
+    ]
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes({ 'data-duration-tag': '' }, HTMLAttributes)];
+    return [
+      'span',
+      mergeAttributes({ 'data-duration-tag': '' }, HTMLAttributes)
+    ]
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(DurationTagComponent);
-  },
-});
+    return ReactNodeViewRenderer(DurationTagComponent)
+  }
+})
 
 const CustomMention = Mention.extend({
   addAttributes() {
@@ -111,88 +129,113 @@ const CustomMention = Mention.extend({
       ...this.parent?.(),
       itemData: {
         default: null,
-        parseHTML: element => JSON.parse(element.getAttribute('data-item') || 'null'),
-        renderHTML: attributes => {
+        parseHTML: (element) =>
+          JSON.parse(element.getAttribute('data-item') || 'null'),
+        renderHTML: (attributes) => {
           if (!attributes.itemData) {
-            return {};
+            return {}
           }
           return {
-            'data-item': JSON.stringify(attributes.itemData),
-          };
-        },
-      },
-    };
+            'data-item': JSON.stringify(attributes.itemData)
+          }
+        }
+      }
+    }
   },
 
   renderHTML({ node, HTMLAttributes }) {
-    const item = node.attrs.itemData;
-    let colorClass = 'bg-gray-400';
-    if (item?.name?.includes('泽维尔')) colorClass = 'bg-blue-500';
-    else if (item?.name?.includes('塞西莉亚')) colorClass = 'bg-orange-400';
-    else if (item?.name?.includes('金发女孩')) colorClass = 'bg-yellow-400';
-    else if (item?.name?.includes('办公室')) colorClass = 'bg-blue-400';
+    const item = node.attrs.itemData
+    let colorClass = 'bg-gray-400'
+    if (item?.name?.includes('泽维尔')) colorClass = 'bg-blue-500'
+    else if (item?.name?.includes('塞西莉亚')) colorClass = 'bg-orange-400'
+    else if (item?.name?.includes('金发女孩')) colorClass = 'bg-yellow-400'
+    else if (item?.name?.includes('办公室')) colorClass = 'bg-blue-400'
 
-    const colorSpan = ['span', { class: `w-2 h-2 rounded-full ${colorClass}` }];
+    const colorSpan = ['span', { class: `w-2 h-2 rounded-full ${colorClass}` }]
 
     // 显示图片或颜色圆点
     const imgOrColor = item?.image
-      ? ['img', { src: item.image, class: 'w-4 h-4 rounded-full object-cover shrink-0' }]
-      : colorSpan;
+      ? [
+          'img',
+          {
+            src: item.image,
+            class: 'w-4 h-4 rounded-full object-cover shrink-0'
+          }
+        ]
+      : colorSpan
 
-    const suffix = item?.type === 'character' ? '-基础形象' : item?.type === 'scene' ? '_0' : '';
+    const suffix =
+      item?.type === 'character'
+        ? '-基础形象'
+        : item?.type === 'scene'
+          ? '_0'
+          : ''
 
     return [
       'span',
       mergeAttributes(
-        { class: 'inline-flex h-6 items-center gap-1.5 bg-white border border-gray-200 rounded-full px-1.5 mx-1.5 text-[11px] font-medium text-black cursor-pointer hover:border-gray-300 shadow-sm transition-colors align-middle select-none' },
+        {
+          class:
+            'inline-flex h-6 items-center gap-1.5 bg-white border border-gray-200 rounded-full px-1.5 mx-1.5 text-[11px] font-medium text-black cursor-pointer hover:border-gray-300 shadow-sm transition-colors align-middle select-none'
+        },
         HTMLAttributes,
         { 'data-type': this.name }
       ),
       imgOrColor,
-      ['span', { class: 'truncate max-w-[120px]' }, `${node.attrs.label}${suffix}`],
-    ];
-  },
-});
+      [
+        'span',
+        { class: 'truncate max-w-[120px]' },
+        `${node.attrs.label}${suffix}`
+      ]
+    ]
+  }
+})
 
 interface Props {
-  project: ProjectState;
-  projectLibrary?: SeriesProject | null;
-  initialContent?: string;
+  project: ProjectState
+  projectLibrary?: SeriesProject | null
+  initialContent?: string
 }
 
-const DEFAULT_SCRIPT = `<p>分镜1 <span data-duration-tag="" value="5.0"></span> : 氛围压抑而紧张，走廊光线昏暗，只有一道门缝透出明亮的室内光。镜头从<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的肩后缓缓推近，她面部朝向门缝，正透过半开的门向泽维尔的办公室里窥视。门缝中，<span data-type="mention" data-id="泽维尔" data-item='{"type":"character","name":"泽维尔", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0171ccb7-d72e-4a9a-b061-3744361f6c05?X-Everphoto-Sum=74f5a1101e64ac618575af72b606d695503d8488&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAAKMaDNP8pfLTxE1YdgqiL8uU4GrXBW25-4aqUCNC6wyxl5GGlLvEe9YlUqikV7C2xCAwcBdVsD3ZnGXvB-ReJPg"}'>@泽维尔-基础形象</span>的手指穿过<span data-type="mention" data-id="金发女孩" data-item='{"type":"character","name":"金发女孩", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_a4fc59f5-7611-4299-99bb-12fcce1a1080?X-Everphoto-Sum=461daeaa265f7a817e29c11d4c7ed8040b53a73d&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGyzzclIKCtUB2Bz1iR3srmp3NaGmpcCp6NJIPQOHYhZnPtydlFIi_z6qN6SvtvfLDE"}'>@金发女孩-基础形象</span>的金发，嘴唇压在她脖颈上。镜头切换到<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的眼部特写，她瞳孔微颤，随后镜头下移，她的手紧紧攥住文件，指节因用力而发白。画面中所有角色全程不说话。</p>`;
+const DEFAULT_SCRIPT = `<p>分镜1 <span data-duration-tag="" value="5.0"></span> : 氛围压抑而紧张，走廊光线昏暗，只有一道门缝透出明亮的室内光。镜头从<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的肩后缓缓推近，她面部朝向门缝，正透过半开的门向泽维尔的办公室里窥视。门缝中，<span data-type="mention" data-id="泽维尔" data-item='{"type":"character","name":"泽维尔", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0171ccb7-d72e-4a9a-b061-3744361f6c05?X-Everphoto-Sum=74f5a1101e64ac618575af72b606d695503d8488&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAAKMaDNP8pfLTxE1YdgqiL8uU4GrXBW25-4aqUCNC6wyxl5GGlLvEe9YlUqikV7C2xCAwcBdVsD3ZnGXvB-ReJPg"}'>@泽维尔-基础形象</span>的手指穿过<span data-type="mention" data-id="金发女孩" data-item='{"type":"character","name":"金发女孩", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_a4fc59f5-7611-4299-99bb-12fcce1a1080?X-Everphoto-Sum=461daeaa265f7a817e29c11d4c7ed8040b53a73d&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGyzzclIKCtUB2Bz1iR3srmp3NaGmpcCp6NJIPQOHYhZnPtydlFIi_z6qN6SvtvfLDE"}'>@金发女孩-基础形象</span>的金发，嘴唇压在她脖颈上。镜头切换到<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的眼部特写，她瞳孔微颤，随后镜头下移，她的手紧紧攥住文件，指节因用力而发白。画面中所有角色全程不说话。</p>`
 
-const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialContent }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [savedContent, setSavedContent] = useState(initialContent || DEFAULT_SCRIPT);
+const ScriptEditorRich: React.FC<Props> = ({
+  project,
+  projectLibrary,
+  initialContent
+}) => {
+  const [isEditing, setIsEditing] = useState(false)
+  const [savedContent, setSavedContent] = useState(
+    initialContent || DEFAULT_SCRIPT
+  )
 
-  const projectRef = useRef(project);
-  const projectLibraryRef = useRef(projectLibrary || null);
+  const projectRef = useRef(project)
+  const projectLibraryRef = useRef(projectLibrary || null)
   const mentionPickerRef = useRef<{
-    popup?: Instance[];
-    component?: ReactRenderer;
-    removeKeydown?: () => void;
-  } | null>(null);
+    popup?: Instance[]
+    component?: ReactRenderer
+    removeKeydown?: () => void
+  } | null>(null)
 
   const destroyMentionPicker = () => {
-    mentionPickerRef.current?.removeKeydown?.();
-    mentionPickerRef.current?.popup?.[0]?.destroy();
-    mentionPickerRef.current?.component?.destroy();
-    mentionPickerRef.current = null;
-  };
+    mentionPickerRef.current?.removeKeydown?.()
+    mentionPickerRef.current?.popup?.[0]?.destroy()
+    mentionPickerRef.current?.component?.destroy()
+    mentionPickerRef.current = null
+  }
 
   useEffect(() => {
-    projectRef.current = project;
-  }, [project]);
+    projectRef.current = project
+  }, [project])
   useEffect(() => {
-    projectLibraryRef.current = projectLibrary || null;
-  }, [projectLibrary]);
+    projectLibraryRef.current = projectLibrary || null
+  }, [projectLibrary])
 
   useEffect(() => {
     return () => {
-      destroyMentionPicker();
-    };
-  }, []);
+      destroyMentionPicker()
+    }
+  }, [])
 
   const editor = useEditor({
     extensions: [
@@ -200,62 +243,75 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
       DurationTag,
       CustomMention.configure({
         HTMLAttributes: {
-          class: 'mention',
+          class: 'mention'
         },
         suggestion: {
-          ...getSuggestion(() => projectRef.current, () => projectLibraryRef.current),
+          ...getSuggestion(
+            () => projectRef.current,
+            () => projectLibraryRef.current
+          ),
           allowedPrefixes: null, // null allows any prefix in Tiptap
-          allowSpaces: true,
-        },
-      }),
+          allowSpaces: true
+        }
+      })
     ],
     content: savedContent,
     editable: isEditing,
     editorProps: {
       attributes: {
-        class: 'focus:outline-none min-h-[200px] outline-none',
+        class: 'focus:outline-none min-h-[200px] outline-none'
       },
       handleClickOn: (view, pos, node, nodePos, event, direct) => {
         if (node.type.name === 'mention' && view.editable) {
-          event.preventDefault();
-          destroyMentionPicker();
-          const scriptItems = buildMentionItems(projectRef.current, '');
-          const libraryItems = buildProjectLibraryMentionItems(projectLibraryRef.current, '');
-          const target = event.target as HTMLElement | null;
-          const getAnchorRect = () => target?.getBoundingClientRect?.() || event.currentTarget?.getBoundingClientRect?.();
+          event.preventDefault()
+          destroyMentionPicker()
+          const scriptItems = buildMentionItems(projectRef.current, '')
+          const libraryItems = buildProjectLibraryMentionItems(
+            projectLibraryRef.current,
+            ''
+          )
+          const target = event.target as HTMLElement | null
+          const getAnchorRect = () =>
+            target?.getBoundingClientRect?.() ||
+            event.currentTarget?.getBoundingClientRect?.()
           const component = new ReactRenderer(MentionList, {
             props: {
               items: scriptItems,
               libraryItems,
               onAddFromLibrary: () => {},
               command: (payload: any) => {
-                const selected = payload?.itemData || payload;
-                const currentNode = view.state.doc.nodeAt(nodePos);
+                const selected = payload?.itemData || payload
+                const currentNode = view.state.doc.nodeAt(nodePos)
                 if (!currentNode || currentNode.type.name !== 'mention') {
-                  destroyMentionPicker();
-                  return;
+                  destroyMentionPicker()
+                  return
                 }
 
-                const nextLabel = selected?.name || payload?.label || payload?.id || currentNode.attrs.label || currentNode.attrs.id;
-                const nextId = selected?.id || payload?.id || nextLabel;
+                const nextLabel =
+                  selected?.name ||
+                  payload?.label ||
+                  payload?.id ||
+                  currentNode.attrs.label ||
+                  currentNode.attrs.id
+                const nextId = selected?.id || payload?.id || nextLabel
 
                 const tr = view.state.tr.setNodeMarkup(nodePos, undefined, {
                   ...currentNode.attrs,
                   id: nextId,
                   label: nextLabel,
-                  itemData: selected,
-                });
-                view.dispatch(tr);
-                view.focus();
-                destroyMentionPicker();
-              },
+                  itemData: selected
+                })
+                view.dispatch(tr)
+                view.focus()
+                destroyMentionPicker()
+              }
             },
-            editor,
-          });
+            editor
+          })
 
           if (!getAnchorRect()) {
-            component.destroy();
-            return true;
+            component.destroy()
+            return true
           }
 
           const popup = tippy('body', {
@@ -269,40 +325,43 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
             hideOnClick: true,
             theme: 'mention-picker',
             arrow: false,
-            maxWidth: 'none',
-          });
+            maxWidth: 'none'
+          })
 
           const onKeyDown = (keydownEvent: KeyboardEvent) => {
             if (keydownEvent.key === 'Escape') {
-              keydownEvent.preventDefault();
-              destroyMentionPicker();
-              return;
+              keydownEvent.preventDefault()
+              destroyMentionPicker()
+              return
             }
-            const handled = (component.ref as any)?.onKeyDown?.({ event: keydownEvent });
+            const handled = (component.ref as any)?.onKeyDown?.({
+              event: keydownEvent
+            })
             if (handled) {
-              keydownEvent.preventDefault();
-              keydownEvent.stopPropagation();
+              keydownEvent.preventDefault()
+              keydownEvent.stopPropagation()
             }
-          };
-          document.addEventListener('keydown', onKeyDown, true);
+          }
+          document.addEventListener('keydown', onKeyDown, true)
 
           mentionPickerRef.current = {
             popup,
             component,
-            removeKeydown: () => document.removeEventListener('keydown', onKeyDown, true),
-          };
-          return true;
+            removeKeydown: () =>
+              document.removeEventListener('keydown', onKeyDown, true)
+          }
+          return true
         }
-        return false;
-      },
-    },
-  });
+        return false
+      }
+    }
+  })
 
   useEffect(() => {
     if (editor) {
-      editor.setEditable(isEditing);
+      editor.setEditable(isEditing)
     }
-  }, [isEditing, editor]);
+  }, [isEditing, editor])
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl p-4 h-full min-h-0 flex flex-col shadow-sm transition-all duration-200">
@@ -353,9 +412,9 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
           <>
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(false);
-                editor?.commands.setContent(savedContent);
+                e.stopPropagation()
+                setIsEditing(false)
+                editor?.commands.setContent(savedContent)
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-white text-black border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm"
             >
@@ -363,10 +422,10 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
             </button>
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(false);
+                e.stopPropagation()
+                setIsEditing(false)
                 if (editor) {
-                  setSavedContent(editor.getHTML());
+                  setSavedContent(editor.getHTML())
                 }
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm"
@@ -378,9 +437,9 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
           <>
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(true);
-                setTimeout(() => editor?.commands.focus(), 0);
+                e.stopPropagation()
+                setIsEditing(true)
+                setTimeout(() => editor?.commands.focus(), 0)
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-white text-black border border-gray-200 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2"
             >
@@ -389,7 +448,7 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
             </button>
             <button
               onClick={(e) => {
-                e.stopPropagation();
+                e.stopPropagation()
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm flex items-center gap-2"
             >
@@ -400,7 +459,7 @@ const ScriptEditorRich: React.FC<Props> = ({ project, projectLibrary, initialCon
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ScriptEditorRich;
+export default ScriptEditorRich

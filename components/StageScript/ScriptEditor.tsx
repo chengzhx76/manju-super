@@ -1,24 +1,24 @@
-import React from 'react';
-import { Plus, RotateCw, BrainCircuit, Wand2, Undo2 } from 'lucide-react';
-import { STYLES } from './constants';
+import React from 'react'
+import { Plus, RotateCw, BrainCircuit, Wand2, Undo2 } from 'lucide-react'
+import { STYLES } from './constants'
 
 interface Props {
-  script: string;
-  scriptSoftLimit: number;
-  scriptHardLimit: number;
-  onChange: (value: string) => void;
-  onContinue: () => void;
-  onRewrite: () => void;
-  onSelectionChange: (start: number, end: number) => void;
-  selectedText: string;
-  rewriteInstruction: string;
-  onRewriteInstructionChange: (value: string) => void;
-  onRewriteSelection: () => void;
-  onUndoRewrite: () => void;
-  canUndoRewrite: boolean;
-  isContinuing: boolean;
-  isRewriting: boolean;
-  lastModified?: string;
+  script: string
+  scriptSoftLimit: number
+  scriptHardLimit: number
+  onChange: (value: string) => void
+  onContinue: () => void
+  onRewrite: () => void
+  onSelectionChange: (start: number, end: number) => void
+  selectedText: string
+  rewriteInstruction: string
+  onRewriteInstructionChange: (value: string) => void
+  onRewriteSelection: () => void
+  onUndoRewrite: () => void
+  canUndoRewrite: boolean
+  isContinuing: boolean
+  isRewriting: boolean
+  lastModified?: string
 }
 
 const ScriptEditor: React.FC<Props> = ({
@@ -42,41 +42,46 @@ const ScriptEditor: React.FC<Props> = ({
   const stats = {
     characters: script.length,
     lines: script.split('\n').length
-  };
-  const selectedCount = selectedText.length;
-  const selectedPreview = selectedCount > 220
-    ? `${selectedText.slice(0, 220)}...`
-    : selectedText;
+  }
+  const selectedCount = selectedText.length
+  const selectedPreview =
+    selectedCount > 220 ? `${selectedText.slice(0, 220)}...` : selectedText
   const scriptLengthStatus: 'normal' | 'warning' | 'error' =
     stats.characters > scriptHardLimit
       ? 'error'
       : stats.characters > scriptSoftLimit
         ? 'warning'
-        : 'normal';
-  const scriptLimitHint = scriptLengthStatus === 'error'
-    ? `超出上限 ${stats.characters}/${scriptHardLimit}，请拆分为多集`
-    : scriptLengthStatus === 'warning'
-      ? `接近上限 ${stats.characters}/${scriptHardLimit}（建议单集 ≤ ${scriptSoftLimit}）`
-      : `建议单集长度 ≤ ${scriptSoftLimit} 字符`;
-  const scriptLimitTextClass = scriptLengthStatus === 'error'
-    ? 'text-rose-300'
-    : scriptLengthStatus === 'warning'
-      ? 'text-amber-300'
-      : 'text-[var(--text-muted)]';
-  const scriptLimitDotClass = scriptLengthStatus === 'error'
-    ? 'bg-rose-300'
-    : scriptLengthStatus === 'warning'
-      ? 'bg-amber-300'
-      : 'bg-[var(--border-primary)]';
+        : 'normal'
+  const scriptLimitHint =
+    scriptLengthStatus === 'error'
+      ? `超出上限 ${stats.characters}/${scriptHardLimit}，请拆分为多集`
+      : scriptLengthStatus === 'warning'
+        ? `接近上限 ${stats.characters}/${scriptHardLimit}（建议单集 ≤ ${scriptSoftLimit}）`
+        : `建议单集长度 ≤ ${scriptSoftLimit} 字符`
+  const scriptLimitTextClass =
+    scriptLengthStatus === 'error'
+      ? 'text-rose-300'
+      : scriptLengthStatus === 'warning'
+        ? 'text-amber-300'
+        : 'text-[var(--text-muted)]'
+  const scriptLimitDotClass =
+    scriptLengthStatus === 'error'
+      ? 'bg-rose-300'
+      : scriptLengthStatus === 'warning'
+        ? 'bg-amber-300'
+        : 'bg-[var(--border-primary)]'
 
-  const isBusy = isContinuing || isRewriting;
-  const isBaseDisabled = isBusy || !script.trim();
-  const canRewriteSelection = !isBusy && selectedText.trim().length > 0 && rewriteInstruction.trim().length > 0;
-  const canUndo = !isBusy && canUndoRewrite;
+  const isBusy = isContinuing || isRewriting
+  const isBaseDisabled = isBusy || !script.trim()
+  const canRewriteSelection =
+    !isBusy &&
+    selectedText.trim().length > 0 &&
+    rewriteInstruction.trim().length > 0
+  const canUndo = !isBusy && canUndoRewrite
 
   const reportSelection = (target: HTMLTextAreaElement) => {
-    onSelectionChange(target.selectionStart ?? 0, target.selectionEnd ?? 0);
-  };
+    onSelectionChange(target.selectionStart ?? 0, target.selectionEnd ?? 0)
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-[var(--bg-base)] relative">
@@ -84,16 +89,16 @@ const ScriptEditor: React.FC<Props> = ({
       <div className="h-14 border-b border-[var(--border-primary)] flex items-center justify-between px-8 bg-[var(--bg-base)] shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-1.5 h-1.5 rounded-full bg-[var(--border-secondary)]"></div>
-          <span className="text-xs font-bold text-[var(--text-tertiary)]">剧本编辑器</span>
+          <span className="text-xs font-bold text-[var(--text-tertiary)]">
+            剧本编辑器
+          </span>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={onContinue}
             disabled={isBaseDisabled}
             className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5 transition-all shadow-sm ${
-              isBaseDisabled
-                ? STYLES.button.disabled
-                : STYLES.button.primary
+              isBaseDisabled ? STYLES.button.disabled : STYLES.button.primary
             }`}
           >
             {isContinuing ? (
@@ -112,9 +117,7 @@ const ScriptEditor: React.FC<Props> = ({
             onClick={onRewrite}
             disabled={isBaseDisabled}
             className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5 transition-all shadow-sm ${
-              isBaseDisabled
-                ? STYLES.button.disabled
-                : STYLES.button.primary
+              isBaseDisabled ? STYLES.button.disabled : STYLES.button.primary
             }`}
           >
             {isRewriting ? (
@@ -154,15 +157,15 @@ const ScriptEditor: React.FC<Props> = ({
             onClick={onUndoRewrite}
             disabled={!canUndo}
             className={`px-3 py-1.5 text-xs font-bold rounded-md flex items-center gap-1.5 transition-all shadow-sm ${
-              canUndo
-                ? STYLES.button.secondary
-                : STYLES.button.disabled
+              canUndo ? STYLES.button.secondary : STYLES.button.disabled
             }`}
           >
             <Undo2 className="w-3.5 h-3.5" />
             撤回改写
           </button>
-          <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">MARKDOWN SUPPORTED</span>
+          <span className="text-[10px] font-mono text-[var(--text-muted)] uppercase tracking-widest">
+            MARKDOWN SUPPORTED
+          </span>
         </div>
       </div>
 
@@ -176,7 +179,9 @@ const ScriptEditor: React.FC<Props> = ({
             className="flex-1 bg-[var(--bg-surface)] border border-[var(--border-primary)] text-[var(--text-primary)] px-3 py-2 text-sm rounded-md focus:border-[var(--border-secondary)] focus:outline-none transition-all placeholder:text-[var(--text-muted)]"
           />
           <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">
-            {selectedCount > 0 ? `已选择 ${selectedCount} 字符` : '请先在下方选择段落'}
+            {selectedCount > 0
+              ? `已选择 ${selectedCount} 字符`
+              : '请先在下方选择段落'}
           </span>
         </div>
         {selectedCount > 0 && (
@@ -190,7 +195,7 @@ const ScriptEditor: React.FC<Props> = ({
           </div>
         )}
       </div>
-      
+
       {/* Editor Area */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full max-w-5xl mx-auto h-full flex flex-col py-12 px-8">
@@ -210,7 +215,9 @@ const ScriptEditor: React.FC<Props> = ({
       {/* Status Footer */}
       <div className="h-8 border-t border-[var(--border-subtle)] bg-[var(--bg-base)] px-4 flex items-center justify-between gap-4 text-[10px] font-mono select-none">
         <div className={`flex items-center gap-1.5 ${scriptLimitTextClass}`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${scriptLimitDotClass}`}></div>
+          <div
+            className={`w-1.5 h-1.5 rounded-full ${scriptLimitDotClass}`}
+          ></div>
           <span>{scriptLimitHint}</span>
         </div>
         <div className="flex items-center gap-4 text-[var(--text-muted)]">
@@ -223,7 +230,7 @@ const ScriptEditor: React.FC<Props> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ScriptEditor;
+export default ScriptEditor

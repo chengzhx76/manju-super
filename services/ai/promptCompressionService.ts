@@ -1,42 +1,49 @@
-import { chatCompletion, getActiveChatModelName } from './apiCore';
+import { chatCompletion, getActiveChatModelName } from './apiCore'
 
-export type PromptCompressionMode = 'image' | 'video' | 'generic';
+export type PromptCompressionMode = 'image' | 'video' | 'generic'
 
 export interface PromptCompressionOptions {
-  text: string;
-  maxChars: number;
-  mode?: PromptCompressionMode;
-  model?: string;
-  timeoutMs?: number;
+  text: string
+  maxChars: number
+  mode?: PromptCompressionMode
+  model?: string
+  timeoutMs?: number
 }
 
 export interface PromptCompressionResult {
-  text: string;
-  compressed: boolean;
-  model: string;
-  reason: 'within-limit' | 'compressed' | 'no-improvement' | 'empty-output' | 'error';
-  originalLength: number;
-  finalLength: number;
+  text: string
+  compressed: boolean
+  model: string
+  reason:
+    | 'within-limit'
+    | 'compressed'
+    | 'no-improvement'
+    | 'empty-output'
+    | 'error'
+  originalLength: number
+  finalLength: number
 }
 
-const countChars = (input: string): number => Array.from(String(input || '')).length;
+const countChars = (input: string): number =>
+  Array.from(String(input || '')).length
 
 const normalizeOutput = (input: string): string =>
   String(input || '')
     .replace(/\r/g, '')
     .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    .trim()
 
 const buildCompressionPrompt = (
   text: string,
   maxChars: number,
   mode: PromptCompressionMode
 ): string => {
-  const modeHint = mode === 'image'
-    ? 'image generation'
-    : mode === 'video'
-      ? 'video generation'
-      : 'content generation';
+  const modeHint =
+    mode === 'image'
+      ? 'image generation'
+      : mode === 'video'
+        ? 'video generation'
+        : 'content generation'
 
   return `Compress the following ${modeHint} prompt to <= ${maxChars} characters.
 
@@ -48,17 +55,17 @@ Hard requirements:
 5. Output only the compressed prompt text, no explanations.
 
 Prompt to compress:
-${text}`;
-};
+${text}`
+}
 
 export const compressPromptWithLLM = async (
   options: PromptCompressionOptions
 ): Promise<PromptCompressionResult> => {
-  const originalText = String(options.text || '');
-  const originalLength = countChars(originalText);
-  const maxChars = Math.max(200, Math.floor(options.maxChars || 0));
-  const mode: PromptCompressionMode = options.mode || 'generic';
-  const model = options.model || getActiveChatModelName() || 'gpt-5.2';
+  const originalText = String(options.text || '')
+  const originalLength = countChars(originalText)
+  const maxChars = Math.max(200, Math.floor(options.maxChars || 0))
+  const mode: PromptCompressionMode = options.mode || 'generic'
+  const model = options.model || getActiveChatModelName() || 'gpt-5.2'
 
   if (originalLength <= maxChars) {
     return {
@@ -67,12 +74,16 @@ export const compressPromptWithLLM = async (
       model,
       reason: 'within-limit',
       originalLength,
-      finalLength: originalLength,
-    };
+      finalLength: originalLength
+    }
   }
 
   try {
-    const compressionPrompt = buildCompressionPrompt(originalText, maxChars, mode);
+    const compressionPrompt = buildCompressionPrompt(
+      originalText,
+      maxChars,
+      mode
+    )
     const response = await chatCompletion(
       compressionPrompt,
       model,
@@ -80,9 +91,9 @@ export const compressPromptWithLLM = async (
       2048,
       undefined,
       options.timeoutMs ?? 60000
-    );
-    const candidate = normalizeOutput(response);
-    const candidateLength = countChars(candidate);
+    )
+    const candidate = normalizeOutput(response)
+    const candidateLength = countChars(candidate)
 
     if (!candidate) {
       return {
@@ -91,8 +102,8 @@ export const compressPromptWithLLM = async (
         model,
         reason: 'empty-output',
         originalLength,
-        finalLength: originalLength,
-      };
+        finalLength: originalLength
+      }
     }
 
     if (candidateLength < originalLength) {
@@ -102,8 +113,8 @@ export const compressPromptWithLLM = async (
         model,
         reason: 'compressed',
         originalLength,
-        finalLength: candidateLength,
-      };
+        finalLength: candidateLength
+      }
     }
 
     return {
@@ -112,8 +123,8 @@ export const compressPromptWithLLM = async (
       model,
       reason: 'no-improvement',
       originalLength,
-      finalLength: originalLength,
-    };
+      finalLength: originalLength
+    }
   } catch {
     return {
       text: originalText,
@@ -121,8 +132,7 @@ export const compressPromptWithLLM = async (
       model,
       reason: 'error',
       originalLength,
-      finalLength: originalLength,
-    };
+      finalLength: originalLength
+    }
   }
-};
-
+}

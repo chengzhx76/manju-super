@@ -3,8 +3,8 @@
  * 支持自定义提供商和 endpoint
  */
 
-import React, { useEffect, useState } from 'react';
-import { Check, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react'
+import { Check, X } from 'lucide-react'
 import {
   ModelType,
   ModelDefinition,
@@ -20,77 +20,92 @@ import {
   DEFAULT_VIDEO_PARAMS_SORA,
   DEFAULT_VIDEO_PARAMS_VEO,
   DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE,
-  DEFAULT_AUDIO_PARAMS,
-} from '../../types/model';
-import { getProviders, addProvider } from '../../services/modelRegistry';
-import { useAlert } from '../GlobalAlert';
+  DEFAULT_AUDIO_PARAMS
+} from '../../types/model'
+import { getProviders, addProvider } from '../../services/modelRegistry'
+import { useAlert } from '../GlobalAlert'
 
 interface AddModelFormProps {
-  type: ModelType;
-  onSave: (model: Omit<ModelDefinition, 'id' | 'isBuiltIn'>) => void;
-  onCancel: () => void;
+  type: ModelType
+  onSave: (model: Omit<ModelDefinition, 'id' | 'isBuiltIn'>) => void
+  onCancel: () => void
 }
 
-const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) => {
-  const existingProviders = getProviders();
-  const { showAlert } = useAlert();
+const AddModelForm: React.FC<AddModelFormProps> = ({
+  type,
+  onSave,
+  onCancel
+}) => {
+  const existingProviders = getProviders()
+  const { showAlert } = useAlert()
 
-  const [name, setName] = useState('');
-  const [apiModel, setApiModel] = useState('');
-  const [description, setDescription] = useState('');
-  const [endpoint, setEndpoint] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [imageApiFormat, setImageApiFormat] = useState<ImageApiFormat>('gemini');
-  const [videoMode, setVideoMode] = useState<'sync' | 'async' | 'task'>('sync');
-  const [audioVoice, setAudioVoice] = useState<string>(DEFAULT_AUDIO_PARAMS.defaultVoice);
-  const [audioOutputFormat, setAudioOutputFormat] = useState<AudioOutputFormat>(DEFAULT_AUDIO_PARAMS.outputFormat);
+  const [name, setName] = useState('')
+  const [apiModel, setApiModel] = useState('')
+  const [description, setDescription] = useState('')
+  const [endpoint, setEndpoint] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [imageApiFormat, setImageApiFormat] = useState<ImageApiFormat>('gemini')
+  const [videoMode, setVideoMode] = useState<'sync' | 'async' | 'task'>('sync')
+  const [audioVoice, setAudioVoice] = useState<string>(
+    DEFAULT_AUDIO_PARAMS.defaultVoice
+  )
+  const [audioOutputFormat, setAudioOutputFormat] = useState<AudioOutputFormat>(
+    DEFAULT_AUDIO_PARAMS.outputFormat
+  )
 
   // 提供商配置
-  const [selectedProviderId, setSelectedProviderId] = useState(existingProviders[0]?.id || 'antsk');
+  const [selectedProviderId, setSelectedProviderId] = useState(
+    existingProviders[0]?.id || 'antsk'
+  )
 
   useEffect(() => {
-    if (type !== 'video' || videoMode !== 'task') return;
+    if (type !== 'video' || videoMode !== 'task') return
     const volcengineProvider = existingProviders.find(
-      p => p.id === 'volcengine' || p.baseUrl.toLowerCase().includes('volces.com')
-    );
+      (p) =>
+        p.id === 'volcengine' || p.baseUrl.toLowerCase().includes('volces.com')
+    )
     if (volcengineProvider) {
-      setSelectedProviderId(volcengineProvider.id);
+      setSelectedProviderId(volcengineProvider.id)
     }
-  }, [type, videoMode]);
+  }, [type, videoMode])
 
   const handleSave = () => {
     if (!name.trim()) {
-      showAlert('请输入模型名称', { type: 'error' });
-      return;
+      showAlert('请输入模型名称', { type: 'error' })
+      return
     }
     if (!apiModel.trim()) {
-      showAlert('请输入模型标识', { type: 'error' });
-      return;
+      showAlert('请输入模型标识', { type: 'error' })
+      return
     }
     if (!selectedProviderId) {
-      showAlert('请选择提供商', { type: 'error' });
-      return;
+      showAlert('请选择提供商', { type: 'error' })
+      return
     }
 
-    const providerId = selectedProviderId;
+    const providerId = selectedProviderId
 
     // 根据模型类型设置默认参数
-    let params: ChatModelParams | ImageModelParams | VideoModelParams | AudioModelParams;
-    let resolvedEndpoint = endpoint.trim() || undefined;
+    let params:
+      | ChatModelParams
+      | ImageModelParams
+      | VideoModelParams
+      | AudioModelParams
+    let resolvedEndpoint = endpoint.trim() || undefined
 
     if (type === 'chat') {
-      params = { ...DEFAULT_CHAT_PARAMS };
-      if (!resolvedEndpoint) resolvedEndpoint = '/v1/chat/completions';
+      params = { ...DEFAULT_CHAT_PARAMS }
+      if (!resolvedEndpoint) resolvedEndpoint = '/v1/chat/completions'
     } else if (type === 'image') {
       params =
         imageApiFormat === 'openai'
           ? { ...DEFAULT_IMAGE_PARAMS_OPENAI }
-          : { ...DEFAULT_IMAGE_PARAMS };
+          : { ...DEFAULT_IMAGE_PARAMS }
       if (!resolvedEndpoint) {
         resolvedEndpoint =
           imageApiFormat === 'openai'
             ? '/v1/images/generations'
-            : '/v1beta/models/{model}:generateContent';
+            : '/v1beta/models/{model}:generateContent'
       }
     } else if (type === 'video') {
       params =
@@ -98,7 +113,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
           ? { ...DEFAULT_VIDEO_PARAMS_VEO }
           : videoMode === 'task'
             ? { ...DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE }
-            : { ...DEFAULT_VIDEO_PARAMS_SORA };
+            : { ...DEFAULT_VIDEO_PARAMS_SORA }
 
       if (!resolvedEndpoint) {
         resolvedEndpoint =
@@ -106,16 +121,16 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             ? '/v1/chat/completions'
             : videoMode === 'task'
               ? '/api/v3/contents/generations/tasks'
-              : '/v1/videos';
+              : '/v1/videos'
       }
     } else {
       params = {
         ...DEFAULT_AUDIO_PARAMS,
         defaultVoice: audioVoice.trim() || DEFAULT_AUDIO_PARAMS.defaultVoice,
-        outputFormat: audioOutputFormat,
-      };
+        outputFormat: audioOutputFormat
+      }
       if (!resolvedEndpoint) {
-        resolvedEndpoint = '/v1/chat/completions';
+        resolvedEndpoint = '/v1/chat/completions'
       }
     }
 
@@ -128,20 +143,24 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
       description: description.trim() || undefined,
       apiKey: apiKey.trim() || undefined,
       isEnabled: true,
-      params,
-    } as any;
+      params
+    } as any
 
-    onSave(model);
-  };
+    onSave(model)
+  }
 
   return (
     <div className="bg-[var(--bg-elevated)]/50 border border-[var(--border-secondary)] rounded-lg p-4 space-y-4">
-      <h4 className="text-sm font-bold text-[var(--text-primary)]">添加自定义模型</h4>
+      <h4 className="text-sm font-bold text-[var(--text-primary)]">
+        添加自定义模型
+      </h4>
 
       {/* 基础信息 */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">模型名称 *</label>
+          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+            模型名称 *
+          </label>
           <input
             type="text"
             value={name}
@@ -151,7 +170,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
           />
         </div>
         <div>
-          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">API 模型名 *（可与内置重复）</label>
+          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+            API 模型名 *（可与内置重复）
+          </label>
           <input
             type="text"
             value={apiModel}
@@ -166,7 +187,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
       </div>
 
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">描述（可选）</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          描述（可选）
+        </label>
         <input
           type="text"
           value={description}
@@ -179,7 +202,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
       {/* 图片模型特有选项 */}
       {type === 'image' && (
         <div>
-          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">图片 API 协议</label>
+          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+            图片 API 协议
+          </label>
           <div className="grid grid-cols-1 gap-2">
             <button
               onClick={() => setImageApiFormat('gemini')}
@@ -203,7 +228,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             </button>
           </div>
           <p className="text-[9px] text-[var(--text-muted)] mt-1">
-            OpenAI 协议下无参考图走 `/v1/images/generations`，带参考图会自动走 `/v1/images/edits`。
+            OpenAI 协议下无参考图走 `/v1/images/generations`，带参考图会自动走
+            `/v1/images/edits`。
           </p>
         </div>
       )}
@@ -212,7 +238,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
       {type === 'audio' && (
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">默认音色</label>
+            <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+              默认音色
+            </label>
             <input
               type="text"
               value={audioVoice}
@@ -222,10 +250,14 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             />
           </div>
           <div>
-            <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">输出格式</label>
+            <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+              输出格式
+            </label>
             <select
               value={audioOutputFormat}
-              onChange={(e) => setAudioOutputFormat(e.target.value as AudioOutputFormat)}
+              onChange={(e) =>
+                setAudioOutputFormat(e.target.value as AudioOutputFormat)
+              }
               className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
             >
               <option value="wav">wav</option>
@@ -237,7 +269,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
 
       {/* API 端点 */}
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">API 端点 (Endpoint)</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          API 端点 (Endpoint)
+        </label>
         <input
           type="text"
           value={endpoint}
@@ -262,7 +296,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
 
       {/* 模型专属 API Key */}
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">API Key（可选）</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          API Key（可选）
+        </label>
         <input
           type="password"
           value={apiKey}
@@ -277,14 +313,18 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
 
       {/* 提供商选择 */}
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-2">API 提供商</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-2">
+          API 提供商
+        </label>
         <select
           value={selectedProviderId}
           onChange={(e) => setSelectedProviderId(e.target.value)}
           className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
         >
           {existingProviders.map((p) => (
-            <option key={p.id} value={p.id}>{p.name} ({p.baseUrl})</option>
+            <option key={p.id} value={p.id}>
+              {p.name} ({p.baseUrl})
+            </option>
           ))}
         </select>
         <p className="text-[9px] text-[var(--text-muted)] mt-1">
@@ -295,7 +335,9 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
       {/* 视频模型特有选项 */}
       {type === 'video' && (
         <div>
-          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">API 模式</label>
+          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+            API 模式
+          </label>
           <div className="grid grid-cols-1 gap-2">
             <button
               onClick={() => setVideoMode('sync')}
@@ -329,7 +371,8 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
             </button>
           </div>
           <p className="text-[9px] text-[var(--text-muted)] mt-1">
-            同步模式：直接返回结果；Sora 类异步：`/v1/videos`；火山任务类：`/api/v3/contents/generations/tasks`
+            同步模式：直接返回结果；Sora
+            类异步：`/v1/videos`；火山任务类：`/api/v3/contents/generations/tasks`
           </p>
         </div>
       )}
@@ -351,7 +394,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({ type, onSave, onCancel }) =
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default AddModelForm;
+export default AddModelForm

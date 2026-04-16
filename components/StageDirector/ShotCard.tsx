@@ -1,38 +1,46 @@
-import React from 'react';
-import { Image as ImageIcon, Video, Trash2 } from 'lucide-react';
-import { Shot } from '../../types';
-import { getShotDisplayLabel } from '../../services/storyboardIdUtils';
+import React from 'react'
+import { Image as ImageIcon, Video, Trash2 } from 'lucide-react'
+import { Shot } from '../../types'
+import { getShotDisplayLabel } from '../../services/storyboardIdUtils'
 
 interface ShotCardProps {
-  shot: Shot;
-  index: number;
-  isActive: boolean;
-  onClick: () => void;
-  onDelete?: (shotId: string) => void;
+  shot: Shot
+  index: number
+  isActive: boolean
+  onClick: () => void
+  onDelete?: (shotId: string) => void
 }
 
-const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onDelete }) => {
-  const sKf = shot.keyframes?.find(k => k.type === 'start');
-  const hasImage = !!sKf?.imageUrl;
-  const hasVideo = !!shot.interval?.videoUrl;
-  const quality = shot.qualityAssessment;
-  const qualityGradeLabel = quality?.grade === 'pass'
-    ? '通过'
-    : quality?.grade === 'warning'
-      ? '需优化'
-      : '高风险';
-  const qualityBadgeClass = quality?.grade === 'pass'
-    ? 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]'
-    : quality?.grade === 'warning'
-      ? 'bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]'
-      : 'bg-[var(--error-hover-bg)] text-[var(--error-text)] border-[var(--error-border)]';
+const ShotCard: React.FC<ShotCardProps> = ({
+  shot,
+  index,
+  isActive,
+  onClick,
+  onDelete
+}) => {
+  const sKf = shot.keyframes?.find((k) => k.type === 'start')
+  const hasImage = !!sKf?.imageUrl
+  const hasVideo = !!shot.interval?.videoUrl
+  const quality = shot.qualityAssessment
+  const qualityGradeLabel =
+    quality?.grade === 'pass'
+      ? '通过'
+      : quality?.grade === 'warning'
+        ? '需优化'
+        : '高风险'
+  const qualityBadgeClass =
+    quality?.grade === 'pass'
+      ? 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-border)]'
+      : quality?.grade === 'warning'
+        ? 'bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-border)]'
+        : 'bg-[var(--error-hover-bg)] text-[var(--error-text)] border-[var(--error-border)]'
 
   // 从shot.id中提取显示编号
   // 例如：shot-1 → "SHOT 001", shot-1-1 → "SHOT 001-1", shot-1-2 → "SHOT 001-2"
-  const getShotDisplayNumber = () => getShotDisplayLabel(shot.id, index);
+  const getShotDisplayNumber = () => getShotDisplayLabel(shot.id, index)
 
   return (
-    <div 
+    <div
       onClick={onClick}
       className={`
         group relative flex flex-col bg-[var(--bg-elevated)] border rounded-xl overflow-hidden cursor-pointer transition-all duration-200
@@ -41,7 +49,9 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
     >
       {/* Header */}
       <div className="px-3 py-2 bg-[var(--bg-surface)] border-b border-[var(--border-primary)] flex justify-between items-center">
-        <span className={`font-mono text-[10px] font-bold ${isActive ? 'text-[var(--accent-text)]' : 'text-[var(--text-tertiary)]'}`}>
+        <span
+          className={`font-mono text-[10px] font-bold ${isActive ? 'text-[var(--accent-text)]' : 'text-[var(--text-tertiary)]'}`}
+        >
           {getShotDisplayNumber()}
         </span>
         <div className="flex items-center gap-1.5">
@@ -51,8 +61,8 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
           {onDelete && (
             <button
               onClick={(e) => {
-                e.stopPropagation();
-                onDelete(shot.id);
+                e.stopPropagation()
+                onDelete(shot.id)
               }}
               className="p-1 rounded-md text-[var(--text-muted)] hover:text-[var(--error)] hover:bg-[var(--error)]/10 transition-all opacity-0 group-hover:opacity-100"
               title="删除分镜"
@@ -66,9 +76,9 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
       {/* Thumbnail */}
       <div className="aspect-video bg-[var(--bg-elevated)] relative overflow-hidden">
         {hasImage ? (
-          <img 
-            src={sKf!.imageUrl} 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+          <img
+            src={sKf!.imageUrl}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             alt={`Shot ${index + 1}`}
           />
         ) : (
@@ -76,11 +86,13 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
             <ImageIcon className="w-8 h-8 opacity-20" />
           </div>
         )}
-        
+
         {/* Badges */}
         <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
           {quality && (
-            <div className={`px-2 py-1 rounded-full text-[9px] font-bold border ${qualityBadgeClass}`}>
+            <div
+              className={`px-2 py-1 rounded-full text-[9px] font-bold border ${qualityBadgeClass}`}
+            >
               评分 {quality.score} · {qualityGradeLabel}
             </div>
           )}
@@ -94,7 +106,9 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
 
         {!isActive && !hasImage && (
           <div className="absolute inset-0 bg-[var(--bg-base)]/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span className="text-[var(--text-primary)] text-xs font-mono">点击编辑</span>
+            <span className="text-[var(--text-primary)] text-xs font-mono">
+              点击编辑
+            </span>
           </div>
         )}
       </div>
@@ -106,7 +120,7 @@ const ShotCard: React.FC<ShotCardProps> = ({ shot, index, isActive, onClick, onD
         </p>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ShotCard;
+export default ShotCard

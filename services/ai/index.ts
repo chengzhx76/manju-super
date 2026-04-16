@@ -32,8 +32,8 @@ export {
   // 日志回调
   setScriptLogCallback,
   clearScriptLogCallback,
-  logScriptProgress,
-} from './apiCore';
+  logScriptProgress
+} from './apiCore'
 
 // 提示词常量
 export {
@@ -44,8 +44,8 @@ export {
   getStylePrompt,
   getStylePromptCN,
   getNegativePrompt,
-  getSceneNegativePrompt,
-} from './promptConstants';
+  getSceneNegativePrompt
+} from './promptConstants'
 
 // 剧本处理服务
 export {
@@ -60,8 +60,8 @@ export {
   rewriteScriptStream,
   rewriteScriptSegment,
   rewriteScriptSegmentStream,
-  type VisualStyleInferenceResult,
-} from './scriptService';
+  type VisualStyleInferenceResult
+} from './scriptService'
 
 // 视觉资产生成服务
 export {
@@ -71,21 +71,19 @@ export {
   generateImage,
   CHARACTER_TURNAROUND_LAYOUT,
   generateCharacterTurnaroundPanels,
-  generateCharacterTurnaroundImage,
-} from './visualService';
+  generateCharacterTurnaroundImage
+} from './visualService'
 
 // 视频生成服务
-export {
-  generateVideo,
-} from './videoService';
+export { generateVideo } from './videoService'
 
 // 配音生成服务
 export {
   generateDubbingAudio,
   type DubbingMode,
   type GenerateDubbingAudioOptions,
-  type GenerateDubbingAudioResult,
-} from './audioService';
+  type GenerateDubbingAudioResult
+} from './audioService'
 
 // 分镜辅助服务
 export {
@@ -98,10 +96,8 @@ export {
   translateNineGridPanels,
   reviseNineGridPanelsByInstruction,
   generateNineGridImage,
-  type NineGridRewriteContext,
-} from './shotService';
+  type NineGridRewriteContext
+} from './shotService'
 
 // Prompt compression service
-export {
-  compressPromptWithLLM,
-} from './promptCompressionService';
+export { compressPromptWithLLM } from './promptCompressionService'

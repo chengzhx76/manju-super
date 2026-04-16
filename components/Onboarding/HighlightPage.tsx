@@ -1,8 +1,8 @@
-import React from 'react';
-import { HIGHLIGHTS } from './constants';
+import React from 'react'
+import { HIGHLIGHTS } from './constants'
 
 interface HighlightPageProps {
-  onNext: () => void;
+  onNext: () => void
 }
 
 const HighlightPage: React.FC<HighlightPageProps> = ({ onNext }) => {
@@ -26,8 +26,12 @@ const HighlightPage: React.FC<HighlightPageProps> = ({ onNext }) => {
           >
             <span className="text-2xl flex-shrink-0">{highlight.icon}</span>
             <div>
-              <h3 className="text-[var(--text-primary)] font-bold text-sm mb-1">{highlight.title}</h3>
-              <p className="text-[var(--text-tertiary)] text-xs">{highlight.description}</p>
+              <h3 className="text-[var(--text-primary)] font-bold text-sm mb-1">
+                {highlight.title}
+              </h3>
+              <p className="text-[var(--text-tertiary)] text-xs">
+                {highlight.description}
+              </p>
             </div>
           </div>
         ))}
@@ -39,9 +43,18 @@ const HighlightPage: React.FC<HighlightPageProps> = ({ onNext }) => {
           推荐使用路径
         </h3>
         <div className="space-y-2 text-[11px] text-[var(--text-secondary)] leading-relaxed">
-          <p>1. 在「导演工作台」点击「九宫格分镜预览」，先确认 9 个镜头描述再生成九宫格图。</p>
-          <p>2. 生成后可点击单个格子裁剪为首帧，也可直接使用整张九宫格图作为首帧。</p>
-          <p>3. 选择 Veo 系列模型时建议补齐首帧+尾帧；仅有首帧也可先生成单图视频。</p>
+          <p>
+            1. 在「导演工作台」点击「九宫格分镜预览」，先确认 9
+            个镜头描述再生成九宫格图。
+          </p>
+          <p>
+            2.
+            生成后可点击单个格子裁剪为首帧，也可直接使用整张九宫格图作为首帧。
+          </p>
+          <p>
+            3. 选择 Veo
+            系列模型时建议补齐首帧+尾帧；仅有首帧也可先生成单图视频。
+          </p>
         </div>
       </div>
 
@@ -53,7 +66,7 @@ const HighlightPage: React.FC<HighlightPageProps> = ({ onNext }) => {
         继续下一步
       </button>
     </div>
-  );
-};
+  )
+}
 
-export default HighlightPage;
+export default HighlightPage

@@ -1,15 +1,19 @@
-const DEFAULT_MEDIA_PROXY_ENDPOINT = '/api/media-proxy';
+const DEFAULT_MEDIA_PROXY_ENDPOINT = '/api/media-proxy'
 const mediaProxyEnabled =
-  String(import.meta.env.VITE_MEDIA_PROXY_ENABLED ?? 'true').toLowerCase() !== 'false';
-const configuredProxyEndpoint = String(import.meta.env.VITE_MEDIA_PROXY_ENDPOINT ?? '').trim();
-const mediaProxyEndpoint = configuredProxyEndpoint || DEFAULT_MEDIA_PROXY_ENDPOINT;
+  String(import.meta.env.VITE_MEDIA_PROXY_ENABLED ?? 'true').toLowerCase() !==
+  'false'
+const configuredProxyEndpoint = String(
+  import.meta.env.VITE_MEDIA_PROXY_ENDPOINT ?? ''
+).trim()
+const mediaProxyEndpoint =
+  configuredProxyEndpoint || DEFAULT_MEDIA_PROXY_ENDPOINT
 
-const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value)
 
 const buildProxyUrl = (targetUrl: string): string => {
-  const separator = mediaProxyEndpoint.includes('?') ? '&' : '?';
-  return `${mediaProxyEndpoint}${separator}url=${encodeURIComponent(targetUrl)}`;
-};
+  const separator = mediaProxyEndpoint.includes('?') ? '&' : '?'
+  return `${mediaProxyEndpoint}${separator}url=${encodeURIComponent(targetUrl)}`
+}
 
 /**
  * Fetch remote media through same-origin Node proxy.
@@ -20,13 +24,12 @@ export const fetchMediaWithCorsFallback = async (
   init?: RequestInit
 ): Promise<Response> => {
   if (!isHttpUrl(url) || !mediaProxyEnabled) {
-    return fetch(url, init);
+    return fetch(url, init)
   }
 
   return fetch(buildProxyUrl(url), {
     method: init?.method || 'GET',
     headers: init?.headers,
-    credentials: 'same-origin',
-  });
-};
-
+    credentials: 'same-origin'
+  })
+}

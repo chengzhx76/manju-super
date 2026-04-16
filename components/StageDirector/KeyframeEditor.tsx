@@ -1,24 +1,32 @@
-import React from 'react';
-import { Loader2, Edit2, Upload, ArrowRight, ArrowLeft, Sparkles, Wand2 } from 'lucide-react';
-import { Keyframe } from '../../types';
+import React from 'react'
+import {
+  Loader2,
+  Edit2,
+  Upload,
+  ArrowRight,
+  ArrowLeft,
+  Sparkles,
+  Wand2
+} from 'lucide-react'
+import { Keyframe } from '../../types'
 
 interface KeyframeEditorProps {
-  startKeyframe?: Keyframe;
-  endKeyframe?: Keyframe;
-  showEndFrame?: boolean;
-  canCopyPrevious: boolean;
-  canCopyNext: boolean; // 是否可以复制下一镜头的首帧（需要有下一个镜头且已生成首帧）
-  isAIOptimizing?: boolean;
-  useAIEnhancement: boolean;
-  onToggleAIEnhancement: () => void;
-  onGenerateKeyframe: (type: 'start' | 'end') => void;
-  onUploadKeyframe: (type: 'start' | 'end') => void;
-  onEditPrompt: (type: 'start' | 'end', prompt: string) => void;
-  onOptimizeWithAI: (type: 'start' | 'end') => void;
-  onOptimizeBothWithAI: () => void;
-  onCopyPrevious: () => void;
-  onCopyNext: () => void; // 复制下一镜头首帧到当前尾帧
-  onImageClick: (url: string, title: string) => void;
+  startKeyframe?: Keyframe
+  endKeyframe?: Keyframe
+  showEndFrame?: boolean
+  canCopyPrevious: boolean
+  canCopyNext: boolean // 是否可以复制下一镜头的首帧（需要有下一个镜头且已生成首帧）
+  isAIOptimizing?: boolean
+  useAIEnhancement: boolean
+  onToggleAIEnhancement: () => void
+  onGenerateKeyframe: (type: 'start' | 'end') => void
+  onUploadKeyframe: (type: 'start' | 'end') => void
+  onEditPrompt: (type: 'start' | 'end', prompt: string) => void
+  onOptimizeWithAI: (type: 'start' | 'end') => void
+  onOptimizeBothWithAI: () => void
+  onCopyPrevious: () => void
+  onCopyNext: () => void // 复制下一镜头首帧到当前尾帧
+  onImageClick: (url: string, title: string) => void
 }
 
 const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
@@ -44,9 +52,9 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
     label: string,
     keyframe?: Keyframe
   ) => {
-    const isGenerating = keyframe?.status === 'generating';
-    const hasFailed = keyframe?.status === 'failed';
-    
+    const isGenerating = keyframe?.status === 'generating'
+    const hasFailed = keyframe?.status === 'failed'
+
     return (
       <div className="space-y-2">
         <div className="flex justify-between items-center">
@@ -77,18 +85,22 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
             )}
           </div>
         </div>
-        
+
         <div className="aspect-video bg-[var(--bg-base)] rounded-lg border border-[var(--border-primary)] overflow-hidden relative group">
           {keyframe?.imageUrl ? (
             <>
               <img
                 src={keyframe.imageUrl}
                 className="w-full h-full object-cover cursor-pointer transition-transform duration-300 group-hover:scale-105"
-                onClick={() => onImageClick(keyframe.imageUrl!, `${label} - 关键帧`)}
+                onClick={() =>
+                  onImageClick(keyframe.imageUrl!, `${label} - 关键帧`)
+                }
                 alt={label}
               />
               <div className="absolute inset-0 bg-[var(--bg-base)]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                <span className="text-[var(--text-primary)] text-xs font-mono">点击预览</span>
+                <span className="text-[var(--text-primary)] text-xs font-mono">
+                  点击预览
+                </span>
               </div>
             </>
           ) : (
@@ -96,11 +108,15 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
               {isGenerating ? (
                 <>
                   <Loader2 className="w-6 h-6 animate-spin mb-2 text-[var(--accent)]" />
-                  <span className="text-[10px] text-[var(--text-tertiary)]">生成中...</span>
+                  <span className="text-[10px] text-[var(--text-tertiary)]">
+                    生成中...
+                  </span>
                 </>
               ) : hasFailed ? (
                 <>
-                  <span className="text-[10px] text-[var(--error)] mb-2">生成失败</span>
+                  <span className="text-[10px] text-[var(--error)] mb-2">
+                    生成失败
+                  </span>
                   <button
                     onClick={() => onGenerateKeyframe(type)}
                     className="px-2 py-1 bg-[var(--error-bg)] text-[var(--error-text)] hover:bg-[var(--error-hover-bg-strong)] rounded text-[9px] font-bold transition-colors border border-[var(--error-border)]"
@@ -159,8 +175,8 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
           </button>
         )}
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -168,7 +184,7 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
         <span className="text-xs font-bold text-[var(--text-tertiary)] uppercase tracking-widest flex-1">
           视觉制作 (Visual Production)
         </span>
-        
+
         {/* AI 增强开关 */}
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-[var(--text-tertiary)]">
@@ -177,9 +193,15 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
           <button
             onClick={onToggleAIEnhancement}
             className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              useAIEnhancement ? 'bg-[var(--accent)]' : 'bg-[var(--border-secondary)]'
+              useAIEnhancement
+                ? 'bg-[var(--accent)]'
+                : 'bg-[var(--border-secondary)]'
             }`}
-            title={useAIEnhancement ? '关闭AI增强：使用基础提示词快速生成' : '开启AI增强：自动扩展为专业电影级描述'}
+            title={
+              useAIEnhancement
+                ? '关闭AI增强：使用基础提示词快速生成'
+                : '开启AI增强：自动扩展为专业电影级描述'
+            }
           >
             <span
               className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[var(--btn-primary-bg)] transition-transform ${
@@ -188,7 +210,7 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
             />
           </button>
         </div>
-        
+
         {/* 一次性优化两帧按钮 */}
         {showEndFrame && (
           <button
@@ -212,12 +234,14 @@ const KeyframeEditor: React.FC<KeyframeEditorProps> = ({
         )}
       </div>
 
-      <div className={`grid gap-4 ${showEndFrame ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div
+        className={`grid gap-4 ${showEndFrame ? 'grid-cols-2' : 'grid-cols-1'}`}
+      >
         {renderKeyframePanel('start', '起始帧', startKeyframe)}
         {showEndFrame && renderKeyframePanel('end', '结束帧', endKeyframe)}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default KeyframeEditor;
+export default KeyframeEditor

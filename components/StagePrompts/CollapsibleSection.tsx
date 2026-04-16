@@ -1,13 +1,13 @@
-import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import React from 'react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Props {
-  title: string;
-  icon: React.ReactNode;
-  count: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
+  title: string
+  icon: React.ReactNode
+  count: number
+  isExpanded: boolean
+  onToggle: () => void
+  children: React.ReactNode
 }
 
 const CollapsibleSection: React.FC<Props> = ({
@@ -27,8 +27,12 @@ const CollapsibleSection: React.FC<Props> = ({
         <div className="flex items-center gap-3 min-w-0">
           <div className="text-[var(--accent-text)] flex-shrink-0">{icon}</div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-[var(--text-primary)]">{title}</h2>
-            <p className="text-xs text-[var(--text-tertiary)]">当前显示 {count} 条</p>
+            <h2 className="text-lg font-bold text-[var(--text-primary)]">
+              {title}
+            </h2>
+            <p className="text-xs text-[var(--text-tertiary)]">
+              当前显示 {count} 条
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -36,7 +40,11 @@ const CollapsibleSection: React.FC<Props> = ({
             {count}
           </span>
           <span className="text-[var(--text-secondary)]">
-            {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+            {isExpanded ? (
+              <ChevronDown className="w-5 h-5" />
+            ) : (
+              <ChevronRight className="w-5 h-5" />
+            )}
           </span>
         </div>
       </button>
@@ -47,7 +55,7 @@ const CollapsibleSection: React.FC<Props> = ({
         </div>
       )}
     </section>
-  );
-};
+  )
+}
 
-export default CollapsibleSection;
+export default CollapsibleSection

@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'
 
 interface InlineEditableTextProps {
-  value: string;
-  onSave: (nextValue: string) => void;
-  required?: boolean;
-  multiline?: boolean;
-  rows?: number;
-  inputClassName: string;
-  renderDisplay: (value: string, startEdit: () => void) => React.ReactNode;
+  value: string
+  onSave: (nextValue: string) => void
+  required?: boolean
+  multiline?: boolean
+  rows?: number
+  inputClassName: string
+  renderDisplay: (value: string, startEdit: () => void) => React.ReactNode
 }
 
 const InlineEditableText: React.FC<InlineEditableTextProps> = ({
@@ -17,35 +17,35 @@ const InlineEditableText: React.FC<InlineEditableTextProps> = ({
   multiline = false,
   rows = 2,
   inputClassName,
-  renderDisplay,
+  renderDisplay
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(value || '');
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(value || '')
 
   useEffect(() => {
     if (!isEditing) {
-      setDraft(value || '');
+      setDraft(value || '')
     }
-  }, [value, isEditing]);
+  }, [value, isEditing])
 
   const commit = () => {
-    const next = draft.trim();
+    const next = draft.trim()
     if (required && !next) {
-      setDraft(value || '');
-      setIsEditing(false);
-      return;
+      setDraft(value || '')
+      setIsEditing(false)
+      return
     }
-    onSave(next);
-    setIsEditing(false);
-  };
+    onSave(next)
+    setIsEditing(false)
+  }
 
   const startEdit = () => {
-    setDraft(value || '');
-    setIsEditing(true);
-  };
+    setDraft(value || '')
+    setIsEditing(true)
+  }
 
   if (!isEditing) {
-    return <>{renderDisplay(value, startEdit)}</>;
+    return <>{renderDisplay(value, startEdit)}</>
   }
 
   if (multiline) {
@@ -58,7 +58,7 @@ const InlineEditableText: React.FC<InlineEditableTextProps> = ({
         autoFocus
         className={inputClassName}
       />
-    );
+    )
   }
 
   return (
@@ -69,16 +69,16 @@ const InlineEditableText: React.FC<InlineEditableTextProps> = ({
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          commit();
+          commit()
         } else if (event.key === 'Escape') {
-          setDraft(value || '');
-          setIsEditing(false);
+          setDraft(value || '')
+          setIsEditing(false)
         }
       }}
       autoFocus
       className={inputClassName}
     />
-  );
-};
+  )
+}
 
-export default InlineEditableText;
+export default InlineEditableText

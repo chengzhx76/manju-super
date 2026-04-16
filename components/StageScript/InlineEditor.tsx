@@ -1,21 +1,21 @@
-import React, { useRef, useEffect } from 'react';
-import { Edit2, Check, X } from 'lucide-react';
-import { STYLES } from './constants';
+import React, { useRef, useEffect } from 'react'
+import { Edit2, Check, X } from 'lucide-react'
+import { STYLES } from './constants'
 
 interface Props {
-  isEditing: boolean;
-  value: string;
-  displayValue?: string;
-  onEdit: () => void;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  placeholder?: string;
-  rows?: number;
-  mono?: boolean;
-  italic?: boolean;
-  showEditButton?: boolean;
-  emptyText?: string;
+  isEditing: boolean
+  value: string
+  displayValue?: string
+  onEdit: () => void
+  onChange: (value: string) => void
+  onSave: () => void
+  onCancel: () => void
+  placeholder?: string
+  rows?: number
+  mono?: boolean
+  italic?: boolean
+  showEditButton?: boolean
+  emptyText?: string
 }
 
 const InlineEditor: React.FC<Props> = ({
@@ -33,20 +33,20 @@ const InlineEditor: React.FC<Props> = ({
   showEditButton = true,
   emptyText = '暂无内容'
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const adjustHeight = () => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, rows * 20)}px`;
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, rows * 20)}px`
     }
-  };
+  }
 
   useEffect(() => {
     if (isEditing) {
-      adjustHeight();
+      adjustHeight()
     }
-  }, [isEditing, value]);
+  }, [isEditing, value])
 
   if (isEditing) {
     return (
@@ -55,8 +55,8 @@ const InlineEditor: React.FC<Props> = ({
           ref={textareaRef}
           value={value}
           onChange={(e) => {
-            onChange(e.target.value);
-            setTimeout(adjustHeight, 0);
+            onChange(e.target.value)
+            setTimeout(adjustHeight, 0)
           }}
           className={`${STYLES.editor.textarea} ${mono ? STYLES.editor.mono : ''} ${italic ? STYLES.editor.serif : ''} overflow-hidden resize-none`}
           rows={rows}
@@ -80,12 +80,14 @@ const InlineEditor: React.FC<Props> = ({
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="flex items-start gap-2 group">
-      <p className={`flex-1 text-xs text-[var(--text-tertiary)] leading-relaxed ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}>
+      <p
+        className={`flex-1 text-xs text-[var(--text-tertiary)] leading-relaxed ${mono ? 'font-mono' : ''} ${italic ? 'font-serif italic' : ''} ${!displayValue && !value ? 'text-[var(--text-muted)]' : ''}`}
+      >
         {displayValue || value || emptyText}
       </p>
       {showEditButton && (
@@ -98,7 +100,7 @@ const InlineEditor: React.FC<Props> = ({
         </button>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default InlineEditor;
+export default InlineEditor

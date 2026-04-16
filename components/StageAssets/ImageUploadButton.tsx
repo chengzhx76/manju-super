@@ -1,15 +1,15 @@
-import React from 'react';
-import { Upload, Sparkles, Loader2 } from 'lucide-react';
+import React from 'react'
+import { Upload, Sparkles, Loader2 } from 'lucide-react'
 
 interface ImageUploadButtonProps {
-  onUpload: (file: File) => void;
-  onGenerate?: () => void;
-  isGenerating?: boolean;
-  hasImage?: boolean;
-  uploadLabel?: string;
-  generateLabel?: string;
-  size?: 'small' | 'medium' | 'large';
-  variant?: 'inline' | 'separate';
+  onUpload: (file: File) => void
+  onGenerate?: () => void
+  isGenerating?: boolean
+  hasImage?: boolean
+  uploadLabel?: string
+  generateLabel?: string
+  size?: 'small' | 'medium' | 'large'
+  variant?: 'inline' | 'separate'
 }
 
 const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({
@@ -20,23 +20,23 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({
   uploadLabel = '上传',
   generateLabel = '生成',
   size = 'medium',
-  variant = 'separate',
+  variant = 'separate'
 }) => {
   const sizeClasses = {
     small: 'px-3 py-1.5 text-[10px]',
     medium: 'px-4 py-2 text-xs',
-    large: 'px-6 py-3 text-sm',
-  };
+    large: 'px-6 py-3 text-sm'
+  }
 
-  const buttonClass = `${sizeClasses[size]} bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--border-secondary)] rounded font-bold transition-all border border-[var(--border-secondary)] flex items-center gap-1 cursor-pointer`;
+  const buttonClass = `${sizeClasses[size]} bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:bg-[var(--border-secondary)] rounded font-bold transition-all border border-[var(--border-secondary)] flex items-center gap-1 cursor-pointer`
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      onUpload(file);
-      e.target.value = '';
+      onUpload(file)
+      e.target.value = ''
     }
-  };
+  }
 
   if (variant === 'inline') {
     return (
@@ -66,7 +66,7 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({
           />
         </label>
       </div>
-    );
+    )
   }
 
   // Separate variant for regenerate + upload
@@ -91,7 +91,9 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({
           )}
         </button>
       )}
-      <label className={`flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer`}>
+      <label
+        className={`flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer`}
+      >
         <Upload className="w-3 h-3" />
         {uploadLabel}
         <input
@@ -102,7 +104,7 @@ const ImageUploadButton: React.FC<ImageUploadButtonProps> = ({
         />
       </label>
     </div>
-  );
-};
+  )
+}
 
-export default ImageUploadButton;
+export default ImageUploadButton

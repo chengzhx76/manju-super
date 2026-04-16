@@ -1,19 +1,19 @@
-import React from 'react';
-import { Save, X, History } from 'lucide-react';
-import { PromptVersion } from '../../types';
-import { lintPromptText } from '../../services/promptLintService';
-import { STYLES } from './constants';
+import React from 'react'
+import { Save, X, History } from 'lucide-react'
+import { PromptVersion } from '../../types'
+import { lintPromptText } from '../../services/promptLintService'
+import { STYLES } from './constants'
 
 interface Props {
-  value: string;
-  onChange: (value: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  placeholder?: string;
-  size?: 'large' | 'small' | 'video';
-  isVideo?: boolean;
-  versions?: PromptVersion[];
-  onRollback?: (versionId: string) => void;
+  value: string
+  onChange: (value: string) => void
+  onSave: () => void
+  onCancel: () => void
+  placeholder?: string
+  size?: 'large' | 'small' | 'video'
+  isVideo?: boolean
+  versions?: PromptVersion[]
+  onRollback?: (versionId: string) => void
 }
 
 const SOURCE_LABELS: Record<PromptVersion['source'], string> = {
@@ -21,8 +21,8 @@ const SOURCE_LABELS: Record<PromptVersion['source'], string> = {
   'manual-edit': 'Manual',
   rollback: 'Rollback',
   imported: 'Imported',
-  system: 'System',
-};
+  system: 'System'
+}
 
 const PromptEditor: React.FC<Props> = ({
   value,
@@ -33,26 +33,31 @@ const PromptEditor: React.FC<Props> = ({
   size = 'large',
   isVideo = false,
   versions = [],
-  onRollback,
+  onRollback
 }) => {
   const textareaClass = `${STYLES.textarea.base} ${
-    size === 'large' ? STYLES.textarea.large : size === 'video' ? STYLES.textarea.video : STYLES.textarea.small
-  }`;
+    size === 'large'
+      ? STYLES.textarea.large
+      : size === 'video'
+        ? STYLES.textarea.video
+        : STYLES.textarea.small
+  }`
 
   const saveButtonClass = isVideo
     ? STYLES.button.saveVideo
     : size === 'small'
       ? STYLES.button.saveSmall
-      : STYLES.button.save;
+      : STYLES.button.save
 
-  const cancelButtonClass = size === 'small' ? STYLES.button.cancelSmall : STYLES.button.cancel;
+  const cancelButtonClass =
+    size === 'small' ? STYLES.button.cancelSmall : STYLES.button.cancel
 
   const lintResult = lintPromptText(value, {
     minLength: size === 'small' ? 10 : 16,
-    allowEmpty: false,
-  });
-  const hasBlockingError = lintResult.errorCount > 0;
-  const recentVersions = [...versions].slice(-6).reverse();
+    allowEmpty: false
+  })
+  const hasBlockingError = lintResult.errorCount > 0
+  const recentVersions = [...versions].slice(-6).reverse()
 
   return (
     <div className="space-y-3">
@@ -97,10 +102,13 @@ const PromptEditor: React.FC<Props> = ({
               >
                 <div className="min-w-0">
                   <div className="text-[10px] text-[var(--text-secondary)] font-mono">
-                    {SOURCE_LABELS[version.source]} · {new Date(version.createdAt).toLocaleString()}
+                    {SOURCE_LABELS[version.source]} ·{' '}
+                    {new Date(version.createdAt).toLocaleString()}
                   </div>
                   {version.note && (
-                    <div className="text-[9px] text-[var(--text-muted)] truncate">{version.note}</div>
+                    <div className="text-[9px] text-[var(--text-muted)] truncate">
+                      {version.note}
+                    </div>
                   )}
                 </div>
                 <button
@@ -117,7 +125,11 @@ const PromptEditor: React.FC<Props> = ({
       )}
 
       <div className="flex gap-2">
-        <button onClick={onSave} className={saveButtonClass} disabled={hasBlockingError}>
+        <button
+          onClick={onSave}
+          className={saveButtonClass}
+          disabled={hasBlockingError}
+        >
           <Save className="w-3 h-3" />
           保存
         </button>
@@ -127,8 +139,7 @@ const PromptEditor: React.FC<Props> = ({
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default PromptEditor;
-
+export default PromptEditor

@@ -2,17 +2,33 @@
  * StagePrompts utility functions
  */
 
-import { ProjectState, Character, Scene, Prop, Shot, PromptVersion } from '../../types';
-import { findPromptVersion, updatePromptWithVersion } from '../../services/promptVersionService';
+import {
+  ProjectState,
+  Character,
+  Scene,
+  Prop,
+  Shot,
+  PromptVersion
+} from '../../types'
+import {
+  findPromptVersion,
+  updatePromptWithVersion
+} from '../../services/promptVersionService'
 
-export type PromptEditType = 'character' | 'character-variation' | 'scene' | 'prop' | 'keyframe' | 'video';
+export type PromptEditType =
+  | 'character'
+  | 'character-variation'
+  | 'scene'
+  | 'prop'
+  | 'keyframe'
+  | 'video'
 
 export interface PromptEditPayload {
-  type: PromptEditType;
-  id: string;
-  variationId?: string;
-  shotId?: string;
-  value: string;
+  type: PromptEditType
+  id: string
+  variationId?: string
+  shotId?: string
+  value: string
 }
 
 const buildVersionUpdate = (
@@ -21,7 +37,8 @@ const buildVersionUpdate = (
   versions: PromptVersion[] | undefined,
   source: 'manual-edit' | 'rollback',
   note?: string
-): PromptVersion[] => updatePromptWithVersion(currentPrompt, nextPrompt, versions, source, note);
+): PromptVersion[] =>
+  updatePromptWithVersion(currentPrompt, nextPrompt, versions, source, note)
 
 /**
  * Save prompt edits for different prompt entity types.
@@ -32,7 +49,7 @@ export const savePromptEdit = (
 ): ProjectState => {
   switch (editingPrompt.type) {
     case 'character':
-      if (!project.scriptData) return project;
+      if (!project.scriptData) return project
       return {
         ...project,
         scriptData: {
@@ -47,21 +64,21 @@ export const savePromptEdit = (
                     editingPrompt.value,
                     char.promptVersions,
                     'manual-edit'
-                  ),
+                  )
                 }
               : char
-          ),
-        },
-      };
+          )
+        }
+      }
 
     case 'character-variation':
-      if (!project.scriptData) return project;
+      if (!project.scriptData) return project
       return {
         ...project,
         scriptData: {
           ...project.scriptData,
           characters: project.scriptData.characters.map((char) => {
-            if (char.id !== editingPrompt.id) return char;
+            if (char.id !== editingPrompt.id) return char
             return {
               ...char,
               variations: (char.variations || []).map((variation) =>
@@ -74,17 +91,17 @@ export const savePromptEdit = (
                         editingPrompt.value,
                         variation.promptVersions,
                         'manual-edit'
-                      ),
+                      )
                     }
                   : variation
-              ),
-            };
-          }),
-        },
-      };
+              )
+            }
+          })
+        }
+      }
 
     case 'scene':
-      if (!project.scriptData) return project;
+      if (!project.scriptData) return project
       return {
         ...project,
         scriptData: {
@@ -99,15 +116,15 @@ export const savePromptEdit = (
                     editingPrompt.value,
                     scene.promptVersions,
                     'manual-edit'
-                  ),
+                  )
                 }
               : scene
-          ),
-        },
-      };
+          )
+        }
+      }
 
     case 'prop':
-      if (!project.scriptData) return project;
+      if (!project.scriptData) return project
       return {
         ...project,
         scriptData: {
@@ -122,18 +139,18 @@ export const savePromptEdit = (
                     editingPrompt.value,
                     prop.promptVersions,
                     'manual-edit'
-                  ),
+                  )
                 }
               : prop
-          ),
-        },
-      };
+          )
+        }
+      }
 
     case 'keyframe':
       return {
         ...project,
         shots: project.shots.map((shot) => {
-          if (shot.id !== editingPrompt.shotId) return shot;
+          if (shot.id !== editingPrompt.shotId) return shot
           return {
             ...shot,
             keyframes: shot.keyframes.map((kf) =>
@@ -146,20 +163,20 @@ export const savePromptEdit = (
                       editingPrompt.value,
                       kf.promptVersions,
                       'manual-edit'
-                    ),
+                    )
                   }
                 : kf
-            ),
-          };
-        }),
-      };
+            )
+          }
+        })
+      }
 
     case 'video':
       return {
         ...project,
         shots: project.shots.map((shot) => {
-          if (shot.id !== editingPrompt.shotId) return shot;
-          if (!shot.interval) return shot;
+          if (shot.id !== editingPrompt.shotId) return shot
+          if (!shot.interval) return shot
           return {
             ...shot,
             interval: {
@@ -170,16 +187,16 @@ export const savePromptEdit = (
                 editingPrompt.value,
                 shot.interval.promptVersions,
                 'manual-edit'
-              ),
-            },
-          };
-        }),
-      };
+              )
+            }
+          }
+        })
+      }
 
     default:
-      return project;
+      return project
   }
-};
+}
 
 /**
  * Return prompt version list for the currently editing target.
@@ -188,30 +205,54 @@ export const getPromptVersionsForEdit = (
   project: ProjectState,
   editingPrompt: PromptEditPayload | null
 ): PromptVersion[] => {
-  if (!editingPrompt) return [];
+  if (!editingPrompt) return []
   switch (editingPrompt.type) {
     case 'character':
-      return project.scriptData?.characters.find((char) => char.id === editingPrompt.id)?.promptVersions || [];
+      return (
+        project.scriptData?.characters.find(
+          (char) => char.id === editingPrompt.id
+        )?.promptVersions || []
+      )
     case 'character-variation': {
-      const char = project.scriptData?.characters.find((entry) => entry.id === editingPrompt.id);
-      return char?.variations.find((variation) => variation.id === editingPrompt.variationId)?.promptVersions || [];
+      const char = project.scriptData?.characters.find(
+        (entry) => entry.id === editingPrompt.id
+      )
+      return (
+        char?.variations.find(
+          (variation) => variation.id === editingPrompt.variationId
+        )?.promptVersions || []
+      )
     }
     case 'scene':
-      return project.scriptData?.scenes.find((scene) => scene.id === editingPrompt.id)?.promptVersions || [];
+      return (
+        project.scriptData?.scenes.find(
+          (scene) => scene.id === editingPrompt.id
+        )?.promptVersions || []
+      )
     case 'prop':
-      return project.scriptData?.props?.find((prop) => prop.id === editingPrompt.id)?.promptVersions || [];
+      return (
+        project.scriptData?.props?.find((prop) => prop.id === editingPrompt.id)
+          ?.promptVersions || []
+      )
     case 'keyframe': {
-      const shot = project.shots.find((entry) => entry.id === editingPrompt.shotId);
-      return shot?.keyframes.find((frame) => frame.id === editingPrompt.id)?.promptVersions || [];
+      const shot = project.shots.find(
+        (entry) => entry.id === editingPrompt.shotId
+      )
+      return (
+        shot?.keyframes.find((frame) => frame.id === editingPrompt.id)
+          ?.promptVersions || []
+      )
     }
     case 'video': {
-      const shot = project.shots.find((entry) => entry.id === editingPrompt.shotId);
-      return shot?.interval?.promptVersions || [];
+      const shot = project.shots.find(
+        (entry) => entry.id === editingPrompt.shotId
+      )
+      return shot?.interval?.promptVersions || []
     }
     default:
-      return [];
+      return []
   }
-};
+}
 
 /**
  * Rollback a prompt to a selected historical version.
@@ -221,16 +262,16 @@ export const rollbackPromptEdit = (
   target: Omit<PromptEditPayload, 'value'>,
   versionId: string
 ): { project: ProjectState; restoredPrompt?: string } => {
-  const versions = getPromptVersionsForEdit(project, { ...target, value: '' });
-  const selectedVersion = findPromptVersion(versions, versionId);
-  if (!selectedVersion) return { project };
+  const versions = getPromptVersionsForEdit(project, { ...target, value: '' })
+  const selectedVersion = findPromptVersion(versions, versionId)
+  if (!selectedVersion) return { project }
 
-  const rollbackNote = `Rollback to version ${new Date(selectedVersion.createdAt).toLocaleString()}`;
-  const restoredPrompt = selectedVersion.prompt;
+  const rollbackNote = `Rollback to version ${new Date(selectedVersion.createdAt).toLocaleString()}`
+  const restoredPrompt = selectedVersion.prompt
 
   switch (target.type) {
     case 'character':
-      if (!project.scriptData) return { project };
+      if (!project.scriptData) return { project }
       return {
         project: {
           ...project,
@@ -247,24 +288,24 @@ export const rollbackPromptEdit = (
                       char.promptVersions,
                       'rollback',
                       rollbackNote
-                    ),
+                    )
                   }
                 : char
-            ),
-          },
+            )
+          }
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     case 'character-variation':
-      if (!project.scriptData) return { project };
+      if (!project.scriptData) return { project }
       return {
         project: {
           ...project,
           scriptData: {
             ...project.scriptData,
             characters: project.scriptData.characters.map((char) => {
-              if (char.id !== target.id) return char;
+              if (char.id !== target.id) return char
               return {
                 ...char,
                 variations: (char.variations || []).map((variation) =>
@@ -278,19 +319,19 @@ export const rollbackPromptEdit = (
                           variation.promptVersions,
                           'rollback',
                           rollbackNote
-                        ),
+                        )
                       }
                     : variation
-                ),
-              };
-            }),
-          },
+                )
+              }
+            })
+          }
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     case 'scene':
-      if (!project.scriptData) return { project };
+      if (!project.scriptData) return { project }
       return {
         project: {
           ...project,
@@ -307,17 +348,17 @@ export const rollbackPromptEdit = (
                       scene.promptVersions,
                       'rollback',
                       rollbackNote
-                    ),
+                    )
                   }
                 : scene
-            ),
-          },
+            )
+          }
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     case 'prop':
-      if (!project.scriptData) return { project };
+      if (!project.scriptData) return { project }
       return {
         project: {
           ...project,
@@ -334,21 +375,21 @@ export const rollbackPromptEdit = (
                       prop.promptVersions,
                       'rollback',
                       rollbackNote
-                    ),
+                    )
                   }
                 : prop
-            ),
-          },
+            )
+          }
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     case 'keyframe':
       return {
         project: {
           ...project,
           shots: project.shots.map((shot) => {
-            if (shot.id !== target.shotId) return shot;
+            if (shot.id !== target.shotId) return shot
             return {
               ...shot,
               keyframes: shot.keyframes.map((frame) =>
@@ -362,22 +403,22 @@ export const rollbackPromptEdit = (
                         frame.promptVersions,
                         'rollback',
                         rollbackNote
-                      ),
+                      )
                     }
                   : frame
-              ),
-            };
-          }),
+              )
+            }
+          })
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     case 'video':
       return {
         project: {
           ...project,
           shots: project.shots.map((shot) => {
-            if (shot.id !== target.shotId || !shot.interval) return shot;
+            if (shot.id !== target.shotId || !shot.interval) return shot
             return {
               ...shot,
               interval: {
@@ -389,31 +430,37 @@ export const rollbackPromptEdit = (
                   shot.interval.promptVersions,
                   'rollback',
                   rollbackNote
-                ),
-              },
-            };
-          }),
+                )
+              }
+            }
+          })
         },
-        restoredPrompt,
-      };
+        restoredPrompt
+      }
 
     default:
-      return { project };
+      return { project }
   }
-};
+}
 
 /**
  * Search filter helper.
  */
-export const filterBySearch = (text: string | undefined | null, searchQuery: string): boolean => {
-  if (!searchQuery.trim()) return true;
-  return (text || '').toLowerCase().includes(searchQuery.toLowerCase());
-};
+export const filterBySearch = (
+  text: string | undefined | null,
+  searchQuery: string
+): boolean => {
+  if (!searchQuery.trim()) return true
+  return (text || '').toLowerCase().includes(searchQuery.toLowerCase())
+}
 
 /**
  * Filter characters by search query.
  */
-export const filterCharacters = (characters: Character[], searchQuery: string): Character[] => {
+export const filterCharacters = (
+  characters: Character[],
+  searchQuery: string
+): Character[] => {
   return characters.filter(
     (char) =>
       filterBySearch(char.name, searchQuery) ||
@@ -423,17 +470,19 @@ export const filterCharacters = (characters: Character[], searchQuery: string): 
           filterBySearch(variation.name, searchQuery) ||
           filterBySearch(variation.visualPrompt, searchQuery)
       )
-  );
-};
+  )
+}
 
 /**
  * Filter scenes by search query.
  */
 export const filterScenes = (scenes: Scene[], searchQuery: string): Scene[] => {
   return scenes.filter(
-    (scene) => filterBySearch(scene.location, searchQuery) || filterBySearch(scene.visualPrompt || '', searchQuery)
-  );
-};
+    (scene) =>
+      filterBySearch(scene.location, searchQuery) ||
+      filterBySearch(scene.visualPrompt || '', searchQuery)
+  )
+}
 
 /**
  * Filter props by search query.
@@ -444,8 +493,8 @@ export const filterProps = (props: Prop[], searchQuery: string): Prop[] => {
       filterBySearch(prop.name, searchQuery) ||
       filterBySearch(prop.description || '', searchQuery) ||
       filterBySearch(prop.visualPrompt || '', searchQuery)
-  );
-};
+  )
+}
 
 /**
  * Filter shots by search query.
@@ -455,16 +504,20 @@ export const filterShots = (shots: Shot[], searchQuery: string): Shot[] => {
     const hasMatchingShotMeta =
       filterBySearch(shot.actionSummary, searchQuery) ||
       filterBySearch(shot.cameraMovement, searchQuery) ||
-      filterBySearch(shot.shotSize, searchQuery);
-    const hasMatchingKeyframe = shot.keyframes.some((frame) => filterBySearch(frame.visualPrompt, searchQuery));
-    const hasMatchingVideoPrompt = filterBySearch(shot.interval?.videoPrompt, searchQuery);
-    return hasMatchingShotMeta || hasMatchingKeyframe || hasMatchingVideoPrompt;
-  });
-};
+      filterBySearch(shot.shotSize, searchQuery)
+    const hasMatchingKeyframe = shot.keyframes.some((frame) =>
+      filterBySearch(frame.visualPrompt, searchQuery)
+    )
+    const hasMatchingVideoPrompt = filterBySearch(
+      shot.interval?.videoPrompt,
+      searchQuery
+    )
+    return hasMatchingShotMeta || hasMatchingKeyframe || hasMatchingVideoPrompt
+  })
+}
 
 /**
  * Build a fallback video prompt when no saved video prompt exists.
  */
 export const getDefaultVideoPrompt = (shot: Shot): string =>
-  `${shot.actionSummary}\n\nCamera: ${shot.cameraMovement}\nModel: ${shot.videoModel || 'sora-2'}`;
-
+  `${shot.actionSummary}\n\nCamera: ${shot.cameraMovement}\nModel: ${shot.videoModel || 'sora-2'}`

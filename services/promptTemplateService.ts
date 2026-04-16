@@ -1,7 +1,4 @@
-import type {
-  PromptTemplateConfig,
-  PromptTemplateOverrides,
-} from '../types';
+import type { PromptTemplateConfig, PromptTemplateOverrides } from '../types'
 
 const CAMERA_MOVEMENT_REFERENCE = `- Horizontal Left Shot (向左平移) - Camera moves left
 - Horizontal Right Shot (向右平移) - Camera moves right
@@ -31,7 +28,7 @@ const CAMERA_MOVEMENT_REFERENCE = `- Horizontal Left Shot (向左平移) - Camer
 - Slow Motion Shot (慢动作) - Slow-mo effect
 - Time-Lapse Shot (延时摄影) - Time-lapse
 - Canted Shot (斜视镜头) - Dutch angle
-- Cinematic Dolly Zoom (电影式变焦推轨) - Vertigo effect`;
+- Cinematic Dolly Zoom (电影式变焦推轨) - Vertigo effect`
 
 export const DEFAULT_PROMPT_TEMPLATE_CONFIG: PromptTemplateConfig = {
   storyboard: {
@@ -302,7 +299,7 @@ JSON Example (shape reference only):
 - 景别和视角多样化但符合叙事逻辑
 - 保持电影级的专业表达
 
-请开始拆分，直接输出JSON格式（不要包含markdown代码块标记）：`,
+请开始拆分，直接输出JSON格式（不要包含markdown代码块标记）：`
   },
   keyframe: {
     startFrameGuide: `【起始帧要求】建立清晰的初始状态和场景氛围,人物/物体的起始位置、姿态和表情要明确,为后续运动预留视觉空间和动势。`,
@@ -535,7 +532,7 @@ JSON Example (shape reference only):
 4. 输出必须是“单段中文提示词”，不要分节、不要项目符号、不要Markdown。
 5. 不要重复基础提示词同义句，避免冗长；控制在120-220字。
 
-仅输出最终提示词文本:`,
+仅输出最终提示词文本:`
   },
   nineGrid: {
     splitSystem: `你是专业分镜师。请把同一镜头拆成{panelCount}个不重复视角，用于{gridLayout}网格分镜。网格布局必须严格为 {layoutInstruction}。保持同一场景与角色连续性。`,
@@ -613,7 +610,7 @@ Panels (left-to-right, top-to-bottom):`,
 4) shotSize/cameraAngle 用简短中文；description 必须是英文单句，10-30词
 5) 在满足用户要求的同时，保持同一场景/角色连贯性与镜头顺序
 6) shotSize + cameraAngle 组合不得重复，且 shotSize 至少包含 {requiredShotSizeKinds} 种
-7) 只输出 JSON，不要解释`,
+7) 只输出 JSON，不要解释`
   },
   video: {
     sora2Chinese: `基于提供的参考图片生成视频。
@@ -693,11 +690,11 @@ The video must start from the start frame composition and progress naturally to 
 - Transition strictly in order 1→{panelCount}, one shot at a time (hard cuts or motivated transitions); never show multiple panels simultaneously.
 - If constraints conflict, prioritize "single full-screen shot + sequential cuts" over preserving the grid layout appearance.`,
     endFrameConstraintNote: `END FRAME CONSTRAINT: Drive the final moment toward the provided end-frame composition, pose, and scene continuity.`,
-    ignoredEndFrameNote: `Capability routing: this model is start-frame-driven, so end-frame input is ignored automatically.`,
-  },
-};
+    ignoredEndFrameNote: `Capability routing: this model is start-frame-driven, so end-frame input is ignored automatically.`
+  }
+}
 
-export type PromptTemplateCategory = keyof PromptTemplateConfig;
+export type PromptTemplateCategory = keyof PromptTemplateConfig
 
 export type PromptTemplatePath =
   | 'storyboard.shotGeneration'
@@ -730,499 +727,601 @@ export type PromptTemplatePath =
   | 'video.nineGridGuardrailsChinese'
   | 'video.nineGridGuardrailsEnglish'
   | 'video.endFrameConstraintNote'
-  | 'video.ignoredEndFrameNote';
+  | 'video.ignoredEndFrameNote'
 
 export interface PromptTemplateFieldDefinition {
-  path: PromptTemplatePath;
-  category: PromptTemplateCategory;
-  title: string;
-  description: string;
-  placeholders: string[];
+  path: PromptTemplatePath
+  category: PromptTemplateCategory
+  title: string
+  description: string
+  placeholders: string[]
 }
 
-export const PROMPT_TEMPLATE_FIELD_DEFINITIONS: PromptTemplateFieldDefinition[] = [
-  {
-    path: 'storyboard.shotGeneration',
-    category: 'storyboard',
-    title: '分镜生成主提示词',
-    description: '用于生成场景分镜列表的主模板。',
-    placeholders: [
-      'sceneIndex',
-      'lang',
-      'visualStyle',
-      'sceneLocation',
-      'sceneAction',
-      'shotsPerScene',
-    ],
-  },
-  {
-    path: 'storyboard.shotRepair',
-    category: 'storyboard',
-    title: '分镜纠偏提示词',
-    description: '当分镜数量不符时触发的自动纠偏模板。',
-    placeholders: ['actualShots', 'sceneIndex', 'shotsPerScene', 'sceneAction'],
-  },
-  {
-    path: 'storyboard.actionSuggestion',
-    category: 'storyboard',
-    title: '动作建议模板',
-    description: 'AI 生成动作建议的模板',
-    placeholders: ['startFramePrompt', 'endFramePrompt', 'cameraMovement', 'targetDuration', 'userInstructionBlock'],
-  },
-  {
-    path: 'storyboard.shotSplit',
-    category: 'storyboard',
-    title: '镜头拆分模板',
-    description: 'AI 拆分镜头为子镜头的模板',
-    placeholders: ['sceneLocation', 'sceneTime', 'sceneAtmosphere', 'characters', 'styleDesc', 'cameraMovement', 'actionSummary', 'dialogueBlock'],
-  },
-  {
-    path: 'keyframe.startFrameGuide',
-    category: 'keyframe',
-    title: '首帧约束',
-    description: '生成首帧提示词时附加的要求。',
-    placeholders: [],
-  },
-  {
-    path: 'keyframe.endFrameGuide',
-    category: 'keyframe',
-    title: '尾帧约束',
-    description: '生成尾帧提示词时附加的要求。',
-    placeholders: [],
-  },
-  {
-    path: 'keyframe.characterConsistencyGuide',
-    category: 'keyframe',
-    title: '角色一致性约束',
-    description: '首尾帧都使用的角色一致性规则块。',
-    placeholders: [],
-  },
-  {
-    path: 'keyframe.propWithImageGuide',
-    category: 'keyframe',
-    title: '有图道具一致性约束',
-    description: '道具带参考图时的约束模板。',
-    placeholders: ['propList'],
-  },
-  {
-    path: 'keyframe.propWithoutImageGuide',
-    category: 'keyframe',
-    title: '无图道具描述约束',
-    description: '道具无参考图时的文字约束模板。',
-    placeholders: ['propList'],
-  },
-  {
-    path: 'keyframe.nineGridSourceMeta',
-    category: 'keyframe',
-    title: '九宫格首帧来源描述',
-    description: '从网格面板生成首帧时写入的来源元信息。',
-    placeholders: ['sourceLabel', 'shotSize', 'cameraAngle', 'actionSummary'],
-  },
-  {
-    path: 'keyframe.optimizeBoth',
-    category: 'keyframe',
-    title: '关键帧同时优化',
-    description: 'AI 同时优化起始帧和结束帧的模板。',
-    placeholders: [
-      'sceneLocation',
-      'sceneTime',
-      'sceneAtmosphere',
-      'actionSummary',
-      'cameraMovement',
-      'characters',
-      'styleDesc',
-    ],
-  },
-  {
-    path: 'keyframe.optimizeSingle',
-    category: 'keyframe',
-    title: '关键帧单帧优化',
-    description: 'AI 优化单个关键帧提示词的模板。',
-    placeholders: [
-      'frameLabel',
-      'sceneLocation',
-      'sceneTime',
-      'sceneAtmosphere',
-      'actionSummary',
-      'cameraMovement',
-      'characters',
-      'styleDesc',
-      'frameFocus',
-      'frameSpecificRequirements',
-    ],
-  },
-  {
-    path: 'keyframe.enhance',
-    category: 'keyframe',
-    title: '关键帧提示词增强',
-    description: 'AI 增强基础提示词用于图像生成的模板。',
-    placeholders: [
-      'basePrompt',
-      'styleDesc',
-      'cameraMovement',
-      'frameLabel',
-      'frameFocus',
-    ],
-  },
+export const PROMPT_TEMPLATE_FIELD_DEFINITIONS: PromptTemplateFieldDefinition[] =
+  [
+    {
+      path: 'storyboard.shotGeneration',
+      category: 'storyboard',
+      title: '分镜生成主提示词',
+      description: '用于生成场景分镜列表的主模板。',
+      placeholders: [
+        'sceneIndex',
+        'lang',
+        'visualStyle',
+        'sceneLocation',
+        'sceneAction',
+        'shotsPerScene'
+      ]
+    },
+    {
+      path: 'storyboard.shotRepair',
+      category: 'storyboard',
+      title: '分镜纠偏提示词',
+      description: '当分镜数量不符时触发的自动纠偏模板。',
+      placeholders: [
+        'actualShots',
+        'sceneIndex',
+        'shotsPerScene',
+        'sceneAction'
+      ]
+    },
+    {
+      path: 'storyboard.actionSuggestion',
+      category: 'storyboard',
+      title: '动作建议模板',
+      description: 'AI 生成动作建议的模板',
+      placeholders: [
+        'startFramePrompt',
+        'endFramePrompt',
+        'cameraMovement',
+        'targetDuration',
+        'userInstructionBlock'
+      ]
+    },
+    {
+      path: 'storyboard.shotSplit',
+      category: 'storyboard',
+      title: '镜头拆分模板',
+      description: 'AI 拆分镜头为子镜头的模板',
+      placeholders: [
+        'sceneLocation',
+        'sceneTime',
+        'sceneAtmosphere',
+        'characters',
+        'styleDesc',
+        'cameraMovement',
+        'actionSummary',
+        'dialogueBlock'
+      ]
+    },
+    {
+      path: 'keyframe.startFrameGuide',
+      category: 'keyframe',
+      title: '首帧约束',
+      description: '生成首帧提示词时附加的要求。',
+      placeholders: []
+    },
+    {
+      path: 'keyframe.endFrameGuide',
+      category: 'keyframe',
+      title: '尾帧约束',
+      description: '生成尾帧提示词时附加的要求。',
+      placeholders: []
+    },
+    {
+      path: 'keyframe.characterConsistencyGuide',
+      category: 'keyframe',
+      title: '角色一致性约束',
+      description: '首尾帧都使用的角色一致性规则块。',
+      placeholders: []
+    },
+    {
+      path: 'keyframe.propWithImageGuide',
+      category: 'keyframe',
+      title: '有图道具一致性约束',
+      description: '道具带参考图时的约束模板。',
+      placeholders: ['propList']
+    },
+    {
+      path: 'keyframe.propWithoutImageGuide',
+      category: 'keyframe',
+      title: '无图道具描述约束',
+      description: '道具无参考图时的文字约束模板。',
+      placeholders: ['propList']
+    },
+    {
+      path: 'keyframe.nineGridSourceMeta',
+      category: 'keyframe',
+      title: '九宫格首帧来源描述',
+      description: '从网格面板生成首帧时写入的来源元信息。',
+      placeholders: ['sourceLabel', 'shotSize', 'cameraAngle', 'actionSummary']
+    },
+    {
+      path: 'keyframe.optimizeBoth',
+      category: 'keyframe',
+      title: '关键帧同时优化',
+      description: 'AI 同时优化起始帧和结束帧的模板。',
+      placeholders: [
+        'sceneLocation',
+        'sceneTime',
+        'sceneAtmosphere',
+        'actionSummary',
+        'cameraMovement',
+        'characters',
+        'styleDesc'
+      ]
+    },
+    {
+      path: 'keyframe.optimizeSingle',
+      category: 'keyframe',
+      title: '关键帧单帧优化',
+      description: 'AI 优化单个关键帧提示词的模板。',
+      placeholders: [
+        'frameLabel',
+        'sceneLocation',
+        'sceneTime',
+        'sceneAtmosphere',
+        'actionSummary',
+        'cameraMovement',
+        'characters',
+        'styleDesc',
+        'frameFocus',
+        'frameSpecificRequirements'
+      ]
+    },
+    {
+      path: 'keyframe.enhance',
+      category: 'keyframe',
+      title: '关键帧提示词增强',
+      description: 'AI 增强基础提示词用于图像生成的模板。',
+      placeholders: [
+        'basePrompt',
+        'styleDesc',
+        'cameraMovement',
+        'frameLabel',
+        'frameFocus'
+      ]
+    },
 
-  {
-    path: 'nineGrid.splitSystem',
-    category: 'nineGrid',
-    title: '九宫格拆分 System 模板',
-    description: '网格拆分第一步使用的系统提示词。',
-    placeholders: ['panelCount', 'gridLayout', 'rowCount', 'columnCount', 'layoutInstruction', 'layoutExample', 'layoutSpecificConstraint'],
-  },
-  {
-    path: 'nineGrid.splitUser',
-    category: 'nineGrid',
-    title: '九宫格拆分 User 模板',
-    description: '网格拆分第一步使用的用户提示词。',
-    placeholders: [
-      'panelCount',
-      'gridLayout',
-      'rowCount',
-      'columnCount',
-      'layoutInstruction',
-      'layoutExample',
-      'layoutSpecificConstraint',
-      'actionSummary',
-      'cameraMovement',
-      'characters',
-      'visualStyle',
-    ],
-  },
-  {
-    path: 'nineGrid.imagePrefix',
-    category: 'nineGrid',
-    title: '九宫格图片前缀模板',
-    description: '网格图片生成提示词前缀。',
-    placeholders: ['gridLayout', 'panelCount', 'rowCount', 'columnCount', 'layoutInstruction', 'layoutExample', 'layoutSpecificConstraint', 'visualStyle'],
-  },
-  {
-    path: 'nineGrid.imagePanelTemplate',
-    category: 'nineGrid',
-    title: '九宫格单格模板',
-    description: '每个面板拼接时的模板。',
-    placeholders: ['index', 'position', 'shotSize', 'cameraAngle', 'description'],
-  },
-  {
-    path: 'nineGrid.imageSuffix',
-    category: 'nineGrid',
-    title: '九宫格图片后缀模板',
-    description: '网格图片生成提示词后缀。',
-    placeholders: ['gridLayout', 'panelCount', 'rowCount', 'columnCount', 'layoutInstruction', 'layoutExample', 'layoutSpecificConstraint'],
-  },
-  {
-    path: 'nineGrid.imageNoTextConstraint',
-    category: 'nineGrid',
-    title: '九宫格无文字硬约束',
-    description: '九宫格图像禁止文字的硬约束。',
-    placeholders: [],
-  },
-  {
-    path: 'nineGrid.translatePrompt',
-    category: 'nineGrid',
-    title: '九宫格翻译模板',
-    description: 'AI 将九宫格英文描述翻译为中文的模板。',
-    placeholders: ['panelsJson', 'expectedCount', 'expectedCountMinusOne'],
-  },
-  {
-    path: 'nineGrid.rewritePrompt',
-    category: 'nineGrid',
-    title: '九宫格改写模板',
-    description: 'AI 按指令批量改写九宫格面板的模板。',
-    placeholders: [
-      'instruction',
-      'actionSummary',
-      'cameraMovement',
-      'sceneLocation',
-      'sceneTime',
-      'sceneAtmosphere',
-      'visualStyle',
-      'panelsJson',
-      'expectedCount',
-      'expectedCountMinusOne',
-      'requiredShotSizeKinds',
-    ],
-  },
+    {
+      path: 'nineGrid.splitSystem',
+      category: 'nineGrid',
+      title: '九宫格拆分 System 模板',
+      description: '网格拆分第一步使用的系统提示词。',
+      placeholders: [
+        'panelCount',
+        'gridLayout',
+        'rowCount',
+        'columnCount',
+        'layoutInstruction',
+        'layoutExample',
+        'layoutSpecificConstraint'
+      ]
+    },
+    {
+      path: 'nineGrid.splitUser',
+      category: 'nineGrid',
+      title: '九宫格拆分 User 模板',
+      description: '网格拆分第一步使用的用户提示词。',
+      placeholders: [
+        'panelCount',
+        'gridLayout',
+        'rowCount',
+        'columnCount',
+        'layoutInstruction',
+        'layoutExample',
+        'layoutSpecificConstraint',
+        'actionSummary',
+        'cameraMovement',
+        'characters',
+        'visualStyle'
+      ]
+    },
+    {
+      path: 'nineGrid.imagePrefix',
+      category: 'nineGrid',
+      title: '九宫格图片前缀模板',
+      description: '网格图片生成提示词前缀。',
+      placeholders: [
+        'gridLayout',
+        'panelCount',
+        'rowCount',
+        'columnCount',
+        'layoutInstruction',
+        'layoutExample',
+        'layoutSpecificConstraint',
+        'visualStyle'
+      ]
+    },
+    {
+      path: 'nineGrid.imagePanelTemplate',
+      category: 'nineGrid',
+      title: '九宫格单格模板',
+      description: '每个面板拼接时的模板。',
+      placeholders: [
+        'index',
+        'position',
+        'shotSize',
+        'cameraAngle',
+        'description'
+      ]
+    },
+    {
+      path: 'nineGrid.imageSuffix',
+      category: 'nineGrid',
+      title: '九宫格图片后缀模板',
+      description: '网格图片生成提示词后缀。',
+      placeholders: [
+        'gridLayout',
+        'panelCount',
+        'rowCount',
+        'columnCount',
+        'layoutInstruction',
+        'layoutExample',
+        'layoutSpecificConstraint'
+      ]
+    },
+    {
+      path: 'nineGrid.imageNoTextConstraint',
+      category: 'nineGrid',
+      title: '九宫格无文字硬约束',
+      description: '九宫格图像禁止文字的硬约束。',
+      placeholders: []
+    },
+    {
+      path: 'nineGrid.translatePrompt',
+      category: 'nineGrid',
+      title: '九宫格翻译模板',
+      description: 'AI 将九宫格英文描述翻译为中文的模板。',
+      placeholders: ['panelsJson', 'expectedCount', 'expectedCountMinusOne']
+    },
+    {
+      path: 'nineGrid.rewritePrompt',
+      category: 'nineGrid',
+      title: '九宫格改写模板',
+      description: 'AI 按指令批量改写九宫格面板的模板。',
+      placeholders: [
+        'instruction',
+        'actionSummary',
+        'cameraMovement',
+        'sceneLocation',
+        'sceneTime',
+        'sceneAtmosphere',
+        'visualStyle',
+        'panelsJson',
+        'expectedCount',
+        'expectedCountMinusOne',
+        'requiredShotSizeKinds'
+      ]
+    },
 
-  {
-    path: 'video.sora2Chinese',
-    category: 'video',
-    title: '视频模板-Sora 中文',
-    description: '普通模式下中文视频提示词模板。',
-    placeholders: ['actionSummary', 'cameraMovement', 'visualStyle', 'language'],
-  },
-  {
-    path: 'video.sora2English',
-    category: 'video',
-    title: '视频模板-Sora 英文',
-    description: '普通模式下英文视频提示词模板。',
-    placeholders: ['actionSummary', 'cameraMovement', 'visualStyle', 'language'],
-  },
-  {
-    path: 'video.sora2NineGridChinese',
-    category: 'video',
-    title: '视频模板-九宫格中文',
-    description: '网格分镜模式下中文视频提示词模板。',
-    placeholders: [
-      'actionSummary',
-      'visualStyle',
-      'gridLayout',
-      'panelCount',
-      'panelDescriptions',
-      'secondsPerPanel',
-      'cameraMovement',
-      'language',
-    ],
-  },
-  {
-    path: 'video.sora2NineGridEnglish',
-    category: 'video',
-    title: '视频模板-九宫格英文',
-    description: '网格分镜模式下英文视频提示词模板。',
-    placeholders: [
-      'actionSummary',
-      'visualStyle',
-      'gridLayout',
-      'panelCount',
-      'panelDescriptions',
-      'secondsPerPanel',
-      'cameraMovement',
-      'language',
-    ],
-  },
-  {
-    path: 'video.veoStartOnly',
-    category: 'video',
-    title: '视频模板-Veo 首帧模式',
-    description: '仅首帧驱动时使用的模板。',
-    placeholders: ['actionSummary', 'cameraMovement', 'visualStyle', 'language'],
-  },
-  {
-    path: 'video.veoStartEnd',
-    category: 'video',
-    title: '视频模板-Veo 首尾帧模式',
-    description: '首尾帧双约束模式使用的模板。',
-    placeholders: ['actionSummary', 'cameraMovement', 'visualStyle', 'language'],
-  },
-  {
-    path: 'video.nineGridGuardrailsChinese',
-    category: 'video',
-    title: '九宫格视频硬约束-中文',
-    description: '九宫格视频的中文硬约束模板。',
-    placeholders: ['panelCount'],
-  },
-  {
-    path: 'video.nineGridGuardrailsEnglish',
-    category: 'video',
-    title: '九宫格视频硬约束-英文',
-    description: '九宫格视频的英文硬约束模板。',
-    placeholders: ['panelCount'],
-  },
-  {
-    path: 'video.endFrameConstraintNote',
-    category: 'video',
-    title: '尾帧约束备注',
-    description: '模型支持尾帧时追加的备注。',
-    placeholders: [],
-  },
-  {
-    path: 'video.ignoredEndFrameNote',
-    category: 'video',
-    title: '忽略尾帧备注',
-    description: '模型忽略尾帧时追加的备注。',
-    placeholders: [],
-  },
-
-];
+    {
+      path: 'video.sora2Chinese',
+      category: 'video',
+      title: '视频模板-Sora 中文',
+      description: '普通模式下中文视频提示词模板。',
+      placeholders: [
+        'actionSummary',
+        'cameraMovement',
+        'visualStyle',
+        'language'
+      ]
+    },
+    {
+      path: 'video.sora2English',
+      category: 'video',
+      title: '视频模板-Sora 英文',
+      description: '普通模式下英文视频提示词模板。',
+      placeholders: [
+        'actionSummary',
+        'cameraMovement',
+        'visualStyle',
+        'language'
+      ]
+    },
+    {
+      path: 'video.sora2NineGridChinese',
+      category: 'video',
+      title: '视频模板-九宫格中文',
+      description: '网格分镜模式下中文视频提示词模板。',
+      placeholders: [
+        'actionSummary',
+        'visualStyle',
+        'gridLayout',
+        'panelCount',
+        'panelDescriptions',
+        'secondsPerPanel',
+        'cameraMovement',
+        'language'
+      ]
+    },
+    {
+      path: 'video.sora2NineGridEnglish',
+      category: 'video',
+      title: '视频模板-九宫格英文',
+      description: '网格分镜模式下英文视频提示词模板。',
+      placeholders: [
+        'actionSummary',
+        'visualStyle',
+        'gridLayout',
+        'panelCount',
+        'panelDescriptions',
+        'secondsPerPanel',
+        'cameraMovement',
+        'language'
+      ]
+    },
+    {
+      path: 'video.veoStartOnly',
+      category: 'video',
+      title: '视频模板-Veo 首帧模式',
+      description: '仅首帧驱动时使用的模板。',
+      placeholders: [
+        'actionSummary',
+        'cameraMovement',
+        'visualStyle',
+        'language'
+      ]
+    },
+    {
+      path: 'video.veoStartEnd',
+      category: 'video',
+      title: '视频模板-Veo 首尾帧模式',
+      description: '首尾帧双约束模式使用的模板。',
+      placeholders: [
+        'actionSummary',
+        'cameraMovement',
+        'visualStyle',
+        'language'
+      ]
+    },
+    {
+      path: 'video.nineGridGuardrailsChinese',
+      category: 'video',
+      title: '九宫格视频硬约束-中文',
+      description: '九宫格视频的中文硬约束模板。',
+      placeholders: ['panelCount']
+    },
+    {
+      path: 'video.nineGridGuardrailsEnglish',
+      category: 'video',
+      title: '九宫格视频硬约束-英文',
+      description: '九宫格视频的英文硬约束模板。',
+      placeholders: ['panelCount']
+    },
+    {
+      path: 'video.endFrameConstraintNote',
+      category: 'video',
+      title: '尾帧约束备注',
+      description: '模型支持尾帧时追加的备注。',
+      placeholders: []
+    },
+    {
+      path: 'video.ignoredEndFrameNote',
+      category: 'video',
+      title: '忽略尾帧备注',
+      description: '模型忽略尾帧时追加的备注。',
+      placeholders: []
+    }
+  ]
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
+  !!value && typeof value === 'object' && !Array.isArray(value)
 
 const sanitizeSection = <T extends Record<string, string>>(
   input: unknown,
   defaults: T
 ): Partial<T> | undefined => {
-  if (!isObject(input)) return undefined;
-  const sanitized: Partial<T> = {};
-  (Object.keys(defaults) as Array<keyof T>).forEach((key) => {
-    const value = input[String(key)];
+  if (!isObject(input)) return undefined
+  const sanitized: Partial<T> = {}
+  ;(Object.keys(defaults) as Array<keyof T>).forEach((key) => {
+    const value = input[String(key)]
     if (typeof value === 'string') {
-      sanitized[key] = value;
+      sanitized[key] = value
     }
-  });
-  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
-};
+  })
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined
+}
 
 export const sanitizePromptTemplateOverrides = (
   overrides?: PromptTemplateOverrides | null
 ): PromptTemplateOverrides | undefined => {
-  if (!isObject(overrides)) return undefined;
+  if (!isObject(overrides)) return undefined
 
-  const storyboard = sanitizeSection(overrides.storyboard, DEFAULT_PROMPT_TEMPLATE_CONFIG.storyboard);
-  const keyframe = sanitizeSection(overrides.keyframe, DEFAULT_PROMPT_TEMPLATE_CONFIG.keyframe);
-  const nineGrid = sanitizeSection(overrides.nineGrid, DEFAULT_PROMPT_TEMPLATE_CONFIG.nineGrid);
-  const video = sanitizeSection(overrides.video, DEFAULT_PROMPT_TEMPLATE_CONFIG.video);
+  const storyboard = sanitizeSection(
+    overrides.storyboard,
+    DEFAULT_PROMPT_TEMPLATE_CONFIG.storyboard
+  )
+  const keyframe = sanitizeSection(
+    overrides.keyframe,
+    DEFAULT_PROMPT_TEMPLATE_CONFIG.keyframe
+  )
+  const nineGrid = sanitizeSection(
+    overrides.nineGrid,
+    DEFAULT_PROMPT_TEMPLATE_CONFIG.nineGrid
+  )
+  const video = sanitizeSection(
+    overrides.video,
+    DEFAULT_PROMPT_TEMPLATE_CONFIG.video
+  )
 
-  const normalized: PromptTemplateOverrides = {};
-  if (storyboard) normalized.storyboard = storyboard;
-  if (keyframe) normalized.keyframe = keyframe;
-  if (nineGrid) normalized.nineGrid = nineGrid;
-  if (video) normalized.video = video;
+  const normalized: PromptTemplateOverrides = {}
+  if (storyboard) normalized.storyboard = storyboard
+  if (keyframe) normalized.keyframe = keyframe
+  if (nineGrid) normalized.nineGrid = nineGrid
+  if (video) normalized.video = video
 
-  return Object.keys(normalized).length > 0 ? normalized : undefined;
-};
+  return Object.keys(normalized).length > 0 ? normalized : undefined
+}
 
 export const resolvePromptTemplateConfig = (
   overrides?: PromptTemplateOverrides | null
 ): PromptTemplateConfig => {
-  const normalizedOverrides = sanitizePromptTemplateOverrides(overrides);
+  const normalizedOverrides = sanitizePromptTemplateOverrides(overrides)
   return {
     storyboard: {
       ...DEFAULT_PROMPT_TEMPLATE_CONFIG.storyboard,
-      ...(normalizedOverrides?.storyboard || {}),
+      ...(normalizedOverrides?.storyboard || {})
     },
     keyframe: {
       ...DEFAULT_PROMPT_TEMPLATE_CONFIG.keyframe,
-      ...(normalizedOverrides?.keyframe || {}),
+      ...(normalizedOverrides?.keyframe || {})
     },
     nineGrid: {
       ...DEFAULT_PROMPT_TEMPLATE_CONFIG.nineGrid,
-      ...(normalizedOverrides?.nineGrid || {}),
+      ...(normalizedOverrides?.nineGrid || {})
     },
     video: {
       ...DEFAULT_PROMPT_TEMPLATE_CONFIG.video,
-      ...(normalizedOverrides?.video || {}),
-    },
-  };
-};
+      ...(normalizedOverrides?.video || {})
+    }
+  }
+}
 
 const splitPromptTemplatePath = (
   path: PromptTemplatePath
 ): [PromptTemplateCategory, string] => {
-  const [category, key] = path.split('.') as [PromptTemplateCategory, string];
-  return [category, key];
-};
+  const [category, key] = path.split('.') as [PromptTemplateCategory, string]
+  return [category, key]
+}
 
 export const getPromptTemplateValueByPath = (
   config: PromptTemplateConfig,
   path: PromptTemplatePath
 ): string => {
-  const [category, key] = splitPromptTemplatePath(path);
-  const section = config[category] as Record<string, string>;
-  return section[key] || '';
-};
+  const [category, key] = splitPromptTemplatePath(path)
+  const section = config[category] as Record<string, string>
+  return section[key] || ''
+}
 
-export const getDefaultPromptTemplateValue = (path: PromptTemplatePath): string => {
-  return getPromptTemplateValueByPath(DEFAULT_PROMPT_TEMPLATE_CONFIG, path);
-};
+export const getDefaultPromptTemplateValue = (
+  path: PromptTemplatePath
+): string => {
+  return getPromptTemplateValueByPath(DEFAULT_PROMPT_TEMPLATE_CONFIG, path)
+}
 
 export const hasPromptTemplateOverride = (
   overrides: PromptTemplateOverrides | undefined,
   path: PromptTemplatePath
 ): boolean => {
-  const normalized = sanitizePromptTemplateOverrides(overrides);
-  if (!normalized) return false;
-  const [category, key] = splitPromptTemplatePath(path);
-  return typeof (normalized[category] as Record<string, string> | undefined)?.[key] === 'string';
-};
+  const normalized = sanitizePromptTemplateOverrides(overrides)
+  if (!normalized) return false
+  const [category, key] = splitPromptTemplatePath(path)
+  return (
+    typeof (normalized[category] as Record<string, string> | undefined)?.[
+      key
+    ] === 'string'
+  )
+}
 
 export const setPromptTemplateOverride = (
   overrides: PromptTemplateOverrides | undefined,
   path: PromptTemplatePath,
   value: string
 ): PromptTemplateOverrides => {
-  const normalized = sanitizePromptTemplateOverrides(overrides) || {};
-  const [category, key] = splitPromptTemplatePath(path);
+  const normalized = sanitizePromptTemplateOverrides(overrides) || {}
+  const [category, key] = splitPromptTemplatePath(path)
   const nextSection = {
     ...((normalized[category] as Record<string, string>) || {}),
-    [key]: value,
-  };
+    [key]: value
+  }
   const next: PromptTemplateOverrides = {
     ...normalized,
-    [category]: nextSection,
-  };
-  return sanitizePromptTemplateOverrides(next) || {};
-};
+    [category]: nextSection
+  }
+  return sanitizePromptTemplateOverrides(next) || {}
+}
 
 export const removePromptTemplateOverride = (
   overrides: PromptTemplateOverrides | undefined,
   path: PromptTemplatePath
 ): PromptTemplateOverrides | undefined => {
-  const normalized = sanitizePromptTemplateOverrides(overrides);
-  if (!normalized) return undefined;
+  const normalized = sanitizePromptTemplateOverrides(overrides)
+  if (!normalized) return undefined
 
-  const [category, key] = splitPromptTemplatePath(path);
-  const currentSection = { ...((normalized[category] as Record<string, string>) || {}) };
-  delete currentSection[key];
+  const [category, key] = splitPromptTemplatePath(path)
+  const currentSection = {
+    ...((normalized[category] as Record<string, string>) || {})
+  }
+  delete currentSection[key]
 
   const next: PromptTemplateOverrides = {
-    ...normalized,
-  };
-
-  if (Object.keys(currentSection).length === 0) {
-    delete next[category];
-  } else {
-    next[category] = currentSection as any;
+    ...normalized
   }
 
-  return sanitizePromptTemplateOverrides(next);
-};
+  if (Object.keys(currentSection).length === 0) {
+    delete next[category]
+  } else {
+    next[category] = currentSection as PromptTemplateOverrides[typeof category]
+  }
+
+  return sanitizePromptTemplateOverrides(next)
+}
 
 export const searchPromptTemplateFields = (
   config: PromptTemplateConfig,
   query: string
 ): PromptTemplateFieldDefinition[] => {
-  const keyword = String(query || '').trim().toLowerCase();
-  if (!keyword) return PROMPT_TEMPLATE_FIELD_DEFINITIONS;
+  const keyword = String(query || '')
+    .trim()
+    .toLowerCase()
+  if (!keyword) return PROMPT_TEMPLATE_FIELD_DEFINITIONS
 
   return PROMPT_TEMPLATE_FIELD_DEFINITIONS.filter((field) => {
-    const currentValue = getPromptTemplateValueByPath(config, field.path).toLowerCase();
+    const currentValue = getPromptTemplateValueByPath(
+      config,
+      field.path
+    ).toLowerCase()
     return (
       field.title.toLowerCase().includes(keyword) ||
       field.description.toLowerCase().includes(keyword) ||
       field.path.toLowerCase().includes(keyword) ||
       field.category.toLowerCase().includes(keyword) ||
       currentValue.includes(keyword)
-    );
-  });
-};
+    )
+  })
+}
 
-export const getPromptTemplateCategoryLabel = (category: PromptTemplateCategory): string => {
+export const getPromptTemplateCategoryLabel = (
+  category: PromptTemplateCategory
+): string => {
   switch (category) {
     case 'storyboard':
-      return '分镜';
+      return '分镜'
     case 'keyframe':
-      return '首尾帧';
+      return '首尾帧'
     case 'nineGrid':
-      return '九宫格';
+      return '九宫格'
     case 'video':
-      return '视频';
+      return '视频'
     default:
-      return category;
+      return category
   }
-};
+}
 
 export const renderPromptTemplate = (
   template: string,
   variables: Record<string, string | number | undefined | null>
 ): string => {
-  return String(template || '').replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key: string) => {
-    const value = variables[key];
-    if (value === undefined || value === null) {
-      return `{${key}}`;
+  return String(template || '').replace(
+    /\{([a-zA-Z0-9_]+)\}/g,
+    (_, key: string) => {
+      const value = variables[key]
+      if (value === undefined || value === null) {
+        return `{${key}}`
+      }
+      return String(value)
     }
-    return String(value);
-  });
-};
+  )
+}
 
 export const withTemplateFallback = (
   candidate: string | undefined | null,
   fallback: string
 ): string => {
-  const value = String(candidate ?? '');
-  return value.trim().length > 0 ? value : fallback;
-};
+  const value = String(candidate ?? '')
+  return value.trim().length > 0 ? value : fallback
+}
 
-export const getStoryboardCameraMovementReference = (): string => CAMERA_MOVEMENT_REFERENCE;
+export const getStoryboardCameraMovementReference = (): string =>
+  CAMERA_MOVEMENT_REFERENCE

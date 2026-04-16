@@ -1,17 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { X, Loader2, RefreshCw, Grid3x3, AlertCircle, Edit2, Save, ArrowRight, Wand2, ImagePlus } from 'lucide-react';
-import { Character, CharacterTurnaroundPanel } from '../../types';
-import { CHARACTER_TURNAROUND_LAYOUT } from '../../services/aiService';
+import React, { useState, useEffect } from 'react'
+import {
+  X,
+  Loader2,
+  RefreshCw,
+  Grid3x3,
+  AlertCircle,
+  Edit2,
+  Save,
+  ArrowRight,
+  Wand2,
+  ImagePlus
+} from 'lucide-react'
+import { Character, CharacterTurnaroundPanel } from '../../types'
+import { CHARACTER_TURNAROUND_LAYOUT } from '../../services/aiService'
 
 interface TurnaroundModalProps {
-  character: Character;
-  onClose: () => void;
-  onGeneratePanels: (charId: string) => void;
-  onConfirmPanels: (charId: string, panels: CharacterTurnaroundPanel[]) => void;
-  onUpdatePanel: (charId: string, index: number, panel: Partial<CharacterTurnaroundPanel>) => void;
-  onRegenerate: (charId: string) => void;
-  onRegenerateImage: (charId: string) => void; // 仅重新生成图片（保留已有的视角描述）
-  onImageClick: (imageUrl: string) => void;
+  character: Character
+  onClose: () => void
+  onGeneratePanels: (charId: string) => void
+  onConfirmPanels: (charId: string, panels: CharacterTurnaroundPanel[]) => void
+  onUpdatePanel: (
+    charId: string,
+    index: number,
+    panel: Partial<CharacterTurnaroundPanel>
+  ) => void
+  onRegenerate: (charId: string) => void
+  onRegenerateImage: (charId: string) => void // 仅重新生成图片（保留已有的视角描述）
+  onImageClick: (imageUrl: string) => void
 }
 
 const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
@@ -22,51 +37,57 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
   onUpdatePanel,
   onRegenerate,
   onRegenerateImage,
-  onImageClick,
+  onImageClick
 }) => {
-  const turnaround = character.turnaround;
-  const [editingPanel, setEditingPanel] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<{ viewAngle: string; shotSize: string; description: string }>({
-    viewAngle: '', shotSize: '', description: ''
-  });
+  const turnaround = character.turnaround
+  const [editingPanel, setEditingPanel] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<{
+    viewAngle: string
+    shotSize: string
+    description: string
+  }>({
+    viewAngle: '',
+    shotSize: '',
+    description: ''
+  })
 
   // 当编辑面板时，初始化编辑表单
   useEffect(() => {
     if (editingPanel !== null && turnaround?.panels?.[editingPanel]) {
-      const panel = turnaround.panels[editingPanel];
+      const panel = turnaround.panels[editingPanel]
       setEditForm({
         viewAngle: panel.viewAngle,
         shotSize: panel.shotSize,
         description: panel.description
-      });
+      })
     }
-  }, [editingPanel, turnaround?.panels]);
+  }, [editingPanel, turnaround?.panels])
 
-  const isGeneratingPanels = turnaround?.status === 'generating_panels';
-  const isPanelsReady = turnaround?.status === 'panels_ready';
-  const isGeneratingImage = turnaround?.status === 'generating_image';
-  const hasFailed = turnaround?.status === 'failed';
-  const isCompleted = turnaround?.status === 'completed' && turnaround?.imageUrl;
-  const hasNoPanels = !turnaround || turnaround.status === 'pending';
+  const isGeneratingPanels = turnaround?.status === 'generating_panels'
+  const isPanelsReady = turnaround?.status === 'panels_ready'
+  const isGeneratingImage = turnaround?.status === 'generating_image'
+  const hasFailed = turnaround?.status === 'failed'
+  const isCompleted = turnaround?.status === 'completed' && turnaround?.imageUrl
+  const hasNoPanels = !turnaround || turnaround.status === 'pending'
 
   const handlePanelClick = (index: number) => {
     if (isPanelsReady) {
-      setEditingPanel(editingPanel === index ? null : index);
+      setEditingPanel(editingPanel === index ? null : index)
     }
-  };
+  }
 
   const handleSaveEdit = () => {
     if (editingPanel !== null) {
-      onUpdatePanel(character.id, editingPanel, editForm);
-      setEditingPanel(null);
+      onUpdatePanel(character.id, editingPanel, editForm)
+      setEditingPanel(null)
     }
-  };
+  }
 
   const handleConfirmAndGenerate = () => {
     if (turnaround?.panels && turnaround.panels.length === 9) {
-      onConfirmPanels(character.id, turnaround.panels);
+      onConfirmPanels(character.id, turnaround.panels)
     }
-  };
+  }
 
   return (
     <div
@@ -82,7 +103,11 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[var(--bg-hover)] overflow-hidden border border-[var(--border-secondary)]">
               {character.referenceImage && (
-                <img src={character.referenceImage} className="w-full h-full object-cover" alt={character.name} />
+                <img
+                  src={character.referenceImage}
+                  className="w-full h-full object-cover"
+                  alt={character.name}
+                />
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -167,7 +192,8 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                 正在生成视角描述...
               </h4>
               <p className="text-sm text-[var(--text-tertiary)]">
-                AI正在为角色「{character.name}」设计9个不同视角的描述，请耐心等待
+                AI正在为角色「{character.name}
+                」设计9个不同视角的描述，请耐心等待
               </p>
             </div>
           )}
@@ -180,13 +206,17 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                 正在生成九宫格造型图片...
               </h4>
               <p className="text-sm text-[var(--text-tertiary)]">
-                根据视角描述为角色「{character.name}」生成多视角参考图，请耐心等待
+                根据视角描述为角色「{character.name}
+                」生成多视角参考图，请耐心等待
               </p>
               {/* 显示已确认的视角列表 */}
               {turnaround?.panels && turnaround.panels.length > 0 && (
                 <div className="mt-6 w-full max-w-lg space-y-1.5 px-6">
                   {turnaround.panels.map((panel, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-[var(--bg-surface)] rounded-lg border border-[var(--border-primary)]">
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 p-2 bg-[var(--bg-surface)] rounded-lg border border-[var(--border-primary)]"
+                    >
                       <span className="w-5 h-5 rounded-full bg-[var(--accent)] text-white flex items-center justify-center text-[9px] font-bold shrink-0">
                         {idx + 1}
                       </span>
@@ -213,8 +243,7 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
               <p className="text-sm text-[var(--text-tertiary)] mb-6">
                 {turnaround?.panels && turnaround.panels.length > 0
                   ? '九宫格图片生成失败，您可以重新确认生成或修改描述后重试'
-                  : '视角描述生成失败，请重试'
-                }
+                  : '视角描述生成失败，请重试'}
               </p>
               <div className="flex items-center gap-3">
                 <button
@@ -263,16 +292,20 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                         ? 'border-[var(--accent)] bg-[var(--accent-bg)] shadow-lg'
                         : 'border-[var(--border-primary)] bg-[var(--bg-surface)] hover:border-[var(--border-secondary)] hover:bg-[var(--bg-hover)] cursor-pointer'
                     }`}
-                    onClick={() => editingPanel !== idx && handlePanelClick(idx)}
+                    onClick={() =>
+                      editingPanel !== idx && handlePanelClick(idx)
+                    }
                   >
                     {/* 面板头部 */}
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          editingPanel === idx
-                            ? 'bg-[var(--accent)] text-white'
-                            : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)]'
-                        }`}>
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            editingPanel === idx
+                              ? 'bg-[var(--accent)] text-white'
+                              : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)]'
+                          }`}
+                        >
                           {idx + 1}
                         </span>
                         {editingPanel !== idx && (
@@ -283,7 +316,10 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                       </div>
                       {editingPanel !== idx && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); handlePanelClick(idx); }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handlePanelClick(idx)
+                          }}
                           className="p-1 hover:bg-[var(--bg-hover)] rounded text-[var(--text-muted)] hover:text-[var(--accent-text)] transition-colors"
                           title="编辑"
                         >
@@ -294,38 +330,70 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
 
                     {/* 编辑模式 */}
                     {editingPanel === idx ? (
-                      <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="space-y-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex gap-2">
                           <div className="flex-1">
-                            <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">视角</label>
+                            <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">
+                              视角
+                            </label>
                             <select
                               value={editForm.viewAngle}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, viewAngle: e.target.value }))}
+                              onChange={(e) =>
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  viewAngle: e.target.value
+                                }))
+                              }
                               className="w-full bg-[var(--bg-base)] border border-[var(--border-secondary)] rounded px-2 py-1 text-[11px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                             >
-                              {CHARACTER_TURNAROUND_LAYOUT.viewAngles.map(angle => (
-                                <option key={angle} value={angle}>{angle}</option>
-                              ))}
+                              {CHARACTER_TURNAROUND_LAYOUT.viewAngles.map(
+                                (angle) => (
+                                  <option key={angle} value={angle}>
+                                    {angle}
+                                  </option>
+                                )
+                              )}
                             </select>
                           </div>
                           <div className="flex-1">
-                            <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">景别</label>
+                            <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">
+                              景别
+                            </label>
                             <select
                               value={editForm.shotSize}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, shotSize: e.target.value }))}
+                              onChange={(e) =>
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  shotSize: e.target.value
+                                }))
+                              }
                               className="w-full bg-[var(--bg-base)] border border-[var(--border-secondary)] rounded px-2 py-1 text-[11px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                             >
-                              {CHARACTER_TURNAROUND_LAYOUT.shotSizes.map(size => (
-                                <option key={size} value={size}>{size}</option>
-                              ))}
+                              {CHARACTER_TURNAROUND_LAYOUT.shotSizes.map(
+                                (size) => (
+                                  <option key={size} value={size}>
+                                    {size}
+                                  </option>
+                                )
+                              )}
                             </select>
                           </div>
                         </div>
                         <div>
-                          <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">描述</label>
+                          <label className="text-[8px] uppercase tracking-wider text-[var(--text-muted)] font-bold mb-0.5 block">
+                            描述
+                          </label>
                           <textarea
                             value={editForm.description}
-                            onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                            onChange={(e) =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                description: e.target.value
+                              }))
+                            }
                             rows={3}
                             className="w-full bg-[var(--bg-base)] border border-[var(--border-secondary)] rounded px-2 py-1 text-[10px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] resize-none"
                           />
@@ -425,7 +493,7 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default TurnaroundModal;
+export default TurnaroundModal

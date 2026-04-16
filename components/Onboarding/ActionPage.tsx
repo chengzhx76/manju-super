@@ -1,18 +1,21 @@
-import React from 'react';
-import { QUICK_START_OPTIONS } from './constants';
-import { FileText, Film } from 'lucide-react';
+import React from 'react'
+import { QUICK_START_OPTIONS } from './constants'
+import { FileText, Film } from 'lucide-react'
 
 interface ActionPageProps {
-  onComplete: () => void;
-  onQuickStart: (option: 'script' | 'example') => void;
+  onComplete: () => void
+  onQuickStart: (option: 'script' | 'example') => void
 }
 
 const icons = {
   script: FileText,
-  example: Film,
-};
+  example: Film
+}
 
-const ActionPage: React.FC<ActionPageProps> = ({ onComplete, onQuickStart }) => {
+const ActionPage: React.FC<ActionPageProps> = ({
+  onComplete,
+  onQuickStart
+}) => {
   return (
     <div className="flex flex-col items-center text-center">
       {/* 标题 */}
@@ -28,7 +31,7 @@ const ActionPage: React.FC<ActionPageProps> = ({ onComplete, onQuickStart }) => 
       {/* 选项卡片 */}
       <div className="w-full max-w-md space-y-3 mb-8">
         {QUICK_START_OPTIONS.map((option) => {
-          const Icon = icons[option.id as keyof typeof icons];
+          const Icon = icons[option.id as keyof typeof icons]
           return (
             <button
               key={option.id}
@@ -43,10 +46,12 @@ const ActionPage: React.FC<ActionPageProps> = ({ onComplete, onQuickStart }) => 
                   <span>{option.icon}</span>
                   {option.title}
                 </h3>
-                <p className="text-[var(--text-tertiary)] text-xs">{option.description}</p>
+                <p className="text-[var(--text-tertiary)] text-xs">
+                  {option.description}
+                </p>
               </div>
             </button>
-          );
+          )
         })}
       </div>
 
@@ -63,7 +68,7 @@ const ActionPage: React.FC<ActionPageProps> = ({ onComplete, onQuickStart }) => 
         以后可在侧边栏「帮助」中重新查看引导
       </p>
     </div>
-  );
-};
+  )
+}
 
-export default ActionPage;
+export default ActionPage

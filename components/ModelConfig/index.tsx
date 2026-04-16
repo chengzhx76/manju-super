@@ -3,9 +3,27 @@
  * 独立的模型管理界面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
-import { X, Settings, MessageSquare, Image, Video, Mic, Key, ExternalLink, Gift, Sparkles, Download, Upload, Server } from 'lucide-react';
-import { ModelType, ModelDefinition, ModelRegistryState } from '../../types/model';
+import React, { useRef, useState, useEffect } from 'react'
+import {
+  X,
+  Settings,
+  MessageSquare,
+  Image,
+  Video,
+  Mic,
+  Key,
+  ExternalLink,
+  Gift,
+  Sparkles,
+  Download,
+  Upload,
+  Server
+} from 'lucide-react'
+import {
+  ModelType,
+  ModelDefinition,
+  ModelRegistryState
+} from '../../types/model'
 import {
   getRegistryState,
   getModels,
@@ -15,102 +33,119 @@ import {
   registerModel,
   removeModel,
   saveRegistry
-} from '../../services/modelRegistry';
-import { verifyApiKey } from '../../services/modelService';
-import ModelList from './ModelList';
-import GlobalSettings from './GlobalSettings';
+} from '../../services/modelRegistry'
+import { verifyApiKey } from '../../services/modelService'
+import ModelList from './ModelList'
+import GlobalSettings from './GlobalSettings'
 
 interface ModelConfigModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen: boolean
+  onClose: () => void
 }
 
-type TabType = 'global' | 'chat' | 'image' | 'video' | 'audio';
+type TabType = 'global' | 'chat' | 'image' | 'video' | 'audio'
 
-const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('global');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const modalRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const pointerDownOutsideRef = useRef(false);
+const ModelConfigModal: React.FC<ModelConfigModalProps> = ({
+  isOpen,
+  onClose
+}) => {
+  const [activeTab, setActiveTab] = useState<TabType>('global')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const modalRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const pointerDownOutsideRef = useRef(false)
 
-  const refresh = () => setRefreshKey(k => k + 1);
+  const refresh = () => setRefreshKey((k) => k + 1)
 
   const handleExport = () => {
-    const state = getRegistryState();
-    const dataStr = JSON.stringify(state, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const state = getRegistryState()
+    const dataStr = JSON.stringify(state, null, 2)
+    const dataUri =
+      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr)
 
-    const exportFileDefaultName = `bigbanana_model_config_${new Date().toISOString().slice(0, 10)}.json`;
+    const exportFileDefaultName = `bigbanana_model_config_${new Date().toISOString().slice(0, 10)}.json`
 
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
+    const linkElement = document.createElement('a')
+    linkElement.setAttribute('href', dataUri)
+    linkElement.setAttribute('download', exportFileDefaultName)
+    linkElement.click()
+  }
 
   const handleImport = () => {
     if (fileInputRef.current) {
-      fileInputRef.current.click();
+      fileInputRef.current.click()
     }
-  };
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const file = e.target.files?.[0]
+    if (!file) return
 
-    const reader = new FileReader();
+    const reader = new FileReader()
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (json && typeof json === 'object' && Array.isArray(json.models) && Array.isArray(json.providers)) {
-          saveRegistry(json as ModelRegistryState);
-          refresh();
-          alert('配置导入成功！页面将刷新以应用新配置。');
-          window.location.reload();
+        const json = JSON.parse(event.target?.result as string)
+        if (
+          json &&
+          typeof json === 'object' &&
+          Array.isArray(json.models) &&
+          Array.isArray(json.providers)
+        ) {
+          saveRegistry(json as ModelRegistryState)
+          refresh()
+          alert('配置导入成功！页面将刷新以应用新配置。')
+          window.location.reload()
         } else {
-          alert('导入失败：无效的配置文件格式。');
+          alert('导入失败：无效的配置文件格式。')
         }
       } catch (err) {
-        alert('导入失败：解析 JSON 文件出错。');
-        console.error(err);
+        alert('导入失败：解析 JSON 文件出错。')
+        console.error(err)
       }
-    };
-    reader.readAsText(file);
+    }
+    reader.readAsText(file)
     // 重置 input 值，允许重复导入同一个文件
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = ''
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'global', label: '全局配置', icon: <Key className="w-4 h-4" /> },
-    { id: 'chat', label: '对话模型', icon: <MessageSquare className="w-4 h-4" /> },
+    {
+      id: 'chat',
+      label: '对话模型',
+      icon: <MessageSquare className="w-4 h-4" />
+    },
     { id: 'image', label: '图片模型', icon: <Image className="w-4 h-4" /> },
     { id: 'video', label: '视频模型', icon: <Video className="w-4 h-4" /> },
-    { id: 'audio', label: '配音模型', icon: <Mic className="w-4 h-4" /> },
-  ];
+    { id: 'audio', label: '配音模型', icon: <Mic className="w-4 h-4" /> }
+  ]
 
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center"
       onPointerDown={(e) => {
         // 仅当按下发生在弹窗外部时，才允许后续抬起关闭。
-        const targetNode = e.target as Node;
-        pointerDownOutsideRef.current = modalRef.current ? !modalRef.current.contains(targetNode) : true;
+        const targetNode = e.target as Node
+        pointerDownOutsideRef.current = modalRef.current
+          ? !modalRef.current.contains(targetNode)
+          : true
       }}
       onPointerUp={(e) => {
         // 避免在弹窗内选中文本/拖拽到外部抬起时误触发关闭
-        if (!pointerDownOutsideRef.current) return;
-        const targetNode = e.target as Node;
-        const isOutside = modalRef.current ? !modalRef.current.contains(targetNode) : true;
-        pointerDownOutsideRef.current = false;
-        if (isOutside) onClose();
+        if (!pointerDownOutsideRef.current) return
+        const targetNode = e.target as Node
+        const isOutside = modalRef.current
+          ? !modalRef.current.contains(targetNode)
+          : true
+        pointerDownOutsideRef.current = false
+        if (isOutside) onClose()
       }}
       onPointerCancel={() => {
-        pointerDownOutsideRef.current = false;
+        pointerDownOutsideRef.current = false
       }}
     >
       {/* 背景遮罩 */}
@@ -129,8 +164,12 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
               <Settings className="w-5 h-5 text-[var(--accent-text)]" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">模型配置</h2>
-              <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest font-mono">MODEL CONFIGURATION</p>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">
+                模型配置
+              </h2>
+              <p className="text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest font-mono">
+                MODEL CONFIGURATION
+              </p>
             </div>
           </div>
           <button
@@ -164,10 +203,7 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
           {activeTab === 'global' ? (
             <GlobalSettings onRefresh={refresh} />
           ) : (
-            <ModelList
-              type={activeTab as ModelType}
-              onRefresh={refresh}
-            />
+            <ModelList type={activeTab as ModelType} onRefresh={refresh} />
           )}
         </div>
 
@@ -210,7 +246,7 @@ const ModelConfigModal: React.FC<ModelConfigModalProps> = ({ isOpen, onClose }) 
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ModelConfigModal;
+export default ModelConfigModal

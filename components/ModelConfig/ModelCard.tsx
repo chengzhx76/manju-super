@@ -3,8 +3,16 @@
  * 显示单个模型的配置
  */
 
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2, ToggleLeft, ToggleRight, CheckCircle, Circle } from 'lucide-react';
+import React, { useState } from 'react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  CheckCircle,
+  Circle
+} from 'lucide-react'
 import {
   ModelDefinition,
   ChatModelParams,
@@ -13,17 +21,17 @@ import {
   AudioModelParams,
   AspectRatio,
   VideoDuration
-} from '../../types/model';
-import { getProviderById } from '../../services/modelRegistry';
+} from '../../types/model'
+import { getProviderById } from '../../services/modelRegistry'
 
 interface ModelCardProps {
-  model: ModelDefinition;
-  isExpanded: boolean;
-  isActive: boolean;
-  onToggleExpand: () => void;
-  onUpdate: (updates: Partial<ModelDefinition>) => void;
-  onDelete: () => void;
-  onSetActive: () => void;
+  model: ModelDefinition
+  isExpanded: boolean
+  isActive: boolean
+  onToggleExpand: () => void
+  onUpdate: (updates: Partial<ModelDefinition>) => void
+  onDelete: () => void
+  onSetActive: () => void
 }
 
 const ModelCard: React.FC<ModelCardProps> = ({
@@ -33,72 +41,89 @@ const ModelCard: React.FC<ModelCardProps> = ({
   onToggleExpand,
   onUpdate,
   onDelete,
-  onSetActive,
+  onSetActive
 }) => {
-  const [editParams, setEditParams] = useState<any>(model.params);
-  const [editApiKey, setEditApiKey] = useState<string>(model.apiKey || '');
+  const [editParams, setEditParams] = useState<any>(model.params)
+  const [editApiKey, setEditApiKey] = useState<string>(model.apiKey || '')
 
-  const provider = getProviderById(model.providerId);
-  const isVolcengineModel = model.providerId === 'volcengine';
-  const modelHasApiKey = Boolean(model.apiKey?.trim());
-  const providerHasApiKey = Boolean(provider?.apiKey?.trim());
-  const isMissingVolcengineKey = isVolcengineModel && !modelHasApiKey && !providerHasApiKey;
+  const provider = getProviderById(model.providerId)
+  const isVolcengineModel = model.providerId === 'volcengine'
+  const modelHasApiKey = Boolean(model.apiKey?.trim())
+  const providerHasApiKey = Boolean(provider?.apiKey?.trim())
+  const isMissingVolcengineKey =
+    isVolcengineModel && !modelHasApiKey && !providerHasApiKey
 
   const handleParamChange = (key: string, value: any) => {
-    const newParams = { ...editParams, [key]: value };
-    setEditParams(newParams);
-    onUpdate({ params: newParams } as any);
-  };
+    const newParams = { ...editParams, [key]: value }
+    setEditParams(newParams)
+    onUpdate({ params: newParams } as any)
+  }
 
   const handleToggleEnabled = () => {
-    onUpdate({ isEnabled: !model.isEnabled });
-  };
+    onUpdate({ isEnabled: !model.isEnabled })
+  }
 
   const handleApiKeyChange = (value: string) => {
-    setEditApiKey(value);
-    onUpdate({ apiKey: value.trim() || undefined });
-  };
+    setEditApiKey(value)
+    onUpdate({ apiKey: value.trim() || undefined })
+  }
 
   const renderChatParams = (params: ChatModelParams) => (
     <div className="grid grid-cols-2 gap-4">
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">温度</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          温度
+        </label>
         <input
           type="number"
           min="0"
           max="2"
           step="0.1"
           value={editParams.temperature}
-          onChange={(e) => handleParamChange('temperature', parseFloat(e.target.value))}
+          onChange={(e) =>
+            handleParamChange('temperature', parseFloat(e.target.value))
+          }
           className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
         />
       </div>
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">最大 Token</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          最大 Token
+        </label>
         <input
           type="number"
           min="1"
           max="128000"
           value={editParams.maxTokens ?? ''}
           onChange={(e) => {
-            const value = e.target.value;
-            handleParamChange('maxTokens', value === '' ? undefined : parseInt(value));
+            const value = e.target.value
+            handleParamChange(
+              'maxTokens',
+              value === '' ? undefined : parseInt(value)
+            )
           }}
           placeholder="留空不限制"
           className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
         />
-        <p className="text-[9px] text-[var(--text-muted)] mt-1">留空则不限制最大 Token</p>
+        <p className="text-[9px] text-[var(--text-muted)] mt-1">
+          留空则不限制最大 Token
+        </p>
       </div>
     </div>
-  );
+  )
 
   const renderImageParams = (params: ImageModelParams) => (
     <div className="space-y-3">
       <div className="text-[10px] text-[var(--text-muted)]">
-        协议：{params.apiFormat === 'openai' ? 'OpenAI Images' : 'Gemini GenerateContent'}
+        协议：
+        {params.apiFormat === 'openai'
+          ? 'OpenAI Images'
+          : 'Gemini GenerateContent'}
       </div>
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">默认比例</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          默认比例
+        </label>
         <div className="flex gap-2">
           {/* 从模型的 supportedAspectRatios 读取支持的比例 */}
           {(params.supportedAspectRatios || ['16:9', '9:16']).map((ratio) => (
@@ -117,12 +142,14 @@ const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       </div>
     </div>
-  );
+  )
 
   const renderVideoParams = (params: VideoModelParams) => (
     <div className="space-y-4">
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">默认比例</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          默认比例
+        </label>
         <div className="flex gap-2">
           {editParams.supportedAspectRatios.map((ratio: AspectRatio) => (
             <button
@@ -141,7 +168,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
       </div>
       {editParams.supportedDurations.length > 1 && (
         <div>
-          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">默认时长</label>
+          <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+            默认时长
+          </label>
           <div className="flex gap-2">
             {editParams.supportedDurations.map((duration: VideoDuration) => (
               <button
@@ -160,21 +189,22 @@ const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       )}
       <div className="text-[10px] text-[var(--text-muted)]">
-        模式：{
-          editParams.mode === 'sync'
-            ? '同步（Chat Completion）'
-            : (model.endpoint || '').includes('/contents/generations/tasks')
-              ? '异步（火山任务）'
-              : '异步（Sora 类）'
-        }
+        模式：
+        {editParams.mode === 'sync'
+          ? '同步（Chat Completion）'
+          : (model.endpoint || '').includes('/contents/generations/tasks')
+            ? '异步（火山任务）'
+            : '异步（Sora 类）'}
       </div>
     </div>
-  );
+  )
 
   const renderAudioParams = (params: AudioModelParams) => (
     <div className="grid grid-cols-2 gap-4">
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">默认音色</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          默认音色
+        </label>
         <input
           type="text"
           value={editParams.defaultVoice || params.defaultVoice}
@@ -184,7 +214,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
         />
       </div>
       <div>
-        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">输出格式</label>
+        <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+          输出格式
+        </label>
         <select
           value={editParams.outputFormat || params.outputFormat}
           onChange={(e) => handleParamChange('outputFormat', e.target.value)}
@@ -195,14 +227,16 @@ const ModelCard: React.FC<ModelCardProps> = ({
         </select>
       </div>
     </div>
-  );
+  )
 
-  const apiModelLabel = model.apiModel || model.id;
+  const apiModelLabel = model.apiModel || model.id
 
   return (
     <div
       className={`bg-[var(--bg-elevated)]/50 border rounded-lg overflow-hidden transition-all ${
-        isActive ? 'border-[var(--accent-border)] bg-[var(--accent-bg)]' : 'border-[var(--border-primary)]'
+        isActive
+          ? 'border-[var(--accent-border)] bg-[var(--accent-bg)]'
+          : 'border-[var(--border-primary)]'
       } ${!model.isEnabled ? 'opacity-60' : ''}`}
     >
       {/* 头部 */}
@@ -211,13 +245,17 @@ const ModelCard: React.FC<ModelCardProps> = ({
           {/* 模型信息 */}
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-[var(--text-primary)]">{model.name}</span>
+              <span className="text-sm font-medium text-[var(--text-primary)]">
+                {model.name}
+              </span>
               {model.isBuiltIn && (
-                <span className={`px-1.5 py-0.5 text-[9px] rounded ${
-                  isVolcengineModel
-                    ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]'
-                    : 'bg-[var(--border-secondary)] text-[var(--text-tertiary)]'
-                }`}>
+                <span
+                  className={`px-1.5 py-0.5 text-[9px] rounded ${
+                    isVolcengineModel
+                      ? 'bg-[var(--warning-bg)] text-[var(--warning-text)]'
+                      : 'bg-[var(--border-secondary)] text-[var(--text-tertiary)]'
+                  }`}
+                >
                   {isVolcengineModel ? '火山引擎' : '内置'}
                 </span>
               )}
@@ -302,7 +340,8 @@ const ModelCard: React.FC<ModelCardProps> = ({
               </label>
               {isVolcengineModel && (
                 <p className="text-[9px] text-[var(--warning-text)] mb-1">
-                  火山模型不会使用全局 API Key，请填写模型 Key 或 Volcengine 提供商 Key。
+                  火山模型不会使用全局 API Key，请填写模型 Key 或 Volcengine
+                  提供商 Key。
                 </p>
               )}
               <input
@@ -318,7 +357,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
                 </p>
               )}
               {model.apiKey && (
-                <p className="text-[9px] text-[var(--success)] mt-1">✓ 已配置专属 Key</p>
+                <p className="text-[9px] text-[var(--success)] mt-1">
+                  ✓ 已配置专属 Key
+                </p>
               )}
             </div>
 
@@ -330,7 +371,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default ModelCard;
+export default ModelCard

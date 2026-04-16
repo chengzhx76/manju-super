@@ -1,10 +1,10 @@
-import React from 'react';
-import { Film } from 'lucide-react';
-import { Shot } from '../../types';
-import { STYLES } from './constants';
+import React from 'react'
+import { Film } from 'lucide-react'
+import { Shot } from '../../types'
+import { STYLES } from './constants'
 
 interface Props {
-  shots: Shot[];
+  shots: Shot[]
 }
 
 const TimelineVisualizer: React.FC<Props> = ({ shots }) => {
@@ -22,18 +22,22 @@ const TimelineVisualizer: React.FC<Props> = ({ shots }) => {
           </div>
         ) : (
           shots.map((shot, idx) => {
-            const isDone = !!shot.interval?.videoUrl;
+            const isDone = !!shot.interval?.videoUrl
             return (
-              <div 
-                key={shot.id} 
+              <div
+                key={shot.id}
                 className={`${STYLES.timeline.segment} ${
-                  isDone ? STYLES.timeline.segmentComplete : STYLES.timeline.segmentIncomplete
+                  isDone
+                    ? STYLES.timeline.segmentComplete
+                    : STYLES.timeline.segmentIncomplete
                 }`}
                 title={`镜头 ${idx + 1}：${shot.actionSummary}`}
               >
                 {/* Mini Progress Bar inside timeline segment */}
-                {isDone && <div className="h-full w-full bg-[var(--accent-bg)]"></div>}
-                
+                {isDone && (
+                  <div className="h-full w-full bg-[var(--accent-bg)]"></div>
+                )}
+
                 {/* Hover Tooltip */}
                 <div className={STYLES.timeline.tooltip}>
                   <div className="bg-[var(--bg-base)] text-[var(--text-primary)] text-[10px] px-2 py-1 rounded border border-[var(--border-secondary)] shadow-xl">
@@ -41,12 +45,12 @@ const TimelineVisualizer: React.FC<Props> = ({ shots }) => {
                   </div>
                 </div>
               </div>
-            );
+            )
           })
         )}
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default TimelineVisualizer;
+export default TimelineVisualizer

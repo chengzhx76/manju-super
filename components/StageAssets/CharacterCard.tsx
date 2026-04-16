@@ -1,27 +1,46 @@
-import React from 'react';
-import { User, Check, Shirt, Trash2, Edit2, AlertCircle, FolderPlus, Grid3x3, Link2, Upload, X, Loader2, Sparkles } from 'lucide-react';
-import { Character } from '../../types';
-import PromptEditor from './PromptEditor';
-import ImageUploadButton from './ImageUploadButton';
-import InlineEditableText from './InlineEditableText';
+import React from 'react'
+import {
+  User,
+  Check,
+  Shirt,
+  Trash2,
+  Edit2,
+  AlertCircle,
+  FolderPlus,
+  Grid3x3,
+  Link2,
+  Upload,
+  X,
+  Loader2,
+  Sparkles
+} from 'lucide-react'
+import { Character } from '../../types'
+import PromptEditor from './PromptEditor'
+import ImageUploadButton from './ImageUploadButton'
+import InlineEditableText from './InlineEditableText'
 
 interface CharacterCardProps {
-  character: Character;
-  isGenerating: boolean;
-  shapeReferenceImage?: string;
-  onGenerate: () => void;
-  onUpload: (file: File) => void;
-  onUploadShapeReference: (file: File) => void;
-  onClearShapeReference: () => void;
-  onPromptSave: (newPrompt: string) => void;
-  onOpenWardrobe: () => void;
-  onOpenTurnaround: () => void;
-  onImageClick: (imageUrl: string) => void;
-  onDelete: () => void;
-  onUpdateInfo: (updates: { name?: string; gender?: string; age?: string; personality?: string }) => void;
-  onAddToLibrary: () => void;
-  onAddToProjectLibrary?: () => void;
-  onReplaceFromLibrary: () => void;
+  character: Character
+  isGenerating: boolean
+  shapeReferenceImage?: string
+  onGenerate: () => void
+  onUpload: (file: File) => void
+  onUploadShapeReference: (file: File) => void
+  onClearShapeReference: () => void
+  onPromptSave: (newPrompt: string) => void
+  onOpenWardrobe: () => void
+  onOpenTurnaround: () => void
+  onImageClick: (imageUrl: string) => void
+  onDelete: () => void
+  onUpdateInfo: (updates: {
+    name?: string
+    gender?: string
+    age?: string
+    personality?: string
+  }) => void
+  onAddToLibrary: () => void
+  onAddToProjectLibrary?: () => void
+  onReplaceFromLibrary: () => void
 }
 
 const CharacterCard: React.FC<CharacterCardProps> = ({
@@ -40,22 +59,28 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
   onUpdateInfo,
   onAddToLibrary,
   onAddToProjectLibrary,
-  onReplaceFromLibrary,
+  onReplaceFromLibrary
 }) => {
-  const isLinked = !!character.libraryId;
-  const handleShapeReferenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    onUploadShapeReference(file);
-    e.target.value = '';
-  };
+  const isLinked = !!character.libraryId
+  const handleShapeReferenceChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    onUploadShapeReference(file)
+    e.target.value = ''
+  }
 
   return (
-    <div className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}>
+    <div
+      className={`bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${isLinked ? 'border-[var(--accent-border)] hover:border-[var(--accent)]' : 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'}`}
+    >
       {isLinked && (
         <div className="px-4 py-1.5 bg-[var(--accent-bg)] border-b border-[var(--accent-border)] flex items-center gap-1.5">
           <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
-          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">项目角色</span>
+          <span className="text-[9px] font-mono text-[var(--accent-text)] uppercase tracking-widest">
+            项目角色
+          </span>
         </div>
       )}
       <div className="flex gap-4 p-4 pb-0">
@@ -63,11 +88,17 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         <div className="w-48 flex-shrink-0">
           <div
             className="aspect-video bg-[var(--bg-elevated)] relative rounded-lg overflow-hidden cursor-pointer"
-            onClick={() => character.referenceImage && onImageClick(character.referenceImage)}
+            onClick={() =>
+              character.referenceImage && onImageClick(character.referenceImage)
+            }
           >
             {character.referenceImage ? (
               <>
-                <img src={character.referenceImage} alt={character.name} className="w-full h-full object-cover" />
+                <img
+                  src={character.referenceImage}
+                  alt={character.name}
+                  className="w-full h-full object-cover"
+                />
                 <div className="absolute top-1.5 right-1.5 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg">
                   <Check className="w-3 h-3" />
                 </div>
@@ -77,7 +108,9 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
                 {character.status === 'failed' ? (
                   <>
                     <AlertCircle className="w-8 h-8 mb-2 text-[var(--error)]" />
-                    <span className="text-[10px] text-[var(--error)] mb-2">生成失败</span>
+                    <span className="text-[10px] text-[var(--error)] mb-2">
+                      生成失败
+                    </span>
                     <ImageUploadButton
                       variant="inline"
                       size="small"
@@ -117,7 +150,9 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
               inputClassName="font-bold text-[var(--text-primary)] text-base mb-1 bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-2 py-1 w-full focus:outline-none focus:border-[var(--accent)]"
               renderDisplay={(value, startEdit) => (
                 <div className="flex items-center gap-2 mb-1 group/name">
-                  <h3 className="font-bold text-[var(--text-primary)] text-base">{value}</h3>
+                  <h3 className="font-bold text-[var(--text-primary)] text-base">
+                    {value}
+                  </h3>
                   <button
                     onClick={startEdit}
                     className="opacity-0 group-hover/name:opacity-100 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-opacity"
@@ -156,12 +191,12 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
               />
               {character.variations && character.variations.length > 0 && (
                 <span className="text-[9px] text-[var(--text-tertiary)] font-mono flex items-center gap-1 bg-[var(--bg-elevated)] px-1.5 py-0.5 rounded">
-                  <Shirt className="w-2.5 h-2.5" /> +{character.variations.length}
+                  <Shirt className="w-2.5 h-2.5" /> +
+                  {character.variations.length}
                 </span>
               )}
             </div>
           </div>
-
         </div>
       </div>
 
@@ -207,10 +242,10 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
             accept="image/*"
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const file = e.target.files?.[0]
               if (file) {
-                onUpload(file);
-                e.target.value = '';
+                onUpload(file)
+                e.target.value = ''
               }
             }}
           />
@@ -248,7 +283,9 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
 
         <div className="mb-3 border border-[var(--border-primary)] rounded-lg p-2.5 bg-[var(--bg-elevated)]/40">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">角色参考图</span>
+            <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">
+              角色参考图
+            </span>
             {shapeReferenceImage && (
               <button
                 onClick={onClearShapeReference}
@@ -271,15 +308,23 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
                 onChange={handleShapeReferenceChange}
               />
             </label>
-            <span className="text-[9px] text-[var(--text-muted)]">仅参考角色外形，风格遵循剧本</span>
+            <span className="text-[9px] text-[var(--text-muted)]">
+              仅参考角色外形，风格遵循剧本
+            </span>
           </div>
           {shapeReferenceImage && (
             <button
               onClick={() => onImageClick(shapeReferenceImage)}
               className="mt-2 w-full flex items-center gap-2 p-2 rounded border border-[var(--border-primary)] hover:border-[var(--border-secondary)] transition-colors text-left"
             >
-              <img src={shapeReferenceImage} alt="角色参考图" className="w-10 h-10 rounded object-cover" />
-              <span className="text-[10px] text-[var(--text-secondary)]">已设置角色参考图，下次生成将生效</span>
+              <img
+                src={shapeReferenceImage}
+                alt="角色参考图"
+                className="w-10 h-10 rounded object-cover"
+              />
+              <span className="text-[10px] text-[var(--text-secondary)]">
+                已设置角色参考图，下次生成将生效
+              </span>
             </button>
           )}
         </div>
@@ -315,7 +360,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default CharacterCard;
+export default CharacterCard

@@ -1,188 +1,205 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Film } from 'lucide-react';
-import { ProjectState } from '../../types';
+import React, { useState, useRef, useEffect } from 'react'
+import { Film } from 'lucide-react'
+import { ProjectState } from '../../types'
 import {
   downloadMasterVideo,
   downloadSourceAssets,
   MasterExportMode,
-  MasterVideoQuality,
-} from '../../services/exportService';
-import { exportProjectData } from '../../services/storageService';
-import { STYLES } from './constants';
+  MasterVideoQuality
+} from '../../services/exportService'
+import { exportProjectData } from '../../services/storageService'
+import { STYLES } from './constants'
 import {
   calculateEstimatedDuration,
   calculateProgress,
   getCompletedShots,
   collectRenderLogs,
   hasDownloadableAssets
-} from './utils';
-import StatusPanel from './StatusPanel';
-import TimelineVisualizer from './TimelineVisualizer';
-import ActionButtons from './ActionButtons';
-import SecondaryOptions from './SecondaryOptions';
-import VideoPlayerModal from './VideoPlayerModal';
-import RenderLogsModal from './RenderLogsModal';
-import { useAlert } from '../GlobalAlert';
+} from './utils'
+import StatusPanel from './StatusPanel'
+import TimelineVisualizer from './TimelineVisualizer'
+import ActionButtons from './ActionButtons'
+import SecondaryOptions from './SecondaryOptions'
+import VideoPlayerModal from './VideoPlayerModal'
+import RenderLogsModal from './RenderLogsModal'
+import { useAlert } from '../GlobalAlert'
 import {
   useBackupTransfer,
   EPISODE_BACKUP_TRANSFER_MESSAGES,
-  episodeBackupFileName,
-} from '../../hooks/useBackupTransfer';
+  episodeBackupFileName
+} from '../../hooks/useBackupTransfer'
 
 interface Props {
-  project: ProjectState;
+  project: ProjectState
 }
 
 const StageExport: React.FC<Props> = ({ project }) => {
-  const { showAlert } = useAlert();
-  const completedShots = getCompletedShots(project);
-  const progress = calculateProgress(project);
-  const estimatedDuration = calculateEstimatedDuration(project);
+  const { showAlert } = useAlert()
+  const completedShots = getCompletedShots(project)
+  const progress = calculateProgress(project)
+  const estimatedDuration = calculateEstimatedDuration(project)
 
   // Download state
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadPhase, setDownloadPhase] = useState('');
-  const [downloadProgress, setDownloadProgress] = useState(0);
-  const [exportMode, setExportMode] = useState<MasterExportMode>('master-video');
-  const [exportQuality, setExportQuality] = useState<MasterVideoQuality>('balanced');
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadPhase, setDownloadPhase] = useState('')
+  const [downloadProgress, setDownloadProgress] = useState(0)
+  const [exportMode, setExportMode] = useState<MasterExportMode>('master-video')
+  const [exportQuality, setExportQuality] =
+    useState<MasterVideoQuality>('balanced')
 
   // Source Assets Download state
-  const [isDownloadingAssets, setIsDownloadingAssets] = useState(false);
-  const [assetsPhase, setAssetsPhase] = useState('');
-  const [assetsProgress, setAssetsProgress] = useState(0);
+  const [isDownloadingAssets, setIsDownloadingAssets] = useState(false)
+  const [assetsPhase, setAssetsPhase] = useState('')
+  const [assetsProgress, setAssetsProgress] = useState(0)
 
   // Render Logs Modal state
-  const [showLogsModal, setShowLogsModal] = useState(false);
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [showLogsModal, setShowLogsModal] = useState(false)
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
 
   // Video Preview Player state
-  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
-  const [currentShotIndex, setCurrentShotIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [showVideoPlayer, setShowVideoPlayer] = useState(false)
+  const [currentShotIndex, setCurrentShotIndex] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   // Auto-play when shot changes
   useEffect(() => {
-    const video = videoRef.current;
+    const video = videoRef.current
     if (video && showVideoPlayer) {
-      video.currentTime = 0;
-      const playPromise = video.play();
+      video.currentTime = 0
+      const playPromise = video.play()
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
-          .catch(err => {
-            console.warn('Auto-play failed:', err);
-            setIsPlaying(false);
-          });
+          .catch((err) => {
+            console.warn('Auto-play failed:', err)
+            setIsPlaying(false)
+          })
       }
     }
-  }, [currentShotIndex, showVideoPlayer]);
+  }, [currentShotIndex, showVideoPlayer])
 
   // Video player handlers
   const handlePlayPause = () => {
-    const video = videoRef.current;
-    if (!video) return;
+    const video = videoRef.current
+    if (!video) return
 
     if (isPlaying) {
-      video.pause();
-      setIsPlaying(false);
+      video.pause()
+      setIsPlaying(false)
     } else {
-      video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+      video
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(false))
     }
-  };
+  }
 
   const handlePrevShot = () => {
     if (currentShotIndex > 0) {
-      setCurrentShotIndex(prev => prev - 1);
+      setCurrentShotIndex((prev) => prev - 1)
     }
-  };
+  }
 
   const handleNextShot = () => {
     if (currentShotIndex < completedShots.length - 1) {
-      setCurrentShotIndex(prev => prev + 1);
+      setCurrentShotIndex((prev) => prev + 1)
     }
-  };
+  }
 
   const openVideoPlayer = () => {
     if (completedShots.length > 0) {
-      setCurrentShotIndex(0);
-      setShowVideoPlayer(true);
-      setIsPlaying(true);
+      setCurrentShotIndex(0)
+      setShowVideoPlayer(true)
+      setIsPlaying(true)
     }
-  };
+  }
 
   const closeVideoPlayer = () => {
-    setShowVideoPlayer(false);
-    setIsPlaying(false);
+    setShowVideoPlayer(false)
+    setIsPlaying(false)
     if (videoRef.current) {
-      videoRef.current.pause();
+      videoRef.current.pause()
     }
-  };
+  }
 
   // Handle master video download
   const handleDownloadMaster = async () => {
-    const canDownloadMaster = progress === 100;
-    const canDownloadSegments = completedShots.length > 0;
-    const canDownloadByMode = exportMode === 'segments-zip' ? canDownloadSegments : canDownloadMaster;
-    if (isDownloading || !canDownloadByMode) return;
-    
-    setIsDownloading(true);
-    setDownloadProgress(0);
-    
+    const canDownloadMaster = progress === 100
+    const canDownloadSegments = completedShots.length > 0
+    const canDownloadByMode =
+      exportMode === 'segments-zip' ? canDownloadSegments : canDownloadMaster
+    if (isDownloading || !canDownloadByMode) return
+
+    setIsDownloading(true)
+    setDownloadProgress(0)
+
     try {
-      await downloadMasterVideo(project, (phase, prog) => {
-        setDownloadPhase(phase);
-        setDownloadProgress(prog);
-      }, {
-        mode: exportMode,
-        quality: exportQuality,
-      });
-      
+      await downloadMasterVideo(
+        project,
+        (phase, prog) => {
+          setDownloadPhase(phase)
+          setDownloadProgress(prog)
+        },
+        {
+          mode: exportMode,
+          quality: exportQuality
+        }
+      )
+
       setTimeout(() => {
-        setIsDownloading(false);
-        setDownloadPhase('');
-        setDownloadProgress(0);
-      }, 2000);
+        setIsDownloading(false)
+        setDownloadPhase('')
+        setDownloadProgress(0)
+      }, 2000)
     } catch (error) {
-      console.error('Download failed:', error);
-      showAlert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`, { type: 'error' });
-      setIsDownloading(false);
-      setDownloadPhase('');
-      setDownloadProgress(0);
+      console.error('Download failed:', error)
+      showAlert(
+        `导出失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
+      setIsDownloading(false)
+      setDownloadPhase('')
+      setDownloadProgress(0)
     }
-  };
+  }
 
   // Handle source assets download
   const handleDownloadAssets = async () => {
-    if (isDownloadingAssets) return;
-    
+    if (isDownloadingAssets) return
+
     if (!hasDownloadableAssets(project)) {
-      showAlert('没有可下载的资源。请先生成角色、场景或镜头素材。', { type: 'warning' });
-      return;
+      showAlert('没有可下载的资源。请先生成角色、场景或镜头素材。', {
+        type: 'warning'
+      })
+      return
     }
-    
-    setIsDownloadingAssets(true);
-    setAssetsProgress(0);
-    
+
+    setIsDownloadingAssets(true)
+    setAssetsProgress(0)
+
     try {
       await downloadSourceAssets(project, (phase, prog) => {
-        setAssetsPhase(phase);
-        setAssetsProgress(prog);
-      });
-      
+        setAssetsPhase(phase)
+        setAssetsProgress(prog)
+      })
+
       setTimeout(() => {
-        setIsDownloadingAssets(false);
-        setAssetsPhase('');
-        setAssetsProgress(0);
-      }, 2000);
+        setIsDownloadingAssets(false)
+        setAssetsPhase('')
+        setAssetsProgress(0)
+      }, 2000)
     } catch (error) {
-      console.error('Assets download failed:', error);
-      showAlert(`下载源资源失败: ${error instanceof Error ? error.message : '未知错误'}`, { type: 'error' });
-      setIsDownloadingAssets(false);
-      setAssetsPhase('');
-      setAssetsProgress(0);
+      console.error('Assets download failed:', error)
+      showAlert(
+        `下载源资源失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
+      setIsDownloadingAssets(false)
+      setAssetsPhase('')
+      setAssetsProgress(0)
     }
-  };
+  }
 
   const {
     importInputRef,
@@ -190,13 +207,13 @@ const StageExport: React.FC<Props> = ({ project }) => {
     isDataImporting,
     handleExportData,
     handleImportData,
-    handleImportFileChange,
+    handleImportFileChange
   } = useBackupTransfer({
     exporter: () => exportProjectData(project),
     exportFileName: (timestamp) => episodeBackupFileName(project.id, timestamp),
     showAlert,
-    messages: EPISODE_BACKUP_TRANSFER_MESSAGES,
-  });
+    messages: EPISODE_BACKUP_TRANSFER_MESSAGES
+  })
 
   return (
     <div className={STYLES.container}>
@@ -205,7 +222,8 @@ const StageExport: React.FC<Props> = ({ project }) => {
         <div className="flex items-center gap-4">
           <h2 className={STYLES.header.title}>
             <Film className="w-5 h-5 text-[var(--accent)]" />
-            成片与导出 <span className={STYLES.header.subtitle}>渲染与导出</span>
+            成片与导出{' '}
+            <span className={STYLES.header.subtitle}>渲染与导出</span>
           </h2>
         </div>
         <div className="flex items-center gap-2">
@@ -218,18 +236,17 @@ const StageExport: React.FC<Props> = ({ project }) => {
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-8 md:p-12">
         <div className="max-w-6xl mx-auto space-y-8">
-          
           {/* Main Status Panel */}
           <div>
-            <StatusPanel 
+            <StatusPanel
               project={project}
               progress={progress}
               estimatedDuration={estimatedDuration}
             />
-            
+
             {/* Timeline Visualizer */}
             <TimelineVisualizer shots={project.shots} />
-            
+
             {/* Action Buttons */}
             <ActionButtons
               completedShotsCount={completedShots.length}
@@ -263,7 +280,6 @@ const StageExport: React.FC<Props> = ({ project }) => {
             isDataExporting={isDataExporting}
             isDataImporting={isDataImporting}
           />
-
         </div>
       </div>
 
@@ -289,7 +305,9 @@ const StageExport: React.FC<Props> = ({ project }) => {
           logs={collectRenderLogs(project)}
           expandedLogId={expandedLogId}
           onClose={() => setShowLogsModal(false)}
-          onToggleExpand={(logId) => setExpandedLogId(expandedLogId === logId ? null : logId)}
+          onToggleExpand={(logId) =>
+            setExpandedLogId(expandedLogId === logId ? null : logId)
+          }
         />
       )}
 
@@ -301,8 +319,7 @@ const StageExport: React.FC<Props> = ({ project }) => {
         onChange={handleImportFileChange}
       />
     </div>
-  );
-};
+  )
+}
 
-export default StageExport;
-
+export default StageExport

@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { Edit3, Save, AlertCircle, Camera } from 'lucide-react';
+import React, { useState } from 'react'
+import { Edit3, Save, AlertCircle, Camera } from 'lucide-react'
 
 interface PromptEditorProps {
-  prompt: string;
-  onSave: (newPrompt: string) => void;
-  label?: string;
-  placeholder?: string;
-  maxHeight?: string;
+  prompt: string
+  onSave: (newPrompt: string) => void
+  label?: string
+  placeholder?: string
+  maxHeight?: string
 }
 
 const PromptEditor: React.FC<PromptEditorProps> = ({
@@ -14,25 +14,25 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
   onSave,
   label = '提示词',
   placeholder = '输入视觉描述...',
-  maxHeight = 'max-h-[260px]',
+  maxHeight = 'max-h-[260px]'
 }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedPrompt, setEditedPrompt] = useState(prompt);
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedPrompt, setEditedPrompt] = useState(prompt)
 
   const handleStartEdit = () => {
-    setIsEditing(true);
-    setEditedPrompt(prompt || '');
-  };
+    setIsEditing(true)
+    setEditedPrompt(prompt || '')
+  }
 
   const handleSave = () => {
-    onSave(editedPrompt.trim());
-    setIsEditing(false);
-  };
+    onSave(editedPrompt.trim())
+    setIsEditing(false)
+  }
 
   const handleCancel = () => {
-    setIsEditing(false);
-    setEditedPrompt(prompt || '');
-  };
+    setIsEditing(false)
+    setEditedPrompt(prompt || '')
+  }
 
   return (
     <div className="flex flex-col">
@@ -78,7 +78,9 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
           </div>
         </div>
       ) : (
-        <div className={`flex-1 bg-[var(--nav-hover-bg)] border border-[var(--border-primary)] rounded-lg p-3 overflow-y-auto ${maxHeight}`}>
+        <div
+          className={`flex-1 bg-[var(--nav-hover-bg)] border border-[var(--border-primary)] rounded-lg p-3 overflow-y-auto ${maxHeight}`}
+        >
           {prompt ? (
             <p className="text-[11px] text-[var(--text-tertiary)] leading-relaxed font-mono">
               {prompt}
@@ -94,7 +96,7 @@ const PromptEditor: React.FC<PromptEditorProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default PromptEditor;
+export default PromptEditor

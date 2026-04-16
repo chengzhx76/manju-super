@@ -1,11 +1,11 @@
 /* 暗色主题 - 语义化颜色令牌 */
-[data-theme="dark"] {
+[data-theme='dark'] {
   --bg-base: #050505;
-  --bg-primary: #0A0A0A;
+  --bg-primary: #0a0a0a;
   --bg-secondary: #121212;
   --bg-surface: #141414;
-  --bg-elevated: #1A1A1A;
-  --bg-deep: #0F0F0F;
+  --bg-elevated: #1a1a1a;
+  --bg-deep: #0f0f0f;
   --bg-sunken: #080808;
   --bg-hover: #27272a;
   --border-primary: #27272a;

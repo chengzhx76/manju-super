@@ -1,42 +1,42 @@
-import { AspectRatio, VideoDuration } from '../types';
+import { AspectRatio, VideoDuration } from '../types'
 
-export type PromptLintSeverity = 'error' | 'warning' | 'info';
+export type PromptLintSeverity = 'error' | 'warning' | 'info'
 
 export interface PromptLintIssue {
-  code: string;
-  severity: PromptLintSeverity;
-  message: string;
-  suggestion?: string;
+  code: string
+  severity: PromptLintSeverity
+  message: string
+  suggestion?: string
 }
 
 export interface PromptLintResult {
-  issues: PromptLintIssue[];
-  errorCount: number;
-  warningCount: number;
-  canProceed: boolean;
+  issues: PromptLintIssue[]
+  errorCount: number
+  warningCount: number
+  canProceed: boolean
 }
 
 export interface KeyframePreflightInput {
-  prompt: string;
-  negativePrompt?: string;
-  hasCharacters: boolean;
-  frameType: 'start' | 'end';
-  hasStartFrameImage: boolean;
-  referenceImageCount: number;
-  aspectRatio: AspectRatio;
-  supportedAspectRatios?: AspectRatio[];
+  prompt: string
+  negativePrompt?: string
+  hasCharacters: boolean
+  frameType: 'start' | 'end'
+  hasStartFrameImage: boolean
+  referenceImageCount: number
+  aspectRatio: AspectRatio
+  supportedAspectRatios?: AspectRatio[]
 }
 
 export interface VideoPreflightInput {
-  prompt: string;
-  hasStartFrame: boolean;
-  hasEndFrame: boolean;
-  modelId: string;
-  supportsEndFrame: boolean;
-  aspectRatio: AspectRatio;
-  supportedAspectRatios?: AspectRatio[];
-  duration: VideoDuration;
-  supportedDurations?: VideoDuration[];
+  prompt: string
+  hasStartFrame: boolean
+  hasEndFrame: boolean
+  modelId: string
+  supportsEndFrame: boolean
+  aspectRatio: AspectRatio
+  supportedAspectRatios?: AspectRatio[]
+  duration: VideoDuration
+  supportedDurations?: VideoDuration[]
 }
 
 const HUMAN_EXCLUSION_TERMS = [
@@ -49,8 +49,8 @@ const HUMAN_EXCLUSION_TERMS = [
   'character',
   'silhouette',
   'crowd',
-  'pedestrian',
-];
+  'pedestrian'
+]
 
 const PLACEHOLDER_PATTERNS = [
   /\bTODO\b/i,
@@ -58,43 +58,43 @@ const PLACEHOLDER_PATTERNS = [
   /\bto be filled\b/i,
   /未设置/,
   /待补充/,
-  /待填写/,
-];
+  /待填写/
+]
 
-const REPEATED_SYMBOLS_PATTERN = /([,.!?;:])\1{2,}/;
+const REPEATED_SYMBOLS_PATTERN = /([,.!?;:])\1{2,}/
 
-const normalizePrompt = (prompt?: string) => (prompt || '').trim();
+const normalizePrompt = (prompt?: string) => (prompt || '').trim()
 
 const splitBySeparators = (value?: string): string[] => {
-  if (!value) return [];
+  if (!value) return []
   return value
     .split(/[,;，；\n]+/)
     .map((item) => item.trim())
-    .filter(Boolean);
-};
+    .filter(Boolean)
+}
 
 export const hasHumanExclusionTerms = (negativePrompt?: string): boolean => {
-  if (!negativePrompt) return false;
-  const tokens = splitBySeparators(negativePrompt.toLowerCase());
+  if (!negativePrompt) return false
+  const tokens = splitBySeparators(negativePrompt.toLowerCase())
   return tokens.some((token) =>
     HUMAN_EXCLUSION_TERMS.some((keyword) => token.includes(keyword))
-  );
-};
+  )
+}
 
 export const lintPromptText = (
   prompt: string,
   options?: {
-    minLength?: number;
-    maxLength?: number;
-    allowEmpty?: boolean;
+    minLength?: number
+    maxLength?: number
+    allowEmpty?: boolean
   }
 ): PromptLintResult => {
-  const minLength = options?.minLength ?? 16;
-  const maxLength = options?.maxLength ?? 2200;
-  const allowEmpty = options?.allowEmpty ?? false;
+  const minLength = options?.minLength ?? 16
+  const maxLength = options?.maxLength ?? 2200
+  const allowEmpty = options?.allowEmpty ?? false
 
-  const normalized = normalizePrompt(prompt);
-  const issues: PromptLintIssue[] = [];
+  const normalized = normalizePrompt(prompt)
+  const issues: PromptLintIssue[] = []
 
   if (!normalized) {
     if (!allowEmpty) {
@@ -102,10 +102,11 @@ export const lintPromptText = (
         code: 'empty-prompt',
         severity: 'error',
         message: 'Prompt is empty.',
-        suggestion: 'Provide a clear visual/action description before generating.',
-      });
+        suggestion:
+          'Provide a clear visual/action description before generating.'
+      })
     }
-    return buildLintResult(issues);
+    return buildLintResult(issues)
   }
 
   if (normalized.length < minLength) {
@@ -113,8 +114,8 @@ export const lintPromptText = (
       code: 'prompt-too-short',
       severity: 'warning',
       message: `Prompt is very short (${normalized.length} chars).`,
-      suggestion: 'Add scene details, subject action, and composition clues.',
-    });
+      suggestion: 'Add scene details, subject action, and composition clues.'
+    })
   }
 
   if (normalized.length > maxLength) {
@@ -122,8 +123,8 @@ export const lintPromptText = (
       code: 'prompt-too-long',
       severity: 'warning',
       message: `Prompt is very long (${normalized.length} chars).`,
-      suggestion: 'Remove duplicated phrases and keep only actionable details.',
-    });
+      suggestion: 'Remove duplicated phrases and keep only actionable details.'
+    })
   }
 
   if (PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(normalized))) {
@@ -131,8 +132,8 @@ export const lintPromptText = (
       code: 'placeholder-text',
       severity: 'warning',
       message: 'Prompt still contains placeholder text.',
-      suggestion: 'Replace placeholders with concrete visual instructions.',
-    });
+      suggestion: 'Replace placeholders with concrete visual instructions.'
+    })
   }
 
   if (REPEATED_SYMBOLS_PATTERN.test(normalized)) {
@@ -140,16 +141,18 @@ export const lintPromptText = (
       code: 'repeated-symbols',
       severity: 'info',
       message: 'Prompt has repeated punctuation symbols.',
-      suggestion: 'Clean punctuation to improve prompt readability.',
-    });
+      suggestion: 'Clean punctuation to improve prompt readability.'
+    })
   }
 
-  return buildLintResult(issues);
-};
+  return buildLintResult(issues)
+}
 
-export const runKeyframePreflight = (input: KeyframePreflightInput): PromptLintResult => {
-  const promptLint = lintPromptText(input.prompt);
-  const issues: PromptLintIssue[] = [...promptLint.issues];
+export const runKeyframePreflight = (
+  input: KeyframePreflightInput
+): PromptLintResult => {
+  const promptLint = lintPromptText(input.prompt)
+  const issues: PromptLintIssue[] = [...promptLint.issues]
 
   if (
     input.supportedAspectRatios?.length &&
@@ -159,17 +162,18 @@ export const runKeyframePreflight = (input: KeyframePreflightInput): PromptLintR
       code: 'unsupported-aspect-ratio',
       severity: 'error',
       message: `Aspect ratio ${input.aspectRatio} is not supported by current image model.`,
-      suggestion: `Use one of: ${input.supportedAspectRatios.join(', ')}`,
-    });
+      suggestion: `Use one of: ${input.supportedAspectRatios.join(', ')}`
+    })
   }
 
   if (input.hasCharacters && hasHumanExclusionTerms(input.negativePrompt)) {
     issues.push({
       code: 'negative-conflict-human',
       severity: 'warning',
-      message: 'Negative prompt contains human-exclusion terms while shot has characters.',
-      suggestion: 'Remove person/human exclusion tokens for character shots.',
-    });
+      message:
+        'Negative prompt contains human-exclusion terms while shot has characters.',
+      suggestion: 'Remove person/human exclusion tokens for character shots.'
+    })
   }
 
   if (input.referenceImageCount === 0) {
@@ -177,8 +181,9 @@ export const runKeyframePreflight = (input: KeyframePreflightInput): PromptLintR
       code: 'no-reference-images',
       severity: 'warning',
       message: 'No reference images provided for this keyframe.',
-      suggestion: 'Attach scene/character/prop references to improve consistency.',
-    });
+      suggestion:
+        'Attach scene/character/prop references to improve consistency.'
+    })
   }
 
   if (input.frameType === 'end' && !input.hasStartFrameImage) {
@@ -186,24 +191,29 @@ export const runKeyframePreflight = (input: KeyframePreflightInput): PromptLintR
       code: 'end-without-start-image',
       severity: 'warning',
       message: 'Generating end frame without an existing start-frame image.',
-      suggestion: 'Generate or upload start frame first for better continuity.',
-    });
+      suggestion: 'Generate or upload start frame first for better continuity.'
+    })
   }
 
-  return buildLintResult(issues);
-};
+  return buildLintResult(issues)
+}
 
-export const runVideoPreflight = (input: VideoPreflightInput): PromptLintResult => {
-  const promptLint = lintPromptText(input.prompt, { minLength: 20, maxLength: 2600 });
-  const issues: PromptLintIssue[] = [...promptLint.issues];
+export const runVideoPreflight = (
+  input: VideoPreflightInput
+): PromptLintResult => {
+  const promptLint = lintPromptText(input.prompt, {
+    minLength: 20,
+    maxLength: 2600
+  })
+  const issues: PromptLintIssue[] = [...promptLint.issues]
 
   if (!input.hasStartFrame) {
     issues.push({
       code: 'missing-start-frame',
       severity: 'error',
       message: 'Missing start frame image.',
-      suggestion: 'Generate or upload a start frame before video generation.',
-    });
+      suggestion: 'Generate or upload a start frame before video generation.'
+    })
   }
 
   if (
@@ -214,8 +224,8 @@ export const runVideoPreflight = (input: VideoPreflightInput): PromptLintResult 
       code: 'unsupported-video-aspect-ratio',
       severity: 'error',
       message: `Aspect ratio ${input.aspectRatio} is not supported by model ${input.modelId}.`,
-      suggestion: `Use one of: ${input.supportedAspectRatios.join(', ')}`,
-    });
+      suggestion: `Use one of: ${input.supportedAspectRatios.join(', ')}`
+    })
   }
 
   if (
@@ -226,32 +236,33 @@ export const runVideoPreflight = (input: VideoPreflightInput): PromptLintResult 
       code: 'unsupported-video-duration',
       severity: 'error',
       message: `Duration ${input.duration}s is not supported by model ${input.modelId}.`,
-      suggestion: `Use one of: ${input.supportedDurations.join(', ')} seconds`,
-    });
+      suggestion: `Use one of: ${input.supportedDurations.join(', ')} seconds`
+    })
   }
 
   if (input.hasEndFrame && !input.supportsEndFrame) {
     issues.push({
       code: 'end-frame-ignored',
       severity: 'info',
-      message: `Model ${input.modelId} uses start-frame only; end frame will be ignored.`,
-    });
+      message: `Model ${input.modelId} uses start-frame only; end frame will be ignored.`
+    })
   }
 
-  return buildLintResult(issues);
-};
+  return buildLintResult(issues)
+}
 
 export const formatLintIssues = (issues: PromptLintIssue[]): string =>
-  issues.map((issue) => `- [${issue.severity}] ${issue.message}`).join('\n');
+  issues.map((issue) => `- [${issue.severity}] ${issue.message}`).join('\n')
 
 const buildLintResult = (issues: PromptLintIssue[]): PromptLintResult => {
-  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
-  const warningCount = issues.filter((issue) => issue.severity === 'warning').length;
+  const errorCount = issues.filter((issue) => issue.severity === 'error').length
+  const warningCount = issues.filter(
+    (issue) => issue.severity === 'warning'
+  ).length
   return {
     issues,
     errorCount,
     warningCount,
-    canProceed: errorCount === 0,
-  };
-};
-
+    canProceed: errorCount === 0
+  }
+}

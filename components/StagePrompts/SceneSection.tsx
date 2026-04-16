@@ -1,21 +1,21 @@
-import React from 'react';
-import { MapPin } from 'lucide-react';
-import { Scene, PromptVersion } from '../../types';
-import { EditingPrompt, STYLES } from './constants';
-import CollapsibleSection from './CollapsibleSection';
-import PromptEditor from './PromptEditor';
+import React from 'react'
+import { MapPin } from 'lucide-react'
+import { Scene, PromptVersion } from '../../types'
+import { EditingPrompt, STYLES } from './constants'
+import CollapsibleSection from './CollapsibleSection'
+import PromptEditor from './PromptEditor'
 
 interface Props {
-  scenes: Scene[];
-  isExpanded: boolean;
-  onToggle: () => void;
-  editingPrompt: EditingPrompt;
-  editingVersions: PromptVersion[];
-  onStartEdit: (type: 'scene', id: string, value: string) => void;
-  onSaveEdit: () => void;
-  onCancelEdit: () => void;
-  onPromptChange: (value: string) => void;
-  onRollbackVersion: (versionId: string) => void;
+  scenes: Scene[]
+  isExpanded: boolean
+  onToggle: () => void
+  editingPrompt: EditingPrompt
+  editingVersions: PromptVersion[]
+  onStartEdit: (type: 'scene', id: string, value: string) => void
+  onSaveEdit: () => void
+  onCancelEdit: () => void
+  onPromptChange: (value: string) => void
+  onRollbackVersion: (versionId: string) => void
 }
 
 const SceneSection: React.FC<Props> = ({
@@ -30,7 +30,7 @@ const SceneSection: React.FC<Props> = ({
   onPromptChange,
   onRollbackVersion
 }) => {
-  if (scenes.length === 0) return null;
+  if (scenes.length === 0) return null
 
   return (
     <CollapsibleSection
@@ -40,17 +40,21 @@ const SceneSection: React.FC<Props> = ({
       isExpanded={isExpanded}
       onToggle={onToggle}
     >
-      {scenes.map(scene => (
+      {scenes.map((scene) => (
         <div key={scene.id} className={STYLES.card.base}>
           <div className="flex items-start justify-between mb-3">
             <div>
-              <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">{scene.location}</h3>
+              <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">
+                {scene.location}
+              </h3>
               <p className="text-sm text-[var(--text-tertiary)]">
                 {scene.time} · {scene.atmosphere}
               </p>
             </div>
             <button
-              onClick={() => onStartEdit('scene', scene.id, scene.visualPrompt || '')}
+              onClick={() =>
+                onStartEdit('scene', scene.id, scene.visualPrompt || '')
+              }
               className={STYLES.button.edit}
             >
               编辑
@@ -75,7 +79,7 @@ const SceneSection: React.FC<Props> = ({
         </div>
       ))}
     </CollapsibleSection>
-  );
-};
+  )
+}
 
-export default SceneSection;
+export default SceneSection
