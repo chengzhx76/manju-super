@@ -108,9 +108,7 @@ type AssetWithImage = {
   imageUrl?: string
 }
 
-function getAssetImage(
-  asset: AssetWithImage
-): string | undefined {
+function getAssetImage(asset: AssetWithImage): string | undefined {
   // Backward compatibility: older data may keep preview image in imageUrl.
   return asset.referenceImage || asset.imageUrl
 }

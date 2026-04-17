@@ -19,6 +19,7 @@ import {
   removeAssetLibraryConfig,
   setDefaultAssetLibraryConfig
 } from '../../services/modelRegistry'
+import { verifyRelayConfigByListAssetGroups } from '../../services/assetRelayService'
 import { useAlert } from '../GlobalAlert'
 import { AssetLibraryConfig } from '../../types/model'
 
@@ -35,7 +36,9 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
   const [address, setAddress] = useState('')
   const [accessKey, setAccessKey] = useState('')
   const [secretKey, setSecretKey] = useState('')
-  const [verifyingConfigId, setVerifyingConfigId] = useState<string | null>(null)
+  const [verifyingConfigId, setVerifyingConfigId] = useState<string | null>(
+    null
+  )
   const { showAlert } = useAlert()
 
   useEffect(() => {
@@ -46,7 +49,11 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     const currentConfig = getAssetLibraryConfig()
     const allConfigs = getAssetLibraryConfigs()
     const normalizedConfigs =
-      allConfigs.length > 0 ? allConfigs : currentConfig.address ? [currentConfig] : []
+      allConfigs.length > 0
+        ? allConfigs
+        : currentConfig.address
+          ? [currentConfig]
+          : []
     setConfigs(normalizedConfigs)
   }
 
@@ -178,7 +185,18 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         return
       }
 
-      showAlert('验证通过：配置格式检查成功', { type: 'success' })
+      await verifyRelayConfigByListAssetGroups({
+        ...config,
+        address: normalizedAddress,
+        access_key: normalizedAccessKey,
+        secret_key: normalizedSecretKey
+      })
+      showAlert('验证通过：ListAssetGroups 返回 200', { type: 'success' })
+    } catch (error) {
+      showAlert(
+        `验证失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
     } finally {
       setVerifyingConfigId(null)
     }
@@ -190,7 +208,10 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     return `${value.slice(0, 4)}***${value.slice(-4)}`
   }
 
-  const getDisplayName = (config: AssetLibraryConfig, index: number): string => {
+  const getDisplayName = (
+    config: AssetLibraryConfig,
+    index: number
+  ): string => {
     if (!config.address) return `资产库 ${index + 1}`
     try {
       const url = new URL(config.address)

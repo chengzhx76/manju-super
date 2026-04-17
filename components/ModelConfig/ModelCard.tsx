@@ -3,7 +3,7 @@
  * 显示单个模型的配置
  */
 
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -45,6 +45,14 @@ const ModelCard: React.FC<ModelCardProps> = ({
 }) => {
   const [editParams, setEditParams] = useState<any>(model.params)
   const [editApiKey, setEditApiKey] = useState<string>(model.apiKey || '')
+  const [editName, setEditName] = useState<string>(model.name)
+  const [editApiModel, setEditApiModel] = useState<string>(
+    model.apiModel || model.id
+  )
+  const [editEndpoint, setEditEndpoint] = useState<string>(model.endpoint || '')
+  const [editDescription, setEditDescription] = useState<string>(
+    model.description || ''
+  )
 
   const provider = getProviderById(model.providerId)
   const isVolcengineModel = model.providerId === 'volcengine'
@@ -52,6 +60,15 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const providerHasApiKey = Boolean(provider?.apiKey?.trim())
   const isMissingVolcengineKey =
     isVolcengineModel && !modelHasApiKey && !providerHasApiKey
+
+  useEffect(() => {
+    setEditParams(model.params)
+    setEditApiKey(model.apiKey || '')
+    setEditName(model.name)
+    setEditApiModel(model.apiModel || model.id)
+    setEditEndpoint(model.endpoint || '')
+    setEditDescription(model.description || '')
+  }, [model])
 
   const handleParamChange = (key: string, value: any) => {
     const newParams = { ...editParams, [key]: value }
@@ -66,6 +83,26 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const handleApiKeyChange = (value: string) => {
     setEditApiKey(value)
     onUpdate({ apiKey: value.trim() || undefined })
+  }
+
+  const handleCustomFieldBlur = (
+    field: 'name' | 'apiModel' | 'endpoint' | 'description',
+    value: string
+  ) => {
+    if (model.isBuiltIn) return
+
+    const trimmedValue = value.trim()
+    if ((field === 'name' || field === 'apiModel') && !trimmedValue) {
+      if (field === 'name') setEditName(model.name)
+      if (field === 'apiModel') setEditApiModel(model.apiModel || model.id)
+      return
+    }
+
+    const normalizedValue =
+      field === 'endpoint' || field === 'description'
+        ? trimmedValue || undefined
+        : trimmedValue
+    onUpdate({ [field]: normalizedValue } as Partial<ModelDefinition>)
   }
 
   const renderChatParams = (params: ChatModelParams) => (
@@ -333,6 +370,67 @@ const ModelCard: React.FC<ModelCardProps> = ({
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-[var(--border-primary)]">
           <div className="pt-4 space-y-4">
+            {!model.isBuiltIn && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                    模型名称
+                  </label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onBlur={(e) => handleCustomFieldBlur('name', e.target.value)}
+                    className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                    API 模型名
+                  </label>
+                  <input
+                    type="text"
+                    value={editApiModel}
+                    onChange={(e) => setEditApiModel(e.target.value)}
+                    onBlur={(e) =>
+                      handleCustomFieldBlur('apiModel', e.target.value)
+                    }
+                    className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] font-mono"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                    API 端点
+                  </label>
+                  <input
+                    type="text"
+                    value={editEndpoint}
+                    onChange={(e) => setEditEndpoint(e.target.value)}
+                    onBlur={(e) =>
+                      handleCustomFieldBlur('endpoint', e.target.value)
+                    }
+                    placeholder="留空使用默认端点"
+                    className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                    描述
+                  </label>
+                  <input
+                    type="text"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    onBlur={(e) =>
+                      handleCustomFieldBlur('description', e.target.value)
+                    }
+                    placeholder="可选描述"
+                    className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* 模型专属 API Key */}
             <div>
               <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">

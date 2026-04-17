@@ -573,7 +573,9 @@ const StageScript: React.FC<Props> = ({
       showAlert(`风格提示词已生成${confidenceText}`, { type: 'success' })
     } catch (err: unknown) {
       console.error(err)
-      setError(`Style inference failed: ${getErrorMessage(err) || 'request failed'}`)
+      setError(
+        `Style inference failed: ${getErrorMessage(err) || 'request failed'}`
+      )
     } finally {
       setIsInferringVisualStyle(false)
     }

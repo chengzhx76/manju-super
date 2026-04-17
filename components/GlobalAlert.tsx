@@ -131,7 +131,7 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({
               </button>
             </div>
 
-            <div className="text-[var(--text-secondary)] text-sm leading-relaxed">
+            <div className="text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-line">
               {alertState.message}
             </div>
 

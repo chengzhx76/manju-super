@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { ProjectState, Shot } from '../../types'
 import { useAlert } from '../GlobalAlert'
 import { useProjectContext } from '../../contexts/ProjectContext'
-import { getNextMainShotId, parseShotId } from '../../services/storyboardIdUtils'
+import {
+  getNextMainShotId,
+  parseShotId
+} from '../../services/storyboardIdUtils'
 import {
   Plus,
   Users,
@@ -75,7 +78,8 @@ const LarkDirector: React.FC<Props> = ({
 
   const createNewClip = (): Shot => {
     const newId = getNextMainShotId(clips.map((shot) => shot.id))
-    const defaultSceneId = project.scriptData?.scenes?.[0]?.id || 'scene_unassigned'
+    const defaultSceneId =
+      project.scriptData?.scenes?.[0]?.id || 'scene_unassigned'
     return {
       id: newId,
       sceneId: defaultSceneId,
@@ -437,7 +441,10 @@ const LarkDirector: React.FC<Props> = ({
                     </div>
 
                     {clip.videoUrl ? (
-                      <video src={clip.videoUrl} className="w-full h-full object-cover" />
+                      <video
+                        src={clip.videoUrl}
+                        className="w-full h-full object-cover"
+                      />
                     ) : clip.keyframes?.[0]?.imageUrl ? (
                       <img
                         src={clip.keyframes[0].imageUrl}

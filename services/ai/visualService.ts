@@ -50,7 +50,9 @@ type CharacterVisualPromptBatchPayload = {
   characters?: Array<{ visualPrompt?: string }>
 }
 
-type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } }
+type GeminiContentPart =
+  | { text: string }
+  | { inlineData: { mimeType: string; data: string } }
 
 type GeminiImageRequestBody = {
   contents: Array<{
@@ -1735,7 +1737,9 @@ Rules:
     const buildPanels = (parsed: unknown): CharacterTurnaroundPanel[] => {
       const built: CharacterTurnaroundPanel[] = []
       const parsedRecord = toRecord(parsed)
-      const rawPanels = Array.isArray(parsedRecord.panels) ? parsedRecord.panels : []
+      const rawPanels = Array.isArray(parsedRecord.panels)
+        ? parsedRecord.panels
+        : []
       for (let i = 0; i < 9; i++) {
         const rawSource = rawPanels[i]
         if (rawSource) {

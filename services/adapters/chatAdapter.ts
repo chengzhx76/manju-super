@@ -58,9 +58,9 @@ const retryOperation = async <T>(
     }
   }
 
-  throw (lastError instanceof Error
+  throw lastError instanceof Error
     ? lastError
-    : new Error('请求失败，且未返回可识别错误信息'))
+    : new Error('请求失败，且未返回可识别错误信息')
 }
 
 /**

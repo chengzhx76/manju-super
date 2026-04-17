@@ -87,6 +87,11 @@ import { assessShotQualityWithLLM } from '../../services/qualityAssessmentV2Serv
 import { updatePromptWithVersion } from '../../services/promptVersionService'
 import { resolvePromptTemplateConfig } from '../../services/promptTemplateService'
 import { toFriendlyModerationMessage } from '../../services/errorMessageService'
+import { useProjectContext } from '../../contexts/ProjectContext'
+import {
+  deleteRemoteAsset,
+  uploadGeneratedAssetToRelay
+} from '../../services/assetRelayService'
 
 interface Props {
   project: ProjectState
@@ -104,6 +109,12 @@ const StageDirector: React.FC<Props> = ({
   onGeneratingChange
 }) => {
   const { showAlert } = useAlert()
+  const {
+    project: seriesProject,
+    allSeries,
+    allEpisodes,
+    updateProject: updateSeriesProject
+  } = useProjectContext()
   const [activeShotId, setActiveShotId] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<{
     current: number
@@ -218,7 +229,10 @@ const StageDirector: React.FC<Props> = ({
       .join(', ')
   }
 
-  const formatUserFriendlyError = (error: unknown, fallback: string): string => {
+  const formatUserFriendlyError = (
+    error: unknown,
+    fallback: string
+  ): string => {
     if (!error) return fallback
 
     const errorRecord = toRecord(error)
@@ -445,6 +459,52 @@ const StageDirector: React.FC<Props> = ({
     }))
   }
 
+  const syncRelayAsset = async (params: {
+    kind: 'shot' | 'video'
+    localId: string
+    shotId: string
+    url?: string
+    currentAssetId?: string
+  }) => {
+    if (!seriesProject) return
+    try {
+      const result = await uploadGeneratedAssetToRelay({
+        project: seriesProject,
+        seriesList: allSeries,
+        episodes: allEpisodes,
+        episode: project,
+        kind: params.kind,
+        localId: params.localId,
+        url: params.url,
+        currentAssetId: params.currentAssetId
+      })
+      if (result.skipped) return
+      if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
+        updateSeriesProject({ assetGroupId: result.groupId })
+      }
+      if (result.assetId) {
+        updateShot(params.shotId, (shot) =>
+          params.kind === 'shot'
+            ? { ...shot, assetId: result.assetId }
+            : shot.interval
+              ? {
+                  ...shot,
+                  interval: {
+                    ...shot.interval,
+                    assetId: result.assetId
+                  }
+                }
+              : shot
+        )
+      }
+    } catch (error) {
+      showAlert(
+        `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'warning' }
+      )
+    }
+  }
+
   const handleAIReassessQuality = async () => {
     if (!activeShot) return
     const targetShotId = activeShot.id
@@ -493,6 +553,12 @@ const StageDirector: React.FC<Props> = ({
       type: 'warning',
       showCancel: true,
       onConfirm: () => {
+        void Promise.all([
+          deleteRemoteAsset(shot.assetId),
+          deleteRemoteAsset(shot.interval?.assetId)
+        ]).catch((error) => {
+          console.warn('Delete remote shot assets failed:', error)
+        })
         // 如果当前选中的就是被删除的分镜，则关闭工作台
         if (activeShotId === shotId) {
           setActiveShotId(null)
@@ -513,6 +579,23 @@ const StageDirector: React.FC<Props> = ({
     const existingKf = shot.keyframes?.find((k) => k.type === type)
     const kfId = existingKf?.id || generateId(`kf-${shot.id}-${type}`)
     const startKf = shot.keyframes?.find((k) => k.type === 'start')
+    const shouldReplaceShotAsset = type === 'start' && !shot.nineGrid?.imageUrl
+
+    if (shouldReplaceShotAsset && shot.assetId) {
+      try {
+        await deleteRemoteAsset(shot.assetId)
+      } catch (error) {
+        console.warn(
+          'Delete remote shot asset before regenerate failed:',
+          error
+        )
+      }
+      updateShot(shot.id, (currentShot) => {
+        const nextShot = { ...currentShot }
+        delete nextShot.assetId
+        return nextShot
+      })
+    }
 
     const rawBasePrompt = existingKf?.visualPrompt
       ? extractBasePrompt(existingKf.visualPrompt, shot.actionSummary)
@@ -657,6 +740,15 @@ const StageDirector: React.FC<Props> = ({
         }
         return updateKeyframeInShot(s, type, completedKeyframe)
       })
+      if (shouldReplaceShotAsset) {
+        await syncRelayAsset({
+          kind: 'shot',
+          localId: shot.id,
+          shotId: shot.id,
+          url,
+          currentAssetId: shot.assetId
+        })
+      }
     } catch (e: unknown) {
       console.error(e)
       updateShot(shot.id, (s) => {
@@ -700,6 +792,9 @@ const StageDirector: React.FC<Props> = ({
         const base64Url = await convertImageToBase64(file)
         const existingKf = shot.keyframes?.find((k) => k.type === type)
         const kfId = existingKf?.id || generateId(`kf-${shot.id}-${type}`)
+        if (type === 'start' && !shot.nineGrid?.imageUrl && shot.assetId) {
+          await deleteRemoteAsset(shot.assetId)
+        }
 
         updateShot(shot.id, (s) => {
           const visualPrompt = existingKf?.visualPrompt || shot.actionSummary
@@ -707,7 +802,11 @@ const StageDirector: React.FC<Props> = ({
             ...createKeyframe(kfId, type, visualPrompt, base64Url, 'completed'),
             promptVersions: existingKf?.promptVersions
           }
-          return updateKeyframeInShot(s, type, uploadedKeyframe)
+          const nextShot = updateKeyframeInShot(s, type, uploadedKeyframe)
+          if (type === 'start' && !shot.nineGrid?.imageUrl) {
+            delete nextShot.assetId
+          }
+          return nextShot
         })
       } catch (error) {
         showAlert('读取文件失败！', { type: 'error' })
@@ -732,6 +831,16 @@ const StageDirector: React.FC<Props> = ({
   ) => {
     const sKf = shot.keyframes?.find((k) => k.type === 'start')
     const eKf = shot.keyframes?.find((k) => k.type === 'end')
+    if (shot.interval?.assetId) {
+      try {
+        await deleteRemoteAsset(shot.interval.assetId)
+      } catch (error) {
+        console.warn(
+          'Delete remote video asset before regenerate failed:',
+          error
+        )
+      }
+    }
 
     // 使用传入的 modelId 或默认模型
     const selectedModelInput: string =
@@ -883,7 +992,8 @@ const StageDirector: React.FC<Props> = ({
             ...s.interval,
             status: 'generating',
             videoPrompt,
-            promptVersions: intervalPromptVersions
+            promptVersions: intervalPromptVersions,
+            assetId: undefined
           }
         : {
             id: intervalId,
@@ -933,6 +1043,13 @@ const StageDirector: React.FC<Props> = ({
               status: 'completed'
             }
       }))
+      await syncRelayAsset({
+        kind: 'video',
+        localId: intervalId,
+        shotId: shot.id,
+        url: videoUrl,
+        currentAssetId: shot.interval?.assetId
+      })
     } catch (e: unknown) {
       console.error(e)
       updateShot(shot.id, (s) => ({
@@ -1703,6 +1820,16 @@ const StageDirector: React.FC<Props> = ({
   ) => {
     const shot = getShotById(shotId)
     if (!shot) return
+    if (shot.assetId) {
+      try {
+        await deleteRemoteAsset(shot.assetId)
+      } catch (error) {
+        console.warn(
+          'Delete remote shot asset before nine-grid regenerate failed:',
+          error
+        )
+      }
+    }
     const layout = resolveStoryboardGridLayout(
       shot.nineGrid?.layout?.panelCount,
       confirmedPanels.length
@@ -1758,6 +1885,7 @@ const StageDirector: React.FC<Props> = ({
       // 4. 更新状态为完成
       updateShot(shotId, (s) => ({
         ...s,
+        assetId: undefined,
         nineGrid: {
           panels: confirmedPanels,
           layout: {
@@ -1770,12 +1898,20 @@ const StageDirector: React.FC<Props> = ({
           status: 'completed' as const
         }
       }))
+      await syncRelayAsset({
+        kind: 'shot',
+        localId: shotId,
+        shotId,
+        url: imageUrl,
+        currentAssetId: shot.assetId
+      })
 
       showAlert(`${layout.label}分镜图片生成完成！`, { type: 'success' })
     } catch (e: unknown) {
       console.error('网格分镜图片生成失败:', e)
       updateShot(shotId, (s) => ({
         ...s,
+        assetId: undefined,
         nineGrid: {
           panels: confirmedPanels,
           layout: {

@@ -14,16 +14,25 @@ import {
   ChevronRight,
   MapPin,
   Package,
-  Database
+  Database,
+  RefreshCw
 } from 'lucide-react'
 import { useProjectContext } from '../contexts/ProjectContext'
 import { useAlert } from './GlobalAlert'
-import { exportSeriesProjectData } from '../services/storageService'
+import {
+  exportSeriesProjectData,
+  saveEpisode,
+  saveSeriesProject
+} from '../services/storageService'
 import {
   useBackupTransfer,
   PROJECT_BACKUP_TRANSFER_MESSAGES,
   projectBackupFileName
 } from '../hooks/useBackupTransfer'
+import {
+  syncProjectAssetsToRelay,
+  syncProjectGroupMetadataToRelay
+} from '../services/assetRelayService'
 
 const ProjectOverview: React.FC = () => {
   const navigate = useNavigate()
@@ -38,7 +47,8 @@ const ProjectOverview: React.FC = () => {
     removeSeries,
     removeEpisode,
     updateProject,
-    getEpisodesForSeries
+    getEpisodesForSeries,
+    reloadProject
   } = useProjectContext()
 
   const [editingTitle, setEditingTitle] = useState(false)
@@ -46,6 +56,7 @@ const ProjectOverview: React.FC = () => {
   const [newSeriesName, setNewSeriesName] = useState('')
   const [showNewSeries, setShowNewSeries] = useState(false)
   const [expandedSeries, setExpandedSeries] = useState<Set<string>>(new Set())
+  const [isSyncingAssetLibrary, setIsSyncingAssetLibrary] = useState(false)
   const { isDataExporting, handleExportData } = useBackupTransfer({
     exporter: async () => {
       if (!project?.id) throw new Error('当前项目不存在')
@@ -65,9 +76,76 @@ const ProjectOverview: React.FC = () => {
     )
   }
 
-  const handleSaveTitle = () => {
-    if (titleDraft.trim()) updateProject({ title: titleDraft.trim() })
+  const handleSaveTitle = async () => {
+    const nextTitle = titleDraft.trim()
+    if (!nextTitle) {
+      setEditingTitle(false)
+      return
+    }
+
+    updateProject({ title: nextTitle })
     setEditingTitle(false)
+
+    if (!project.assetGroupId) return
+
+    try {
+      await syncProjectGroupMetadataToRelay({
+        project: {
+          ...project,
+          title: nextTitle
+        },
+        seriesList: allSeries,
+        episodes: allEpisodes
+      })
+    } catch (error) {
+      showAlert(
+        `项目名已更新，但远端素材组名称同步失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'warning' }
+      )
+    }
+  }
+
+  const handleSyncAssetLibrary = async () => {
+    if (isSyncingAssetLibrary) return
+    setIsSyncingAssetLibrary(true)
+    try {
+      const result = await syncProjectAssetsToRelay({
+        project,
+        seriesList: allSeries,
+        episodes: allEpisodes
+      })
+
+      if (result.skipped) {
+        showAlert(result.reason || '素材库未配置，当前仍按本地逻辑运行', {
+          type: 'warning'
+        })
+        return
+      }
+
+      await saveSeriesProject(result.project)
+      await Promise.all(result.episodes.map((episode) => saveEpisode(episode)))
+      await reloadProject()
+
+      const messages = [
+        `新增上传 ${result.summary.uploaded} 个`,
+        `自动回填 ${result.summary.merged} 个`,
+        `缺少公网 URL ${result.summary.missing} 个`,
+        `上传失败 ${result.summary.failed} 个`
+      ]
+      if (result.summary.warnings.length > 0) {
+        messages.push(result.summary.warnings.slice(0, 3).join('\n'))
+      }
+      showAlert(`素材库同步完成\n${messages.join('\n')}`, {
+        type: result.summary.failed > 0 ? 'warning' : 'success'
+      })
+    } catch (error) {
+      showAlert(
+        `同步素材库失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
+    } finally {
+      setIsSyncingAssetLibrary(false)
+    }
   }
 
   const handleCreateSeries = async () => {
@@ -228,6 +306,18 @@ const ProjectOverview: React.FC = () => {
                 <Package className="w-4 h-4" />
                 <span className="text-xs font-bold uppercase tracking-widest">
                   道具库 ({project.propLibrary.length})
+                </span>
+              </button>
+              <button
+                onClick={handleSyncAssetLibrary}
+                disabled={isSyncingAssetLibrary}
+                className="flex items-center gap-2 px-5 py-3 border border-[var(--border-primary)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${isSyncingAssetLibrary ? 'animate-spin' : ''}`}
+                />
+                <span className="text-xs font-bold uppercase tracking-widest">
+                  {isSyncingAssetLibrary ? '同步中...' : '同步素材库'}
                 </span>
               </button>
               <button

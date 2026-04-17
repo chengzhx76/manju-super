@@ -48,9 +48,9 @@ const retryOperation = async <T>(
     }
   }
 
-  throw (lastError instanceof Error
+  throw lastError instanceof Error
     ? lastError
-    : new Error('请求失败，且未返回可识别错误信息'))
+    : new Error('请求失败，且未返回可识别错误信息')
 }
 
 /**
@@ -154,7 +154,13 @@ const callSyncChatVideoApi = async (
   // 构建消息
   const messages: Array<{
     role: 'user'
-    content: string | Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }>
+    content:
+      | string
+      | Array<{
+          type: 'text' | 'image_url'
+          text?: string
+          image_url?: { url: string }
+        }>
   }> = [{ role: 'user', content: options.prompt }]
 
   if (cleanStart) {

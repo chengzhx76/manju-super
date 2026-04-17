@@ -89,9 +89,12 @@ const parseAndValidateNineGridPanels = (
   responseText: string,
   expectedPanelCount: number
 ): NineGridPanel[] => {
-  const parsed = parseJsonWithRecovery<NineGridPanelParsePayload>(responseText, {
-    panels: []
-  })
+  const parsed = parseJsonWithRecovery<NineGridPanelParsePayload>(
+    responseText,
+    {
+      panels: []
+    }
+  )
   const rawPanels = Array.isArray(parsed?.panels) ? parsed.panels : []
 
   if (rawPanels.length !== expectedPanelCount) {

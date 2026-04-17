@@ -162,6 +162,7 @@ export interface Character {
   turnaround?: CharacterTurnaroundData
   variations: CharacterVariation[]
   status?: 'pending' | 'generating' | 'completed' | 'failed'
+  assetId?: string
   libraryId?: string
   libraryVersion?: number
   version?: number
@@ -178,6 +179,7 @@ export interface Scene {
   shapeReferenceImage?: string // Optional reference image used only for shape/silhouette guidance during generation
   referenceImage?: string // 场景参考图，存储为base64格式（data:image/png;base64,...）
   status?: 'pending' | 'generating' | 'completed' | 'failed' // 生成状态，用于loading状态持久化
+  assetId?: string
   libraryId?: string
   libraryVersion?: number
   version?: number
@@ -198,6 +200,7 @@ export interface Prop {
   shapeReferenceImage?: string // Optional reference image used only for shape/silhouette guidance during generation
   referenceImage?: string // 道具参考图，存储为base64格式（data:image/png;base64,...）
   status?: 'pending' | 'generating' | 'completed' | 'failed' // 生成状态，用于loading状态持久化
+  assetId?: string
   libraryId?: string
   libraryVersion?: number
   version?: number
@@ -235,6 +238,7 @@ export interface VideoInterval {
   videoPrompt?: string // 视频生成时使用的提示词
   promptVersions?: PromptVersion[] // Prompt edit history with rollback support
   status: 'pending' | 'generating' | 'completed' | 'failed'
+  assetId?: string
 }
 
 /**
@@ -327,6 +331,7 @@ export interface Shot {
   videoInputMode?: 'keyframes' | 'storyboard-grid' // 视频驱动方式：首尾帧 / 网格分镜（互斥）
   nineGrid?: NineGridData // 可选的九宫格分镜预览数据（高级功能）
   dubbing?: ShotDubbing // 镜头配音（旁白/对话）
+  assetId?: string
 }
 
 /**
@@ -419,6 +424,7 @@ export interface SeriesProject {
   visualStyle: string
   language: string
   artDirection?: ArtDirection
+  assetGroupId?: string
   characterLibrary: Character[]
   sceneLibrary: Scene[]
   propLibrary: Prop[]

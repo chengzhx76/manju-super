@@ -218,7 +218,10 @@ const ScriptEditorRich: React.FC<Props> = ({
   onSaveText
 }) => {
   const extractTextFromHtml = (html: string): string => {
-    return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim()
+    return html
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim()
   }
   const isEffectivelyEmpty = (html: string, text: string): boolean => {
     if (text.trim().length > 0) return false

@@ -1,0 +1,12 @@
+- [ ] 全局素材库默认配置可被远端素材流程统一读取，缺失 AK/SK 时完整回退原有本地逻辑且不会误发请求
+- [ ] 新项目只创建一个远端 Asset Group，并能在本地持久化 `GroupId`
+- [ ] Asset Group `Description` 按 `季ID__集ID` 规则生成并可增量更新
+- [ ] 角色、场景、分镜、视频生成成功后会按 `role__ID / scene__ID / shot__ID / video__ID` 规则自动调用 `CreateAsset`
+- [ ] `CreateAsset` 后会使用 `GetAsset` 轮询，直到 `Active`、失败或超时，并写回本地 `AssetId` 关联
+- [ ] 项目改名会触发 `UpdateAssetGroup`，远端失败不会阻断本地改名
+- [ ] 已同步素材在删除和重新生图时会调用 `DeleteAsset` 并清理旧映射
+- [ ] 项目页面右上角存在“同步素材库”按钮，点击后会执行当前项目资源的全量补同步、合并和缺失检查
+- [ ] 角色页和场景页 header 存在同步按钮，点击后会调用 `ListAssets` 做局部合并检查
+- [ ] 角色页和场景页中没有 `AssetId` 的本地资源会收到明确告警
+- [ ] 远端同步过程具备必要的错误提示和可追溯日志
+- [ ] 一期实现未依赖 `ListAssetGroups`、`GetAssetGroup`，且 `GetAsset` 仅用于内部异步轮询

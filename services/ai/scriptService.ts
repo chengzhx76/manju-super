@@ -565,7 +565,9 @@ export const parseScriptStructure = async (
           return {
             id: String(propRecord.id ?? `prop-${idx + 1}`),
             name: String(propRecord.name || `道具${idx + 1}`),
-            category: normalizePropCategory(String(propRecord.category || '其他')),
+            category: normalizePropCategory(
+              String(propRecord.category || '其他')
+            ),
             description: String(propRecord.description || ''),
             visualPrompt: propRecord.visualPrompt
               ? String(propRecord.visualPrompt)

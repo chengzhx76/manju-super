@@ -74,6 +74,12 @@ import {
   EpisodeSceneRef,
   EpisodePropRef
 } from '../../types'
+import {
+  clearEpisodeAssetBinding,
+  deleteRemoteAsset,
+  reconcileEpisodeAssetsFromRelay,
+  uploadGeneratedAssetToRelay
+} from '../../services/assetRelayService'
 
 interface Props {
   project: ProjectState
@@ -113,6 +119,9 @@ const StageAssets: React.FC<Props> = ({
   const [showSceneLibraryPicker, setShowSceneLibraryPicker] = useState(false)
   const [showPropLibraryPicker, setShowPropLibraryPicker] = useState(false)
   const [pickerProject, setPickerProject] = useState<SeriesProject | null>(null)
+  const [episodeSyncingKind, setEpisodeSyncingKind] = useState<
+    'character' | 'scene' | 'prop' | null
+  >(null)
 
   const loadPickerProject = async (): Promise<SeriesProject | null> => {
     if (!project.projectId) return null
@@ -426,6 +435,20 @@ const StageAssets: React.FC<Props> = ({
   ) => {
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
+    const existingAssetId =
+      type === 'character'
+        ? scriptSnapshot.characters.find((item) => compareIds(item.id, id))
+            ?.assetId
+        : scriptSnapshot.scenes.find((item) => compareIds(item.id, id))?.assetId
+
+    if (existingAssetId) {
+      try {
+        await deleteRemoteAsset(existingAssetId)
+      } catch (error) {
+        console.warn('Delete remote asset before regenerate failed:', error)
+      }
+      clearLocalAssetId(type, id)
+    }
 
     // 设置生成状态
     updateProject((prev) => {
@@ -599,15 +622,23 @@ const StageAssets: React.FC<Props> = ({
           if (c) {
             c.referenceImage = imageUrl
             c.status = 'completed'
+            delete c.assetId
           }
         } else {
           const s = newData.scenes.find((s) => compareIds(s.id, id))
           if (s) {
             s.referenceImage = imageUrl
             s.status = 'completed'
+            delete s.assetId
           }
         }
         return { ...prev, scriptData: newData }
+      })
+      await syncGeneratedAsset({
+        kind: type,
+        localId: id,
+        url: imageUrl,
+        currentAssetId: existingAssetId
       })
     } catch (e: any) {
       console.error(e)
@@ -678,6 +709,13 @@ const StageAssets: React.FC<Props> = ({
    */
   const handleUploadCharacterImage = async (charId: string, file: File) => {
     try {
+      const currentAssetId =
+        project.scriptData?.characters.find((item) =>
+          compareIds(item.id, charId)
+        )?.assetId || undefined
+      if (currentAssetId) {
+        await deleteRemoteAsset(currentAssetId)
+      }
       const base64 = await handleImageUpload(file)
 
       updateProject((prev) => {
@@ -687,6 +725,7 @@ const StageAssets: React.FC<Props> = ({
         if (char) {
           char.referenceImage = base64
           char.status = 'completed'
+          delete char.assetId
         }
         return { ...prev, scriptData: newData }
       })
@@ -700,6 +739,12 @@ const StageAssets: React.FC<Props> = ({
    */
   const handleUploadSceneImage = async (sceneId: string, file: File) => {
     try {
+      const currentAssetId =
+        project.scriptData?.scenes.find((item) => compareIds(item.id, sceneId))
+          ?.assetId || undefined
+      if (currentAssetId) {
+        await deleteRemoteAsset(currentAssetId)
+      }
       const base64 = await handleImageUpload(file)
 
       updateProject((prev) => {
@@ -709,6 +754,7 @@ const StageAssets: React.FC<Props> = ({
         if (scene) {
           scene.referenceImage = base64
           scene.status = 'completed'
+          delete scene.assetId
         }
         return { ...prev, scriptData: newData }
       })
@@ -756,13 +802,201 @@ const StageAssets: React.FC<Props> = ({
 
   const {
     project: seriesProject,
+    allSeries,
+    allEpisodes,
     addCharacterToLibrary,
     updateCharacterInLibrary,
     addSceneToLibrary,
     updateSceneInLibrary,
     addPropToLibrary,
-    updatePropInLibrary
+    updatePropInLibrary,
+    updateProject: updateSeriesProject
   } = useProjectContext()
+
+  const applyEpisodeAssetId = (
+    kind: 'character' | 'scene' | 'prop' | 'shot' | 'video',
+    localId: string,
+    assetId: string
+  ) => {
+    updateProject((prev) => {
+      const nextEpisode = clearEpisodeAssetBinding(prev, kind, localId)
+      if (kind === 'character') {
+        const target = nextEpisode.scriptData?.characters.find((item) =>
+          compareIds(item.id, localId)
+        )
+        if (target) target.assetId = assetId
+        return nextEpisode
+      }
+      if (kind === 'scene') {
+        const target = nextEpisode.scriptData?.scenes.find((item) =>
+          compareIds(item.id, localId)
+        )
+        if (target) target.assetId = assetId
+        return nextEpisode
+      }
+      if (kind === 'prop') {
+        const target = (nextEpisode.scriptData?.props || []).find((item) =>
+          compareIds(item.id, localId)
+        )
+        if (target) target.assetId = assetId
+        return nextEpisode
+      }
+      if (kind === 'shot') {
+        const target = nextEpisode.shots.find((item) =>
+          compareIds(item.id, localId)
+        )
+        if (target) target.assetId = assetId
+        return nextEpisode
+      }
+      const target = nextEpisode.shots.find((item) =>
+        compareIds(item.interval?.id || '', localId)
+      )
+      if (target?.interval) target.interval.assetId = assetId
+      return nextEpisode
+    })
+  }
+
+  const clearLocalAssetId = (
+    kind: 'character' | 'scene' | 'prop' | 'shot' | 'video',
+    localId: string
+  ) => {
+    updateProject((prev) => clearEpisodeAssetBinding(prev, kind, localId))
+  }
+
+  const mergeEpisodeAssetIds = (
+    current: ProjectState,
+    incoming: ProjectState,
+    kind: 'character' | 'scene' | 'prop'
+  ): ProjectState => {
+    if (!current.scriptData || !incoming.scriptData) return current
+    const nextScriptData = cloneScriptData(current.scriptData)
+
+    if (kind === 'character') {
+      const incomingMap = new Map(
+        (incoming.scriptData.characters || []).map((item) => [item.id, item])
+      )
+      for (const target of nextScriptData.characters || []) {
+        const source = incomingMap.get(target.id)
+        if (source?.assetId) {
+          target.assetId = source.assetId
+        }
+      }
+      return { ...current, scriptData: nextScriptData }
+    }
+
+    if (kind === 'scene') {
+      const incomingMap = new Map(
+        (incoming.scriptData.scenes || []).map((item) => [item.id, item])
+      )
+      for (const target of nextScriptData.scenes || []) {
+        const source = incomingMap.get(target.id)
+        if (source?.assetId) {
+          target.assetId = source.assetId
+        }
+      }
+      return { ...current, scriptData: nextScriptData }
+    }
+
+    const incomingMap = new Map(
+      (incoming.scriptData.props || []).map((item) => [item.id, item])
+    )
+    for (const target of nextScriptData.props || []) {
+      const source = incomingMap.get(target.id)
+      if (source?.assetId) {
+        target.assetId = source.assetId
+      }
+    }
+    return { ...current, scriptData: nextScriptData }
+  }
+
+  const syncGeneratedAsset = async (params: {
+    kind: 'character' | 'scene' | 'prop'
+    localId: string
+    url?: string
+    currentAssetId?: string
+  }) => {
+    if (!seriesProject) return
+    try {
+      const result = await uploadGeneratedAssetToRelay({
+        project: seriesProject,
+        seriesList: allSeries,
+        episodes: allEpisodes,
+        episode: project,
+        kind: params.kind,
+        localId: params.localId,
+        url: params.url,
+        currentAssetId: params.currentAssetId
+      })
+      if (result.skipped) return
+      if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
+        updateSeriesProject({ assetGroupId: result.groupId })
+      }
+      if (result.assetId) {
+        applyEpisodeAssetId(params.kind, params.localId, result.assetId)
+      }
+    } catch (error) {
+      showAlert(
+        `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'warning' }
+      )
+    }
+  }
+
+  const reconcileEpisodeAssets = async (
+    kind: 'character' | 'scene' | 'prop',
+    label: string
+  ) => {
+    if (!seriesProject) {
+      showAlert('无法获取项目信息，请刷新后重试', { type: 'error' })
+      return
+    }
+    setEpisodeSyncingKind(kind)
+    try {
+      const result = await reconcileEpisodeAssetsFromRelay({
+        project: seriesProject,
+        seriesList: allSeries,
+        episodes: allEpisodes,
+        episode: project,
+        kinds: [kind]
+      })
+      if (result.skipped) {
+        showAlert(result.reason || '素材库未配置，当前仍按本地逻辑运行', {
+          type: 'warning'
+        })
+        return
+      }
+
+      if (
+        result.project.assetGroupId &&
+        seriesProject.assetGroupId !== result.project.assetGroupId
+      ) {
+        updateSeriesProject({ assetGroupId: result.project.assetGroupId })
+      }
+      updateProject((prev) => mergeEpisodeAssetIds(prev, result.episode, kind))
+
+      const missingCount =
+        kind === 'character' ? result.summary.missing : result.summary.missing
+      const lines = [
+        `${label}同步检查完成`,
+        `自动回填 ${result.summary.merged} 个`,
+        `未同步 ${missingCount} 个`,
+        `远端缺失 ${result.summary.stale} 个`
+      ]
+      if (result.summary.warnings.length > 0) {
+        lines.push(result.summary.warnings.slice(0, 3).join('\n'))
+      }
+      showAlert(lines.join('\n'), {
+        type: result.summary.stale > 0 ? 'warning' : 'success'
+      })
+    } catch (error) {
+      showAlert(
+        `${label}同步失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
+    } finally {
+      setEpisodeSyncingKind(null)
+    }
+  }
 
   const handleAddCharacterToLibrary = async (char: Character) => {
     const processSave = async (existingItem?: AssetLibraryItem) => {
@@ -1196,7 +1430,9 @@ const StageAssets: React.FC<Props> = ({
   const handleRemoveSceneFromGlobalLibrary = (scene: Scene) => {
     const existing = findGlobalLibraryItem('scene', scene.location)
     if (!existing) {
-      showAlert(`全局资产库中不存在场景：${scene.location}`, { type: 'warning' })
+      showAlert(`全局资产库中不存在场景：${scene.location}`, {
+        type: 'warning'
+      })
       return
     }
 
@@ -1211,7 +1447,9 @@ const StageAssets: React.FC<Props> = ({
           setLibraryItems((prev) =>
             prev.filter((item) => item.id !== existing.id)
           )
-          showAlert(`已从全局资产库移除：${scene.location}`, { type: 'success' })
+          showAlert(`已从全局资产库移除：${scene.location}`, {
+            type: 'success'
+          })
         } catch (e: any) {
           showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
         }
@@ -1423,6 +1661,9 @@ const StageAssets: React.FC<Props> = ({
         confirmText: '删除',
         cancelText: '取消',
         onConfirm: () => {
+          void deleteRemoteAsset(char.assetId).catch((error) => {
+            console.warn('Delete remote character asset failed:', error)
+          })
           const newData = cloneScriptData(project.scriptData!)
           newData.characters = newData.characters.filter(
             (c) => !compareIds(c.id, charId)
@@ -1523,6 +1764,9 @@ const StageAssets: React.FC<Props> = ({
         confirmText: '删除',
         cancelText: '取消',
         onConfirm: () => {
+          void deleteRemoteAsset(scene.assetId).catch((error) => {
+            console.warn('Delete remote scene asset failed:', error)
+          })
           const newData = cloneScriptData(project.scriptData!)
           newData.scenes = newData.scenes.filter(
             (s) => !compareIds(s.id, sceneId)
@@ -1597,6 +1841,9 @@ const StageAssets: React.FC<Props> = ({
         confirmText: '删除',
         cancelText: '取消',
         onConfirm: () => {
+          void deleteRemoteAsset(prop.assetId).catch((error) => {
+            console.warn('Delete remote prop asset failed:', error)
+          })
           const newData = cloneScriptData(project.scriptData!)
           newData.props = (newData.props || []).filter(
             (p) => !compareIds(p.id, propId)
@@ -1638,6 +1885,21 @@ const StageAssets: React.FC<Props> = ({
   const handleGeneratePropAsset = async (propId: string) => {
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
+    const existingAssetId = scriptSnapshot.props?.find((item) =>
+      compareIds(item.id, propId)
+    )?.assetId
+
+    if (existingAssetId) {
+      try {
+        await deleteRemoteAsset(existingAssetId)
+      } catch (error) {
+        console.warn(
+          'Delete remote prop asset before regenerate failed:',
+          error
+        )
+      }
+      clearLocalAssetId('prop', propId)
+    }
 
     // 设置生成状态
     updateProject((prev) => {
@@ -1723,6 +1985,7 @@ const StageAssets: React.FC<Props> = ({
         if (updated) {
           updated.referenceImage = imageUrl
           updated.status = 'completed'
+          delete updated.assetId
           if (!updated.visualPrompt) {
             updated.promptVersions = updatePromptWithVersion(
               updated.visualPrompt,
@@ -1739,6 +2002,12 @@ const StageAssets: React.FC<Props> = ({
         }
         return { ...prev, scriptData: updatedData }
       })
+      await syncGeneratedAsset({
+        kind: 'prop',
+        localId: propId,
+        url: imageUrl,
+        currentAssetId: existingAssetId
+      })
     } catch (e: any) {
       console.error(e)
       updateProject((prev) => {
@@ -1753,6 +2022,12 @@ const StageAssets: React.FC<Props> = ({
   }
   const handleUploadPropImage = async (propId: string, file: File) => {
     try {
+      const currentAssetId =
+        project.scriptData?.props?.find((item) => compareIds(item.id, propId))
+          ?.assetId || undefined
+      if (currentAssetId) {
+        await deleteRemoteAsset(currentAssetId)
+      }
       const base64 = await handleImageUpload(file)
       updateProject((prev) => {
         if (!prev.scriptData) return prev
@@ -1761,6 +2036,7 @@ const StageAssets: React.FC<Props> = ({
         if (prop) {
           prop.referenceImage = base64
           prop.status = 'completed'
+          delete prop.assetId
         }
         return { ...prev, scriptData: newData }
       })
@@ -1940,7 +2216,9 @@ const StageAssets: React.FC<Props> = ({
           )
           const nextRefs = hasOtherLinked
             ? prev.propRefs || []
-            : (prev.propRefs || []).filter((ref) => ref.propId !== targetLibraryId)
+            : (prev.propRefs || []).filter(
+                (ref) => ref.propId !== targetLibraryId
+              )
 
           return {
             ...prev,
@@ -2788,6 +3066,20 @@ const StageAssets: React.FC<Props> = ({
                 从资产库选择
               </button>
               <button
+                onClick={() => reconcileEpisodeAssets('character', '角色')}
+                disabled={!!batchProgress || episodeSyncingKind === 'character'}
+                className={STYLES.secondaryButton}
+              >
+                <RefreshCw
+                  className={`w-3 h-3 ${
+                    episodeSyncingKind === 'character' ? 'animate-spin' : ''
+                  }`}
+                />
+                {episodeSyncingKind === 'character'
+                  ? '同步中...'
+                  : '同步素材库'}
+              </button>
+              <button
                 onClick={() => handleBatchGenerate('character')}
                 disabled={!!batchProgress}
                 className={
@@ -2811,6 +3103,7 @@ const StageAssets: React.FC<Props> = ({
               <CharacterCard
                 key={char.id}
                 character={char}
+                hasAssetId={!!char.assetId}
                 isInGlobalLibrary={globalCharacterNames.has(char.name)}
                 isInProjectLibrary={!!char.libraryId}
                 isGenerating={char.status === 'generating'}
@@ -2893,6 +3186,18 @@ const StageAssets: React.FC<Props> = ({
                 从资产库选择
               </button>
               <button
+                onClick={() => reconcileEpisodeAssets('scene', '场景')}
+                disabled={!!batchProgress || episodeSyncingKind === 'scene'}
+                className={STYLES.secondaryButton}
+              >
+                <RefreshCw
+                  className={`w-3 h-3 ${
+                    episodeSyncingKind === 'scene' ? 'animate-spin' : ''
+                  }`}
+                />
+                {episodeSyncingKind === 'scene' ? '同步中...' : '同步素材库'}
+              </button>
+              <button
                 onClick={() => handleBatchGenerate('scene')}
                 disabled={!!batchProgress}
                 className={
@@ -2914,6 +3219,7 @@ const StageAssets: React.FC<Props> = ({
               <SceneCard
                 key={scene.id}
                 scene={scene}
+                hasAssetId={!!scene.assetId}
                 isInGlobalLibrary={globalSceneNames.has(scene.location)}
                 isInProjectLibrary={!!scene.libraryId}
                 isGenerating={scene.status === 'generating'}
@@ -2992,6 +3298,18 @@ const StageAssets: React.FC<Props> = ({
                 <Archive className="w-3 h-3" />
                 从资产库选择
               </button>
+              <button
+                onClick={() => reconcileEpisodeAssets('prop', '道具')}
+                disabled={!!batchProgress || episodeSyncingKind === 'prop'}
+                className={STYLES.secondaryButton}
+              >
+                <RefreshCw
+                  className={`w-3 h-3 ${
+                    episodeSyncingKind === 'prop' ? 'animate-spin' : ''
+                  }`}
+                />
+                {episodeSyncingKind === 'prop' ? '同步中...' : '同步素材库'}
+              </button>
               {(project.scriptData.props || []).length > 0 && (
                 <button
                   onClick={handleBatchGenerateProps}
@@ -3023,6 +3341,7 @@ const StageAssets: React.FC<Props> = ({
                 <PropCard
                   key={prop.id}
                   prop={prop}
+                  hasAssetId={!!prop.assetId}
                   isInGlobalLibrary={globalPropNames.has(prop.name)}
                   isInProjectLibrary={!!prop.libraryId}
                   isGenerating={prop.status === 'generating'}

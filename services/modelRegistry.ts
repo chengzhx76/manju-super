@@ -880,7 +880,9 @@ export const updateAssetLibraryConfig = (
   updates: Partial<AssetLibraryConfig>
 ): boolean => {
   const state = loadRegistry()
-  const index = state.assetLibraryConfigs.findIndex((config) => config.id === id)
+  const index = state.assetLibraryConfigs.findIndex(
+    (config) => config.id === id
+  )
   if (index === -1) return false
 
   const merged = normalizeAssetLibraryConfig({

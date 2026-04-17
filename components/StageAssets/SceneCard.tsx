@@ -28,6 +28,7 @@ interface SceneCardProps {
     status?: 'pending' | 'generating' | 'completed' | 'failed'
     libraryId?: string
   }
+  hasAssetId: boolean
   isInGlobalLibrary?: boolean
   isInProjectLibrary?: boolean
   isGenerating: boolean
@@ -50,6 +51,7 @@ interface SceneCardProps {
 
 const SceneCard: React.FC<SceneCardProps> = ({
   scene,
+  hasAssetId,
   isInGlobalLibrary = false,
   isInProjectLibrary = false,
   isGenerating,
@@ -78,8 +80,17 @@ const SceneCard: React.FC<SceneCardProps> = ({
 
   return (
     <div
-      className="bg-[var(--bg-surface)] border border-[var(--border-primary)] hover:border-[var(--border-secondary)] rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg"
+      className={`relative bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${
+        hasAssetId
+          ? 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'
+          : 'border-[var(--warning)] hover:border-[var(--warning)]'
+      }`}
     >
+      {!hasAssetId && (
+        <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded border border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] text-[9px] font-mono uppercase tracking-wider">
+          未同步
+        </div>
+      )}
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() =>

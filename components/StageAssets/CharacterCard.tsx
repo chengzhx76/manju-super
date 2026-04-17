@@ -22,6 +22,7 @@ import InlineEditableText from './InlineEditableText'
 
 interface CharacterCardProps {
   character: Character
+  hasAssetId: boolean
   isInGlobalLibrary?: boolean
   isInProjectLibrary?: boolean
   isGenerating: boolean
@@ -48,6 +49,7 @@ interface CharacterCardProps {
 
 const CharacterCard: React.FC<CharacterCardProps> = ({
   character,
+  hasAssetId,
   isInGlobalLibrary = false,
   isInProjectLibrary = false,
   isGenerating,
@@ -78,8 +80,17 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
 
   return (
     <div
-      className="bg-[var(--bg-surface)] border border-[var(--border-primary)] hover:border-[var(--border-secondary)] rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg"
+      className={`relative bg-[var(--bg-surface)] border rounded-xl overflow-hidden flex flex-col group transition-all hover:shadow-lg ${
+        hasAssetId
+          ? 'border-[var(--border-primary)] hover:border-[var(--border-secondary)]'
+          : 'border-[var(--warning)] hover:border-[var(--warning)]'
+      }`}
     >
+      {!hasAssetId && (
+        <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded border border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] text-[9px] font-mono uppercase tracking-wider">
+          未同步
+        </div>
+      )}
       <div className="flex gap-4 p-4 pb-0">
         {/* Character Image */}
         <div className="w-48 flex-shrink-0">

@@ -160,7 +160,9 @@ export default forwardRef((props: any, ref) => {
             (action) => action.filter === libraryFilter
           )
           const actionIdx = fallbackIdx >= 0 ? fallbackIdx : 0
-          setSelectedIndex(defaultItems.length + quickActions.length + actionIdx)
+          setSelectedIndex(
+            defaultItems.length + quickActions.length + actionIdx
+          )
           return true
         }
       }
