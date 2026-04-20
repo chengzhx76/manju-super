@@ -68,6 +68,11 @@ export const REGIONAL_FEATURES = {
       'Chinese person, East Asian facial features, Chinese ethnicity, ',
     scene: 'Chinese setting, East Asian architecture and aesthetics, '
   },
+  English: {
+    character:
+      'English-speaking person, Western facial features, North American ethnicity, ',
+    scene: 'North American setting, Western architecture and aesthetics, '
+  },
   Japanese: {
     character:
       'Japanese person, East Asian facial features, Japanese ethnicity, ',
@@ -79,6 +84,8 @@ export const REGIONAL_FEATURES = {
 export const LANGUAGE_MAP: Record<string, keyof typeof REGIONAL_FEATURES> = {
   中文: 'Chinese',
   Chinese: 'Chinese',
+  English: 'English',
+  'English (US)': 'English',
   日本語: 'Japanese',
   Japanese: 'Japanese'
 }

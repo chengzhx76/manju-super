@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   MapPin,
   Check,
@@ -11,9 +11,9 @@ import {
   Upload,
   X,
   Sparkles,
-  Link2
+  Link2,
+  Camera
 } from 'lucide-react'
-import PromptEditor from './PromptEditor'
 import ImageUploadButton from './ImageUploadButton'
 import InlineEditableText from './InlineEditableText'
 
@@ -67,6 +67,30 @@ const SceneCard: React.FC<SceneCardProps> = ({
   onAddToLibrary,
   onAddToProjectLibrary
 }) => {
+  const [showGenerateModal, setShowGenerateModal] = useState(false)
+  const [promptDraft, setPromptDraft] = useState(scene.visualPrompt || '')
+
+  useEffect(() => {
+    if (showGenerateModal) {
+      setPromptDraft(scene.visualPrompt || '')
+    }
+  }, [showGenerateModal, scene.visualPrompt])
+
+  const openGenerateModal = () => {
+    if (isGenerating) return
+    setShowGenerateModal(true)
+  }
+
+  const handleConfirmGenerate = () => {
+    if (isGenerating) return
+    const normalizedPrompt = promptDraft.trim()
+    if (normalizedPrompt !== (scene.visualPrompt || '')) {
+      onPromptSave(normalizedPrompt)
+    }
+    setShowGenerateModal(false)
+    onGenerate()
+  }
+
   const handleShapeReferenceChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -135,7 +159,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
                   variant="inline"
                   size="small"
                   onUpload={onUpload}
-                  onGenerate={onGenerate}
+                  onGenerate={openGenerateModal}
                   isGenerating={isGenerating}
                   uploadLabel="上传"
                   generateLabel="重试"
@@ -148,7 +172,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
                   variant="inline"
                   size="medium"
                   onUpload={onUpload}
-                  onGenerate={onGenerate}
+                  onGenerate={openGenerateModal}
                   isGenerating={isGenerating}
                   uploadLabel="上传"
                   generateLabel="生成"
@@ -218,7 +242,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
               <button
                 onClick={onAddToLibrary}
                 disabled={isGenerating}
-                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {isInGlobalLibrary ? (
                   <FolderMinus className="w-3 h-3" />
@@ -230,7 +254,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
               <button
                 onClick={onAddToProjectLibrary}
                 disabled={isGenerating}
-                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="flex-1 py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 {isInProjectLibrary ? (
                   <FolderMinus className="w-3 h-3" />
@@ -240,7 +264,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
                 {isInProjectLibrary ? '从项目场景库移除' : '加入项目场景库'}
               </button>
             </div>
-            <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
+            <label className="w-full py-1.5 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-[var(--border-primary)] transition-colors cursor-pointer">
               <Upload className="w-3 h-3" />
               上传图片
               <input
@@ -259,72 +283,12 @@ const SceneCard: React.FC<SceneCardProps> = ({
           </div>
         )}
 
-        {/* Scene Prompt Section */}
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <PromptEditor
-            prompt={scene.visualPrompt || ''}
-            onSave={onPromptSave}
-            label="场景提示词"
-            placeholder="输入场景视觉描述..."
-            maxHeight="h-[160px]"
-          />
-        </div>
-
-        {/* Scene Prompt Section */}
-        <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">
-              场景参考图
-            </span>
-            {shapeReferenceImage && (
-              <button
-                onClick={onClearShapeReference}
-                disabled={isGenerating}
-                className="text-[9px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-30"
-                title="清除场景参考图"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="px-2 py-1 bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer flex items-center gap-1">
-              <Upload className="w-3 h-3" />
-              上传场景参考图
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleShapeReferenceChange}
-              />
-            </label>
-            <span className="text-[9px] text-[var(--text-muted)]">
-              仅参考场景构图，风格遵循剧本
-            </span>
-          </div>
-          {shapeReferenceImage && (
-            <button
-              onClick={() => onImageClick(shapeReferenceImage)}
-              className="mt-2 w-full flex items-center gap-2 p-2 rounded border border-[var(--border-primary)] hover:border-[var(--border-secondary)] transition-colors text-left"
-            >
-              <img
-                src={shapeReferenceImage}
-                alt="场景参考图"
-                className="w-10 h-10 rounded object-cover"
-              />
-              <span className="text-[10px] text-[var(--text-secondary)]">
-                已设置场景参考图，下次生成将生效
-              </span>
-            </button>
-          )}
-        </div>
-
         <div className="mt-auto pt-3 border-t border-[var(--border-primary)]">
           {scene.referenceImage && (
             <button
-              onClick={onGenerate}
+              onClick={openGenerateModal}
               disabled={isGenerating}
-              className="w-full py-2 mb-3 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-full py-2 mb-3 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
@@ -342,13 +306,112 @@ const SceneCard: React.FC<SceneCardProps> = ({
           <button
             onClick={onDelete}
             disabled={isGenerating}
-            className="w-full py-2 bg-transparent hover:bg-[var(--error-bg)] text-[var(--error-text)] hover:text-[var(--error-text)] border border-[var(--error-border)] hover:border-[var(--error-border)] rounded text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full py-2 bg-transparent hover:bg-[var(--error-bg)] text-[var(--error-text)] hover:text-[var(--error-text)] border border-[var(--error-border)] hover:border-[var(--error-border)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-3 h-3" />
             删除场景
           </button>
         </div>
       </div>
+
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-40 bg-[var(--bg-base)]/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-[var(--bg-elevated)] border border-[var(--border-secondary)] rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                编辑场景
+              </h3>
+              <button
+                onClick={() => setShowGenerateModal(false)}
+                className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label="关闭"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col">
+                <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                  <Camera className="w-3 h-3" />
+                  场景提示词
+                </label>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  className="w-full bg-[var(--bg-base)] border border-[var(--accent)] text-[var(--text-primary)] px-3 py-2 text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none font-mono leading-relaxed h-[220px]"
+                  placeholder="输入场景视觉描述..."
+                  autoFocus
+                />
+              </div>
+
+              <div className="border border-[var(--border-primary)] rounded-lg p-3 bg-[var(--bg-elevated)]/40">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider">
+                    场景参考图
+                  </span>
+                  {shapeReferenceImage && (
+                    <button
+                      onClick={onClearShapeReference}
+                      disabled={isGenerating}
+                      className="text-[9px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] disabled:opacity-30"
+                      title="清除场景参考图"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="px-2 py-1 bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3" />
+                    上传场景参考图
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleShapeReferenceChange}
+                    />
+                  </label>
+                  <span className="text-[9px] text-[var(--text-muted)]">
+                    仅参考场景构图，风格遵循剧本
+                  </span>
+                </div>
+                {shapeReferenceImage && (
+                  <button
+                    onClick={() => onImageClick(shapeReferenceImage)}
+                    className="mt-2 w-full flex items-center gap-2 p-2 rounded border border-[var(--border-primary)] hover:border-[var(--border-secondary)] transition-colors text-left"
+                  >
+                    <img
+                      src={shapeReferenceImage}
+                      alt="场景参考图"
+                      className="w-10 h-10 rounded object-cover"
+                    />
+                    <span className="text-[10px] text-[var(--text-secondary)]">
+                      已设置场景参考图，下次生成将生效
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setShowGenerateModal(false)}
+                className="px-6 py-2 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-sm font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmGenerate}
+                disabled={isGenerating}
+                className="px-6 py-2 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-[var(--btn-primary-text)] rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

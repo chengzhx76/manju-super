@@ -13,9 +13,7 @@ export const DURATION_OPTIONS = [
 export const LANGUAGE_OPTIONS = [
   { label: '中文 (Chinese)', value: '中文' },
   { label: 'English (US)', value: 'English' },
-  { label: '日本語 (Japanese)', value: 'Japanese' },
-  { label: 'Français (French)', value: 'French' },
-  { label: 'Español (Spanish)', value: 'Spanish' }
+  { label: '日本語 (Japanese)', value: 'Japanese' }
 ]
 
 export const MODEL_OPTIONS = [

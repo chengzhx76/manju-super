@@ -56,6 +56,7 @@ interface Props {
 
 type TabMode = 'story' | 'script'
 type AnalyzeRunStep = ScriptGenerationStep | 'done'
+const ANALYZE_DONE_TOAST_SECONDS = 3
 
 const StageScript: React.FC<Props> = ({
   project,
@@ -389,6 +390,9 @@ const StageScript: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null)
   const [processingMessage, setProcessingMessage] = useState('')
   const [processingLogs, setProcessingLogs] = useState<string[]>([])
+  const [analyzeDoneCountdown, setAnalyzeDoneCountdown] = useState<
+    number | null
+  >(null)
 
   // Asset match state
   const [pendingParseResult, setPendingParseResult] = useState<{
@@ -457,6 +461,18 @@ const StageScript: React.FC<Props> = ({
 
     return () => clearScriptLogCallback()
   }, [])
+
+  useEffect(() => {
+    if (analyzeDoneCountdown === null) return
+    if (analyzeDoneCountdown <= 0) {
+      setAnalyzeDoneCountdown(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setAnalyzeDoneCountdown((prev) => (prev === null ? null : prev - 1))
+    }, 1000)
+    return () => window.clearTimeout(timer)
+  }, [analyzeDoneCountdown])
 
   useEffect(() => {
     if (isProcessing || isContinuing || isRewriting) return
@@ -696,6 +712,7 @@ const StageScript: React.FC<Props> = ({
     }
 
     setIsProcessing(true)
+    setAnalyzeDoneCountdown(null)
     setProcessingMessage('正在准备生成流程...')
     setProcessingLogs([])
     setError(null)
@@ -875,6 +892,7 @@ const StageScript: React.FC<Props> = ({
         scriptGenerationCheckpoint: null
       })
 
+      setAnalyzeDoneCountdown(ANALYZE_DONE_TOAST_SECONDS)
       setActiveTab('script')
     } catch (err: unknown) {
       console.error(err)
@@ -1288,7 +1306,6 @@ const StageScript: React.FC<Props> = ({
       ? '继续生成分镜脚本'
       : '生成分镜脚本'
 
-  const showProcessingToast = isProcessing || isContinuing || isRewriting
   const toastMessage =
     processingMessage ||
     (isProcessing
@@ -1297,7 +1314,16 @@ const StageScript: React.FC<Props> = ({
         ? 'AI续写中...'
         : isRewriting
           ? 'AI改写中...'
-          : '')
+          : analyzeDoneCountdown !== null
+            ? '分镜生成完成'
+            : '')
+  const showAnalyzeDoneCountdown =
+    analyzeDoneCountdown !== null &&
+    !isProcessing &&
+    !isContinuing &&
+    !isRewriting
+  const showProcessingToast =
+    isProcessing || isContinuing || isRewriting || showAnalyzeDoneCountdown
 
   // Character editing handlers
   const handleEditCharacter = (charId: string, prompt: string) => {
@@ -1592,8 +1618,19 @@ const StageScript: React.FC<Props> = ({
     <div className="h-full bg-[var(--bg-base)]">
       {showProcessingToast && (
         <div className="fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur">
+          {showAnalyzeDoneCountdown && analyzeDoneCountdown !== null && (
+            <div className="absolute right-3 top-2 text-[11px] font-mono text-zinc-300">
+              {analyzeDoneCountdown}s
+            </div>
+          )}
           <div className="flex items-center gap-3">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500 border-t-white" />
+            <div
+              className={`h-4 w-4 rounded-full border-2 ${
+                showAnalyzeDoneCountdown
+                  ? 'border-emerald-400 bg-emerald-400'
+                  : 'animate-spin border-zinc-500 border-t-white'
+              }`}
+            />
             <div className="text-sm text-white">{toastMessage}</div>
           </div>
           {processingLogs.length > 0 && (
