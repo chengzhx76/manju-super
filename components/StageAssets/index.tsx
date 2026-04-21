@@ -573,6 +573,17 @@ const StageAssets: React.FC<Props> = ({
         enhancedPrompt +=
           '. IMPORTANT: This is a pure environment/background scene with absolutely NO people, NO human figures, NO characters, NO silhouettes, NO crowds - empty scene only.'
       }
+      // 三视图提示词
+      if (type === 'character') {
+        enhancedPrompt +=
+          '\nCharacter design sheet with four views arranged horizontally from left to right: face close-up, front full-body, side full-body, back full-body.' +
+          '\nAll four views vertically aligned at the same height, evenly spaced, white background.' +
+          '\nNo text labels, no annotations, no watermarks.' +
+          '\nHighly detailed face with clear facial features (eyes, mouth, skin texture, accessories).' +
+          '\nIntricate clothing details visible across all views.' +
+          '\nFull body visible from head to toe in all three body views, absolutely no cropping.' +
+          '\nNeutral standing pose, orthographic projection, no perspective distortion.'
+      }
 
       if (shapeReferenceImage) {
         enhancedPrompt += shapeReferenceStyleInstruction
@@ -585,7 +596,7 @@ const StageAssets: React.FC<Props> = ({
         !shapeReferenceImage
       ) {
         enhancedPrompt +=
-          '\n\nIMPORTANT IDENTITY LOCK: Use the provided references as the same character identity anchor. Keep face, hairstyle, body proportions, outfit materials, and signature accessories consistent. Do NOT redesign this character.'
+          '\nIMPORTANT IDENTITY LOCK: Use the provided references as the same character identity anchor. Keep face, hairstyle, body proportions, outfit materials, and signature accessories consistent. Do NOT redesign this character.'
         if (characterHasTurnaroundReference) {
           enhancedPrompt +=
             ' If a 3x3 turnaround sheet is included, prioritize the panel that matches the camera angle and preserve angle-specific details.'
