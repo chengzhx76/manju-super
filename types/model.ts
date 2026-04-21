@@ -173,10 +173,26 @@ export interface ModelProvider {
  */
 export interface AssetLibraryConfig {
   id: string // 唯一标识
-  address: string // 对象存储地址
-  access_key: string
-  secret_key: string
+  address: string // 兼容旧素材库地址字段
+  access_key: string // 兼容旧素材库 access_key
+  secret_key: string // 兼容旧素材库 secret_key
+  region?: string
+  bucketName?: string
+  host?: string
+  accessKeyId?: string
+  secretAccessKey?: string
   isDefault: boolean // 是否为当前使用配置
+}
+
+/**
+ * 火山引擎对象存储配置（独立于素材库配置）
+ */
+export interface VolcengineTosConfig {
+  region: string
+  bucketName: string
+  host: string
+  accessKeyId: string
+  secretAccessKey: string
 }
 
 // ============================================
@@ -202,6 +218,7 @@ export interface ModelRegistryState {
   activeModels: ActiveModels
   globalApiKey?: string
   assetLibraryConfigs: AssetLibraryConfig[]
+  volcengineTosConfig?: VolcengineTosConfig
 }
 
 // ============================================

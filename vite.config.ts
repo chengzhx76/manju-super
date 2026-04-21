@@ -3,6 +3,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'http'
 import { createNewApiProxyHandler } from './server/newApiProxyCore.mjs'
+import { createTosProxyHandler } from './server/tosProxyCore.mjs'
 
 const createDevMediaProxyPlugin = (): Plugin => ({
   name: 'dev-media-proxy',
@@ -140,11 +141,11 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         const upstream = await fetch(rawTarget, {
           method,
           headers: passHeaders,
-          body: ['GET', 'HEAD'].includes(method) ? undefined : req,
+          body: ['GET', 'HEAD'].includes(method) ? undefined : (req as any),
           // Required when using Node stream as request body.
           duplex: ['GET', 'HEAD'].includes(method) ? undefined : 'half',
           redirect: 'follow'
-        })
+        } as any)
 
         res.statusCode = upstream.status
         const passthroughHeaders = [
@@ -185,9 +186,15 @@ const createDevNewApiProxyPlugin = (): Plugin => ({
   name: 'dev-new-api-proxy',
   configureServer(server) {
     const handler = createNewApiProxyHandler()
-    server.middlewares.use(
-      handler as unknown as Parameters<typeof server.middlewares.use>[0]
-    )
+    server.middlewares.use(handler as any)
+  }
+})
+
+const createDevTosProxyPlugin = (): Plugin => ({
+  name: 'dev-tos-proxy',
+  configureServer(server) {
+    const handler = createTosProxyHandler()
+    server.middlewares.use(handler as any)
   }
 })
 
@@ -201,7 +208,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       createDevMediaProxyPlugin(),
-      createDevNewApiProxyPlugin()
+      createDevNewApiProxyPlugin(),
+      createDevTosProxyPlugin()
     ],
     define: {
       'process.env.API_KEY': JSON.stringify(env.ANTSK_API_KEY),

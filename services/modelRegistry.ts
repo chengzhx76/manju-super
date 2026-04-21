@@ -9,6 +9,7 @@ import {
   ModelProvider,
   ModelRegistryState,
   AssetLibraryConfig,
+  VolcengineTosConfig,
   ActiveModels,
   ChatModelDefinition,
   ImageModelDefinition,
@@ -30,7 +31,20 @@ const DEFAULT_ASSET_LIBRARY_CONFIG: AssetLibraryConfig = {
   address: '',
   access_key: '',
   secret_key: '',
+  region: '',
+  bucketName: '',
+  host: '',
+  accessKeyId: '',
+  secretAccessKey: '',
   isDefault: true
+}
+
+const DEFAULT_VOLCENGINE_TOS_CONFIG: VolcengineTosConfig = {
+  region: '',
+  bucketName: '',
+  host: '',
+  accessKeyId: '',
+  secretAccessKey: ''
 }
 
 // 规范化 URL（去尾部斜杠、转小写）用于去重
@@ -42,13 +56,56 @@ const createAssetLibraryConfigId = (): string =>
 
 const normalizeAssetLibraryConfig = (
   config?: Partial<AssetLibraryConfig>
-): AssetLibraryConfig => ({
-  id: config?.id?.trim() || createAssetLibraryConfigId(),
-  address: (config?.address || '').trim().replace(/\/+$/, ''),
-  access_key: (config?.access_key || '').trim(),
-  secret_key: (config?.secret_key || '').trim(),
-  isDefault: !!config?.isDefault
+): AssetLibraryConfig => {
+  const normalizedAddress = (config?.address || '').trim().replace(/\/+$/, '')
+  const normalizedHost = (config?.host || '').trim().replace(/\/+$/, '')
+  const normalizedAccessKeyId = (config?.accessKeyId || '').trim()
+  const normalizedSecretAccessKey = (config?.secretAccessKey || '').trim()
+  const normalizedAccessKey = (
+    config?.access_key ||
+    normalizedAccessKeyId
+  ).trim()
+  const normalizedSecretKey = (
+    config?.secret_key ||
+    normalizedSecretAccessKey
+  ).trim()
+
+  return {
+    id: config?.id?.trim() || createAssetLibraryConfigId(),
+    address: normalizedAddress || normalizedHost,
+    access_key: normalizedAccessKey,
+    secret_key: normalizedSecretKey,
+    region: (config?.region || '').trim(),
+    bucketName: (config?.bucketName || '').trim(),
+    host: normalizedHost || normalizedAddress,
+    accessKeyId: normalizedAccessKeyId || normalizedAccessKey,
+    secretAccessKey: normalizedSecretAccessKey || normalizedSecretKey,
+    isDefault: !!config?.isDefault
+  }
+}
+
+const normalizeVolcengineTosConfig = (
+  config?: Partial<VolcengineTosConfig> | null
+): VolcengineTosConfig => ({
+  region: String(config?.region || '').trim(),
+  bucketName: String(config?.bucketName || '').trim(),
+  host: String(config?.host || '')
+    .trim()
+    .replace(/\/+$/, ''),
+  accessKeyId: String(config?.accessKeyId || '').trim(),
+  secretAccessKey: String(config?.secretAccessKey || '').trim()
 })
+
+const hasCompleteVolcengineTosConfig = (
+  config?: VolcengineTosConfig | null
+): boolean =>
+  !!(
+    config?.region &&
+    config?.bucketName &&
+    config?.host &&
+    config?.accessKeyId &&
+    config?.secretAccessKey
+  )
 
 // 运行时状态缓存
 let registryState: ModelRegistryState | null = null
@@ -65,7 +122,8 @@ const getDefaultState = (): ModelRegistryState => ({
   models: [...ALL_BUILTIN_MODELS],
   activeModels: { ...DEFAULT_ACTIVE_MODELS },
   globalApiKey: localStorage.getItem(API_KEY_STORAGE_KEY) || undefined,
-  assetLibraryConfigs: []
+  assetLibraryConfigs: [],
+  volcengineTosConfig: { ...DEFAULT_VOLCENGINE_TOS_CONFIG }
 })
 
 /**
@@ -323,8 +381,10 @@ export const loadRegistry = (): ModelRegistryState => {
       }
 
       let assetLibraryConfigMigrated = false
+      let volcengineTosConfigMigrated = false
       const parsedAny = parsed as ModelRegistryState & {
         assetLibraryConfig?: Partial<AssetLibraryConfig>
+        volcengineTosConfig?: Partial<VolcengineTosConfig>
       }
       const legacyAssetLibraryConfig = parsedAny.assetLibraryConfig
       const rawAssetLibraryConfigs = Array.isArray(parsed.assetLibraryConfigs)
@@ -384,6 +444,28 @@ export const loadRegistry = (): ModelRegistryState => {
       }
       parsed.assetLibraryConfigs = normalizedAssetLibraryConfigs
 
+      const storedTosConfig = normalizeVolcengineTosConfig(
+        parsedAny.volcengineTosConfig
+      )
+      let nextTosConfig = storedTosConfig
+      if (!hasCompleteVolcengineTosConfig(storedTosConfig)) {
+        const defaultAssetConfig =
+          normalizedAssetLibraryConfigs.find((config) => config.isDefault) ||
+          normalizedAssetLibraryConfigs[0]
+        const migratedFromAssetConfig = normalizeVolcengineTosConfig({
+          region: defaultAssetConfig?.region,
+          bucketName: defaultAssetConfig?.bucketName,
+          host: defaultAssetConfig?.host,
+          accessKeyId: defaultAssetConfig?.accessKeyId,
+          secretAccessKey: defaultAssetConfig?.secretAccessKey
+        })
+        if (hasCompleteVolcengineTosConfig(migratedFromAssetConfig)) {
+          nextTosConfig = migratedFromAssetConfig
+          volcengineTosConfigMigrated = true
+        }
+      }
+      parsed.volcengineTosConfig = nextTosConfig
+
       registryState = parsed
 
       // 如果发生了迁移，立即回写 localStorage，避免每次加载都重复执行
@@ -394,7 +476,8 @@ export const loadRegistry = (): ModelRegistryState => {
         chatModelAliasMigrated ||
         providerMigrated ||
         globalApiKeyMigrated ||
-        assetLibraryConfigMigrated
+        assetLibraryConfigMigrated ||
+        volcengineTosConfigMigrated
       ) {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed))
@@ -962,6 +1045,32 @@ export const setAssetLibraryConfig = (
     )
   }
   saveRegistry(state)
+}
+
+/**
+ * 获取火山引擎对象存储配置（独立于素材库配置）
+ */
+export const getVolcengineTosConfig = (): VolcengineTosConfig => {
+  const state = loadRegistry()
+  return normalizeVolcengineTosConfig(
+    state.volcengineTosConfig || DEFAULT_VOLCENGINE_TOS_CONFIG
+  )
+}
+
+/**
+ * 更新火山引擎对象存储配置
+ */
+export const setVolcengineTosConfig = (
+  config: Partial<VolcengineTosConfig>
+): VolcengineTosConfig => {
+  const state = loadRegistry()
+  const nextConfig = normalizeVolcengineTosConfig({
+    ...(state.volcengineTosConfig || DEFAULT_VOLCENGINE_TOS_CONFIG),
+    ...config
+  })
+  state.volcengineTosConfig = nextConfig
+  saveRegistry(state)
+  return nextConfig
 }
 
 /**

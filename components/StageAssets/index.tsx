@@ -77,7 +77,10 @@ import {
 import {
   clearEpisodeAssetBinding,
   deleteRemoteAsset,
+  hasVolcengineTosConfig,
   reconcileEpisodeAssetsFromRelay,
+  resolveTosPublicUrlFromAssetId,
+  uploadAssetFileToTos,
   uploadGeneratedAssetToRelay
 } from '../../services/assetRelayService'
 
@@ -241,6 +244,60 @@ const StageAssets: React.FC<Props> = ({
       }
     } as T
   }
+
+  useEffect(() => {
+    if (!project.scriptData) return
+    const next = cloneScriptData(project.scriptData)
+    let hasChanged = false
+
+    for (const character of next.characters || []) {
+      const charUrl = resolveTosPublicUrlFromAssetId(character.assetId)
+      if (charUrl && charUrl !== character.referenceImage) {
+        character.referenceImage = charUrl
+        hasChanged = true
+      }
+
+      for (const variation of character.variations || []) {
+        const variationUrl = resolveTosPublicUrlFromAssetId(variation.assetId)
+        if (variationUrl && variationUrl !== variation.referenceImage) {
+          variation.referenceImage = variationUrl
+          hasChanged = true
+        }
+      }
+
+      if (character.turnaround) {
+        const turnaroundUrl = resolveTosPublicUrlFromAssetId(
+          character.turnaround.assetId
+        )
+        if (turnaroundUrl && turnaroundUrl !== character.turnaround.imageUrl) {
+          character.turnaround.imageUrl = turnaroundUrl
+          hasChanged = true
+        }
+      }
+    }
+
+    for (const scene of next.scenes || []) {
+      const sceneUrl = resolveTosPublicUrlFromAssetId(scene.assetId)
+      if (sceneUrl && sceneUrl !== scene.referenceImage) {
+        scene.referenceImage = sceneUrl
+        hasChanged = true
+      }
+    }
+
+    for (const prop of next.props || []) {
+      const propUrl = resolveTosPublicUrlFromAssetId(prop.assetId)
+      if (propUrl && propUrl !== prop.referenceImage) {
+        prop.referenceImage = propUrl
+        hasChanged = true
+      }
+    }
+
+    if (!hasChanged) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      return { ...prev, scriptData: next }
+    })
+  }, [project.scriptData, updateProject])
 
   useEffect(() => {
     const handler = () => {
@@ -450,12 +507,10 @@ const StageAssets: React.FC<Props> = ({
         : scriptSnapshot.scenes.find((item) => compareIds(item.id, id))?.assetId
 
     if (existingAssetId) {
-      try {
-        await deleteRemoteAsset(existingAssetId)
-      } catch (error) {
-        console.warn('Delete remote asset before regenerate failed:', error)
-      }
       clearLocalAssetId(type, id)
+      void deleteRemoteAsset(existingAssetId).catch((error) => {
+        console.warn('Delete remote asset before regenerate failed:', error)
+      })
     }
 
     // 设置生成状态
@@ -732,21 +787,25 @@ const StageAssets: React.FC<Props> = ({
         project.scriptData?.characters.find((item) =>
           compareIds(item.id, charId)
         )?.assetId || undefined
-      if (currentAssetId) {
-        await deleteRemoteAsset(currentAssetId)
-      }
-      const base64 = await handleImageUpload(file)
+      const tosUploaded = await uploadFileViaTosIfEnabled('role', charId, file)
+      const imageUrl = tosUploaded?.url || (await handleImageUpload(file))
 
       updateProject((prev) => {
         if (!prev.scriptData) return prev
         const newData = cloneScriptData(prev.scriptData)
         const char = newData.characters.find((c) => compareIds(c.id, charId))
         if (char) {
-          char.referenceImage = base64
+          char.referenceImage = imageUrl
           char.status = 'completed'
           delete char.assetId
         }
         return { ...prev, scriptData: newData }
+      })
+      await syncGeneratedAsset({
+        kind: 'character',
+        localId: charId,
+        url: imageUrl,
+        currentAssetId
       })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })
@@ -761,21 +820,25 @@ const StageAssets: React.FC<Props> = ({
       const currentAssetId =
         project.scriptData?.scenes.find((item) => compareIds(item.id, sceneId))
           ?.assetId || undefined
-      if (currentAssetId) {
-        await deleteRemoteAsset(currentAssetId)
-      }
-      const base64 = await handleImageUpload(file)
+      const tosUploaded = await uploadFileViaTosIfEnabled('scene', sceneId, file)
+      const imageUrl = tosUploaded?.url || (await handleImageUpload(file))
 
       updateProject((prev) => {
         if (!prev.scriptData) return prev
         const newData = cloneScriptData(prev.scriptData)
         const scene = newData.scenes.find((s) => compareIds(s.id, sceneId))
         if (scene) {
-          scene.referenceImage = base64
+          scene.referenceImage = imageUrl
           scene.status = 'completed'
           delete scene.assetId
         }
         return { ...prev, scriptData: newData }
+      })
+      await syncGeneratedAsset({
+        kind: 'scene',
+        localId: sceneId,
+        url: imageUrl,
+        currentAssetId
       })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })
@@ -953,6 +1016,35 @@ const StageAssets: React.FC<Props> = ({
       if (result.assetId) {
         applyEpisodeAssetId(params.kind, params.localId, result.assetId)
       }
+      if (result.url) {
+        updateProject((prev) => {
+          if (!prev.scriptData) return prev
+          const next = cloneScriptData(prev.scriptData)
+          if (params.kind === 'character') {
+            const target = next.characters.find((item) =>
+              compareIds(item.id, params.localId)
+            )
+            if (target) {
+              target.referenceImage = result.url!
+            }
+          } else if (params.kind === 'scene') {
+            const target = next.scenes.find((item) =>
+              compareIds(item.id, params.localId)
+            )
+            if (target) {
+              target.referenceImage = result.url!
+            }
+          } else {
+            const target = (next.props || []).find((item) =>
+              compareIds(item.id, params.localId)
+            )
+            if (target) {
+              target.referenceImage = result.url!
+            }
+          }
+          return { ...prev, scriptData: next }
+        })
+      }
     } catch (error) {
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
@@ -1009,6 +1101,7 @@ const StageAssets: React.FC<Props> = ({
     url?: string
     currentAssetId?: string
     onSynced: (assetId: string) => void
+    onUrlUpdated?: (url: string) => void
   }): Promise<{ skipped: boolean; reason?: string }> => {
     if (!seriesProject) return { skipped: true, reason: '无法获取项目信息' }
     try {
@@ -1031,6 +1124,9 @@ const StageAssets: React.FC<Props> = ({
       if (result.assetId) {
         params.onSynced(result.assetId)
       }
+      if (result.url) {
+        params.onUrlUpdated?.(result.url)
+      }
       return { skipped: false }
     } catch (error) {
       showAlert(
@@ -1039,6 +1135,22 @@ const StageAssets: React.FC<Props> = ({
       )
       return { skipped: true, reason: '素材库同步失败' }
     }
+  }
+
+  const uploadFileViaTosIfEnabled = async (
+    kind: 'role' | 'scene' | 'prop',
+    localId: string,
+    file: File
+  ): Promise<{ url: string; assetId: string } | null> => {
+    if (!seriesProject || !hasVolcengineTosConfig()) return null
+    const uploaded = await uploadAssetFileToTos({
+      project: seriesProject,
+      episode: project,
+      type: kind,
+      resourceId: localId,
+      file
+    })
+    return { url: uploaded.url, assetId: uploaded.assetId }
   }
 
   const handleSyncVariationToLibrary = async (charId: string, varId: string) => {
@@ -1057,7 +1169,20 @@ const StageAssets: React.FC<Props> = ({
         localId: key,
         url: variation.referenceImage,
         currentAssetId: variation.assetId,
-        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const target = char?.variations?.find((item) =>
+              compareIds(item.id, varId)
+            )
+            if (!target) return prev
+            target.referenceImage = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
       if (result.skipped) {
         showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
@@ -1085,7 +1210,17 @@ const StageAssets: React.FC<Props> = ({
         localId: key,
         url: turnaround.imageUrl,
         currentAssetId: turnaround.assetId,
-        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            if (!char?.turnaround) return prev
+            char.turnaround.imageUrl = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
       if (result.skipped) {
         showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
@@ -2093,15 +2228,13 @@ const StageAssets: React.FC<Props> = ({
     )?.assetId
 
     if (existingAssetId) {
-      try {
-        await deleteRemoteAsset(existingAssetId)
-      } catch (error) {
+      clearLocalAssetId('prop', propId)
+      void deleteRemoteAsset(existingAssetId).catch((error) => {
         console.warn(
           'Delete remote prop asset before regenerate failed:',
           error
         )
-      }
-      clearLocalAssetId('prop', propId)
+      })
     }
 
     // 设置生成状态
@@ -2228,20 +2361,24 @@ const StageAssets: React.FC<Props> = ({
       const currentAssetId =
         project.scriptData?.props?.find((item) => compareIds(item.id, propId))
           ?.assetId || undefined
-      if (currentAssetId) {
-        await deleteRemoteAsset(currentAssetId)
-      }
-      const base64 = await handleImageUpload(file)
+      const tosUploaded = await uploadFileViaTosIfEnabled('prop', propId, file)
+      const imageUrl = tosUploaded?.url || (await handleImageUpload(file))
       updateProject((prev) => {
         if (!prev.scriptData) return prev
         const newData = cloneScriptData(prev.scriptData)
         const prop = (newData.props || []).find((p) => compareIds(p.id, propId))
         if (prop) {
-          prop.referenceImage = base64
+          prop.referenceImage = imageUrl
           prop.status = 'completed'
           delete prop.assetId
         }
         return { ...prev, scriptData: newData }
+      })
+      await syncGeneratedAsset({
+        kind: 'prop',
+        localId: propId,
+        url: imageUrl,
+        currentAssetId
       })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })
@@ -2582,20 +2719,17 @@ const StageAssets: React.FC<Props> = ({
       compareIds(c.id, charId)
     )
     const variation = char?.variations?.find((v) => compareIds(v.id, varId))
-    if (variation?.assetId) {
-      try {
-        await deleteRemoteAsset(variation.assetId)
-      } catch (error) {
-        console.warn('Delete variation remote asset failed:', error)
-      }
-    }
-
     const newData = cloneScriptData(project.scriptData)
     const target = newData.characters.find((c) => compareIds(c.id, charId))
     if (!target) return
 
     target.variations = target.variations?.filter((v) => !compareIds(v.id, varId))
     updateProject({ scriptData: newData })
+    if (variation?.assetId) {
+      void deleteRemoteAsset(variation.assetId).catch((error) => {
+        console.warn('Delete variation remote asset failed:', error)
+      })
+    }
   }
 
   /**
@@ -2667,7 +2801,20 @@ const StageAssets: React.FC<Props> = ({
         localId: variationSyncKey,
         url: imageUrl,
         currentAssetId,
-        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const target = char?.variations?.find((item) =>
+              compareIds(item.id, varId)
+            )
+            if (!target) return prev
+            target.referenceImage = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
     } catch (e: any) {
       console.error(e)
@@ -2705,10 +2852,12 @@ const StageAssets: React.FC<Props> = ({
           .find((item) => compareIds(item.id, charId))
           ?.variations?.find((item) => compareIds(item.id, varId))?.assetId ||
         undefined
-      if (currentAssetId) {
-        await deleteRemoteAsset(currentAssetId)
-      }
-      const base64 = await handleImageUpload(file)
+      const tosUploaded = await uploadFileViaTosIfEnabled(
+        'role',
+        variationSyncKey,
+        file
+      )
+      const imageUrl = tosUploaded?.url || (await handleImageUpload(file))
 
       updateProject((prev) => {
         if (!prev.scriptData) return prev
@@ -2716,7 +2865,7 @@ const StageAssets: React.FC<Props> = ({
         const char = newData.characters.find((c) => compareIds(c.id, charId))
         const variation = char?.variations?.find((v) => compareIds(v.id, varId))
         if (variation) {
-          variation.referenceImage = base64
+          variation.referenceImage = imageUrl
           variation.status = 'completed'
           delete variation.assetId
         }
@@ -2727,9 +2876,22 @@ const StageAssets: React.FC<Props> = ({
       )
       await syncCharacterDerivedAsset({
         localId: variationSyncKey,
-        url: base64,
+        url: imageUrl,
         currentAssetId,
-        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const target = char?.variations?.find((item) =>
+              compareIds(item.id, varId)
+            )
+            if (!target) return prev
+            target.referenceImage = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })
@@ -2859,7 +3021,17 @@ const StageAssets: React.FC<Props> = ({
         localId: turnaroundSyncKey,
         url: imageUrl,
         currentAssetId,
-        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            if (!char?.turnaround) return prev
+            char.turnaround.imageUrl = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
     } catch (e: any) {
       console.error('九宫格造型图片生成失败:', e)
@@ -2935,10 +3107,12 @@ const StageAssets: React.FC<Props> = ({
       const currentAssetId =
         project.scriptData?.characters.find((item) => compareIds(item.id, charId))
           ?.turnaround?.assetId || undefined
-      if (currentAssetId) {
-        await deleteRemoteAsset(currentAssetId)
-      }
-      const base64 = await handleImageUpload(file)
+      const tosUploaded = await uploadFileViaTosIfEnabled(
+        'role',
+        turnaroundSyncKey,
+        file
+      )
+      const imageUrl = tosUploaded?.url || (await handleImageUpload(file))
       updateProject((prev) => {
         if (!prev.scriptData) return prev
         const newData = cloneScriptData(prev.scriptData)
@@ -2948,8 +3122,9 @@ const StageAssets: React.FC<Props> = ({
         char.turnaround = {
           panels: currentTurnaround?.panels || [],
           status: 'completed',
-          imageUrl: base64
+          imageUrl
         }
+        delete char.turnaround.assetId
         return { ...prev, scriptData: newData }
       })
       setSyncingTurnaroundKeys((prev) =>
@@ -2957,9 +3132,19 @@ const StageAssets: React.FC<Props> = ({
       )
       await syncCharacterDerivedAsset({
         localId: turnaroundSyncKey,
-        url: base64,
+        url: imageUrl,
         currentAssetId,
-        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId),
+        onUrlUpdated: (url) => {
+          updateProject((prev) => {
+            if (!prev.scriptData) return prev
+            const next = cloneScriptData(prev.scriptData)
+            const char = next.characters.find((item) => compareIds(item.id, charId))
+            if (!char?.turnaround) return prev
+            char.turnaround.imageUrl = url
+            return { ...prev, scriptData: next }
+          })
+        }
       })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })

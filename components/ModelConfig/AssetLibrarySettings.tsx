@@ -74,7 +74,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     const normalizedAccessKey = accessKey.trim()
     const normalizedSecretKey = secretKey.trim()
     if (!normalizedAddress || !normalizedAccessKey || !normalizedSecretKey) {
-      showAlert('资产库配置需同时填写地址、access_key 和 secret_key', {
+      showAlert('素材库配置需完整填写地址、access_key 和 secret_key', {
         type: 'warning'
       })
       return
@@ -87,10 +87,10 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         secret_key: normalizedSecretKey
       })
       if (!ok) {
-        showAlert('更新资产库配置失败：未找到对应配置', { type: 'error' })
+        showAlert('更新素材库配置失败：未找到对应配置', { type: 'error' })
         return
       }
-      showAlert('资产库配置已更新', { type: 'success' })
+      showAlert('素材库配置已更新', { type: 'success' })
       setEditingConfigId(null)
     } else {
       addAssetLibraryConfig({
@@ -98,7 +98,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         access_key: normalizedAccessKey,
         secret_key: normalizedSecretKey
       })
-      showAlert('资产库配置已添加', { type: 'success' })
+      showAlert('素材库配置已添加', { type: 'success' })
       setIsAdding(false)
     }
 
@@ -115,14 +115,14 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     }
     setIsAdding(false)
     setEditingConfigId(config.id)
-    setAddress(config.address)
-    setAccessKey(config.access_key)
-    setSecretKey(config.secret_key)
+    setAddress(config.address || config.host || '')
+    setAccessKey(config.access_key || config.accessKeyId || '')
+    setSecretKey(config.secret_key || config.secretAccessKey || '')
   }
 
   const handleDelete = (config: AssetLibraryConfig) => {
     const displayName = getDisplayName(config, 0)
-    showAlert(`确定要删除资产库配置「${displayName}」吗？`, {
+    showAlert(`确定要删除素材库配置「${displayName}」吗？`, {
       type: 'warning',
       showCancel: true,
       onConfirm: () => {
@@ -137,7 +137,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         }
         loadConfigs()
         onRefresh()
-        showAlert('已删除资产库配置', { type: 'success' })
+        showAlert('已删除素材库配置', { type: 'success' })
       }
     })
   }
@@ -151,7 +151,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     }
     loadConfigs()
     onRefresh()
-    showAlert('已切换当前使用的资产库配置', { type: 'success' })
+    showAlert('已切换当前使用的素材库配置', { type: 'success' })
   }
 
   const handleVerify = async (config: AssetLibraryConfig) => {
@@ -212,12 +212,13 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     config: AssetLibraryConfig,
     index: number
   ): string => {
-    if (!config.address) return `资产库 ${index + 1}`
+    const rawAddress = config.address
+    if (!rawAddress) return `素材库 ${index + 1}`
     try {
-      const url = new URL(config.address)
-      return url.hostname || `资产库 ${index + 1}`
+      const url = new URL(rawAddress)
+      return url.hostname || `素材库 ${index + 1}`
     } catch {
-      return config.address
+      return rawAddress
     }
   }
 
@@ -227,7 +228,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-[var(--accent-text)]" />
           <label className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest">
-            资产库配置
+            素材库配置
           </label>
         </div>
         {!isAdding && (
@@ -240,7 +241,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--accent)] text-[var(--text-primary)] text-[10px] font-bold rounded hover:bg-[var(--accent-hover)] transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            添加资产库
+            添加素材库
           </button>
         )}
       </div>
@@ -249,7 +250,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
         <div className="p-4 bg-[var(--bg-elevated)]/50 border border-[var(--border-primary)] rounded-lg space-y-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold text-[var(--text-primary)]">
-              添加资产库配置
+              添加素材库配置
             </h4>
             <button
               onClick={cancelEditOrAdd}
@@ -267,7 +268,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="如：https://s3.example.com"
+                placeholder="如：https://example.com"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
               />
             </div>
@@ -279,7 +280,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                 type="text"
                 value={accessKey}
                 onChange={(e) => setAccessKey(e.target.value)}
-                placeholder="对象存储 Access Key"
+                placeholder="素材库 access_key"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
               />
             </div>
@@ -291,7 +292,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                 type="password"
                 value={secretKey}
                 onChange={(e) => setSecretKey(e.target.value)}
-                placeholder="对象存储 Secret Key"
+                placeholder="素材库 secret_key"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
               />
             </div>
@@ -319,11 +320,11 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
           <div className="rounded-lg border border-dashed border-[var(--border-primary)] bg-[var(--bg-surface)]/50 px-4 py-5">
             <div className="flex items-center gap-2 text-[var(--text-secondary)]">
               <Database className="w-4 h-4 text-[var(--text-tertiary)]" />
-              <span className="text-xs font-medium">暂无资产库配置</span>
+              <span className="text-xs font-medium">暂无素材库配置</span>
             </div>
             <div className="mt-2 pl-6">
               <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-                还没有数据，请点击右上角“添加资产库”进行配置
+                还没有数据，请点击右上角“添加素材库”进行配置
               </p>
             </div>
           </div>
@@ -426,7 +427,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                       type="text"
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      placeholder="如：https://s3.example.com"
+                      placeholder="如：https://example.com"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
                   </div>
@@ -438,7 +439,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                       type="text"
                       value={accessKey}
                       onChange={(e) => setAccessKey(e.target.value)}
-                      placeholder="对象存储 Access Key"
+                      placeholder="素材库 access_key"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
                   </div>
@@ -450,7 +451,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                       type="password"
                       value={secretKey}
                       onChange={(e) => setSecretKey(e.target.value)}
-                      placeholder="对象存储 Secret Key"
+                      placeholder="素材库 secret_key"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
                   </div>
@@ -459,7 +460,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                     <button
                       onClick={() => handleDelete(config)}
                       className="text-[var(--error-text)] hover:text-[var(--error-text)]/80 text-xs flex items-center gap-1.5 transition-colors"
-                      title="删除资产库配置"
+                      title="删除素材库配置"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       删除
@@ -488,7 +489,7 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-        管理资产库对象存储的 API 地址与访问凭证
+        管理素材库 API 地址和访问凭证
       </p>
     </div>
   )

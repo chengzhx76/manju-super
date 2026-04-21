@@ -1,6 +1,6 @@
 import { Episode, Series, SeriesProject, Shot } from '../types'
-import type { AssetLibraryConfig } from '../types/model'
-import { getAssetLibraryConfig } from './modelRegistry'
+import type { AssetLibraryConfig, VolcengineTosConfig } from '../types/model'
+import { getAssetLibraryConfig, getVolcengineTosConfig } from './modelRegistry'
 
 const RELAY_SERVICE = 'ark'
 const RELAY_VERSION = '2024-01-01'
@@ -11,6 +11,12 @@ const DESCRIPTION_LIMIT = 300
 const NAME_LIMIT = 64
 const POLL_INTERVAL_MS = 3000
 const POLL_TIMEOUT_MS = 120000
+const TOS_UPLOAD_BY_URL_ENDPOINT = '/api/tos/upload-by-url'
+const TOS_UPLOAD_FILE_ENDPOINT = '/api/tos/upload-file'
+const TOS_DELETE_OBJECT_ENDPOINT = '/api/tos/delete-object'
+const TOS_VERIFY_OBJECT_ENDPOINT = '/api/tos/verify-object'
+const TOS_ASSET_ID_PREFIX = 'tos:'
+const TOS_PATH_PREFIX = 'manju'
 
 export type RelayResourceKind =
   | 'character'
@@ -18,6 +24,14 @@ export type RelayResourceKind =
   | 'prop'
   | 'shot'
   | 'video'
+
+export type TosResourceKind =
+  | 'role'
+  | 'scene'
+  | 'prop'
+  | 'audio'
+  | 'video'
+  | 'shot'
 
 type RelayAssetType = 'Image' | 'Video'
 
@@ -77,6 +91,8 @@ export interface RelayUploadResult {
   reason?: string
   groupId?: string
   assetId?: string
+  url?: string
+  objectKey?: string
 }
 
 interface RelayLocalAssetCandidate {
@@ -127,6 +143,69 @@ const normalizeConfig = (
 
 export const hasAssetRelayConfig = (): boolean => normalizeConfig() !== null
 
+const normalizeTosConfig = (
+  rawConfig?: VolcengineTosConfig | null
+): VolcengineTosConfig | null => {
+  const source = rawConfig || getVolcengineTosConfig()
+  if (!source) return null
+  const region = String(source.region || '').trim()
+  const bucketName = String(source.bucketName || '').trim()
+  const host = String(source.host || '')
+    .trim()
+    .replace(/\/+$/, '')
+  const accessKeyId = String(source.accessKeyId || '').trim()
+  const secretAccessKey = String(source.secretAccessKey || '').trim()
+  if (!region || !bucketName || !host || !accessKeyId || !secretAccessKey) {
+    return null
+  }
+  return {
+    region,
+    bucketName,
+    host,
+    accessKeyId,
+    secretAccessKey
+  }
+}
+
+export const hasVolcengineTosConfig = (): boolean => normalizeTosConfig() !== null
+
+type TosVerifyResponse = {
+  success?: boolean
+  message?: string
+  statusCode?: number
+}
+
+const TOS_VERIFY_OBJECT_KEY = 'ping.txt'
+
+export const verifyVolcengineTosConfigByGetObject = async (
+  rawConfig?: VolcengineTosConfig | null
+): Promise<{ statusCode?: number; message: string }> => {
+  const config = normalizeTosConfig(rawConfig)
+  if (!config) {
+    throw new Error('对象存储配置不完整')
+  }
+  const response = await fetch(TOS_VERIFY_OBJECT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      region: config.region,
+      bucketName: config.bucketName,
+      host: config.host,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+      objectKey: TOS_VERIFY_OBJECT_KEY
+    })
+  })
+  const payload = parseJsonResponse(await response.text()) as TosVerifyResponse
+  if (!response.ok || payload.success === false) {
+    throw new Error(payload.message || '对象存储验证失败')
+  }
+  return {
+    statusCode: payload.statusCode,
+    message: String(payload.message || '验证通过')
+  }
+}
+
 const cloneValue = <T>(value: T): T => structuredClone(value)
 
 const collapseWhitespace = (value: string): string =>
@@ -136,6 +215,109 @@ const truncate = (value: string, max: number): string =>
   collapseWhitespace(value).slice(0, max)
 
 const isHttpUrl = (value?: string): boolean => /^https?:\/\//i.test(value || '')
+
+const sanitizePathSegment = (value: string): string =>
+  String(value || '')
+    .trim()
+    .replace(/[\\/#?%]/g, '_')
+
+const mapRelayKindToTosType = (kind: RelayResourceKind): TosResourceKind => {
+  switch (kind) {
+    case 'character':
+      return 'role'
+    case 'scene':
+      return 'scene'
+    case 'prop':
+      return 'prop'
+    case 'shot':
+      return 'shot'
+    case 'video':
+      return 'video'
+  }
+}
+
+const inferExtensionFromUrl = (
+  value: string | undefined,
+  fallback: string
+): string => {
+  const normalizedFallback = fallback.startsWith('.') ? fallback : `.${fallback}`
+  if (!value) return normalizedFallback
+  try {
+    const target = new URL(value)
+    const pathname = target.pathname || ''
+    const suffix = pathname.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (!suffix) return normalizedFallback
+    return `.${suffix}`
+  } catch {
+    return normalizedFallback
+  }
+}
+
+const inferExtensionFromFile = (file: File, fallback: string): string => {
+  const fromName = inferExtensionFromUrl(file.name, '')
+  if (fromName !== '.') return fromName
+  const mime = String(file.type || '').toLowerCase()
+  if (mime.includes('png')) return '.png'
+  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg'
+  if (mime.includes('webp')) return '.webp'
+  if (mime.includes('gif')) return '.gif'
+  if (mime.includes('mp4')) return '.mp4'
+  if (mime.includes('mp3')) return '.mp3'
+  return fallback.startsWith('.') ? fallback : `.${fallback}`
+}
+
+const buildTosObjectKey = (params: {
+  projectId: string
+  seriesId: string
+  type: TosResourceKind
+  resourceId: string
+  extension: string
+  timestamp?: number
+}): string => {
+  const safeProjectId = sanitizePathSegment(params.projectId)
+  const safeSeriesId = sanitizePathSegment(params.seriesId)
+  const safeResourceId = sanitizePathSegment(params.resourceId)
+  const timestamp = params.timestamp || Date.now()
+  const normalizedExt = params.extension.startsWith('.')
+    ? params.extension
+    : `.${params.extension}`
+  const fileName = `${safeResourceId}-${timestamp}${normalizedExt}`
+  return [
+    TOS_PATH_PREFIX,
+    safeProjectId,
+    safeSeriesId,
+    params.type,
+    'resource',
+    fileName
+  ].join('/')
+}
+
+const buildTosPublicUrl = (host: string, objectKey: string): string =>
+  `${host.replace(/\/+$/, '')}/${String(objectKey || '').replace(/^\/+/, '')}`
+
+const toTosAssetId = (objectKey: string): string => `${TOS_ASSET_ID_PREFIX}${objectKey}`
+
+const parseTosObjectKeyFromAssetId = (assetId?: string): string | null => {
+  const normalized = String(assetId || '').trim()
+  if (!normalized) return null
+  if (normalized.startsWith(TOS_ASSET_ID_PREFIX)) {
+    return normalized.slice(TOS_ASSET_ID_PREFIX.length)
+  }
+  if (normalized.startsWith(`${TOS_PATH_PREFIX}/`)) {
+    return normalized
+  }
+  return null
+}
+
+export const resolveTosPublicUrlFromAssetId = (
+  assetId?: string
+): string | null => {
+  const objectKey = parseTosObjectKeyFromAssetId(assetId)
+  if (!objectKey) return null
+  const config = normalizeTosConfig()
+  if (!config?.host) return null
+  return buildTosPublicUrl(config.host, objectKey)
+}
 
 const toAssetName = (kind: RelayResourceKind, id: string): string => {
   switch (kind) {
@@ -552,6 +734,204 @@ const callRelay = async <T>(
   throw lastError instanceof Error ? lastError : new Error('素材库请求失败')
 }
 
+const callTosApi = async <T>(
+  endpoint: string,
+  init: RequestInit
+): Promise<T> => {
+  const response = await fetch(endpoint, init)
+  const payload = parseJsonResponse(await response.text())
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(payload))
+  }
+  return payload as T
+}
+
+type TosUploadByUrlPayload = {
+  sourceUrl: string
+  objectKey: string
+  region: string
+  bucketName: string
+  host: string
+  accessKeyId: string
+  secretAccessKey: string
+}
+
+type TosUploadResponse = {
+  objectKey?: string
+  object_key?: string
+  key?: string
+  url?: string
+}
+
+type TosDeleteObjectPayload = {
+  objectKey: string
+}
+
+const uploadToTosByUrl = async (
+  config: VolcengineTosConfig,
+  payload: TosUploadByUrlPayload
+): Promise<{ objectKey: string; url: string }> => {
+  const response = await callTosApi<TosUploadResponse>(TOS_UPLOAD_BY_URL_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...payload,
+      region: config.region,
+      bucketName: config.bucketName,
+      host: config.host,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey
+    })
+  })
+  const objectKey = String(
+    response.objectKey || response.object_key || response.key || payload.objectKey
+  ).trim()
+  if (!objectKey) {
+    throw new Error('对象存储上传成功但未返回 objectKey')
+  }
+  const publicUrl =
+    String(response.url || '').trim() || buildTosPublicUrl(config.host, objectKey)
+  return { objectKey, url: publicUrl }
+}
+
+const uploadToTosByFile = async (
+  config: VolcengineTosConfig,
+  params: { file: File; objectKey: string }
+): Promise<{ objectKey: string; url: string }> => {
+  const formData = new FormData()
+  formData.set('file', params.file)
+  formData.set('objectKey', params.objectKey)
+  formData.set('region', config.region)
+  formData.set('bucketName', config.bucketName)
+  formData.set('host', config.host)
+  formData.set('accessKeyId', config.accessKeyId)
+  formData.set('secretAccessKey', config.secretAccessKey)
+  const response = await callTosApi<TosUploadResponse>(TOS_UPLOAD_FILE_ENDPOINT, {
+    method: 'POST',
+    body: formData
+  })
+  const objectKey = String(
+    response.objectKey || response.object_key || response.key || params.objectKey
+  ).trim()
+  if (!objectKey) {
+    throw new Error('对象存储上传成功但未返回 objectKey')
+  }
+  const publicUrl =
+    String(response.url || '').trim() || buildTosPublicUrl(config.host, objectKey)
+  return { objectKey, url: publicUrl }
+}
+
+const uploadGeneratedAssetToTos = async (params: {
+  project: SeriesProject
+  episode: Episode
+  kind: RelayResourceKind
+  localId: string
+  url?: string
+}): Promise<{ assetId: string; objectKey: string; url: string }> => {
+  const config = normalizeTosConfig()
+  if (!config) {
+    throw new Error('对象存储配置不完整')
+  }
+  if (!isHttpUrl(params.url)) {
+    throw new Error('当前资源缺少可上传的公网 URL')
+  }
+
+  const objectKey = buildTosObjectKey({
+    projectId: params.project.id,
+    seriesId: params.episode.seriesId,
+    type: mapRelayKindToTosType(params.kind),
+    resourceId: params.localId,
+    extension: inferExtensionFromUrl(params.url, params.kind === 'video' ? '.mp4' : '.png')
+  })
+  const uploaded = await uploadToTosByUrl(config, {
+    sourceUrl: params.url!,
+    objectKey,
+    region: config.region,
+    bucketName: config.bucketName,
+    host: config.host,
+    accessKeyId: config.accessKeyId,
+    secretAccessKey: config.secretAccessKey
+  })
+  return {
+    assetId: toTosAssetId(uploaded.objectKey),
+    objectKey: uploaded.objectKey,
+    url: uploaded.url
+  }
+}
+
+export const uploadAssetFileToTos = async (params: {
+  project: SeriesProject
+  episode: Episode
+  type: TosResourceKind
+  resourceId: string
+  file: File
+}): Promise<{ assetId: string; objectKey: string; url: string }> => {
+  const config = normalizeTosConfig()
+  if (!config) {
+    throw new Error('对象存储配置不完整')
+  }
+  const objectKey = buildTosObjectKey({
+    projectId: params.project.id,
+    seriesId: params.episode.seriesId,
+    type: params.type,
+    resourceId: params.resourceId,
+    extension: inferExtensionFromFile(
+      params.file,
+      params.type === 'video' ? '.mp4' : '.png'
+    )
+  })
+  const uploaded = await uploadToTosByFile(config, {
+    file: params.file,
+    objectKey
+  })
+  return {
+    assetId: toTosAssetId(uploaded.objectKey),
+    objectKey: uploaded.objectKey,
+    url: uploaded.url
+  }
+}
+
+const deleteTosObject = async (
+  config: VolcengineTosConfig,
+  payload: TosDeleteObjectPayload
+): Promise<void> => {
+  await callTosApi<void>(TOS_DELETE_OBJECT_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      ...payload,
+      region: config.region,
+      bucketName: config.bucketName,
+      host: config.host,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey
+    })
+  })
+}
+
+const scheduleTosDelete = (assetId?: string, context?: Record<string, unknown>): void => {
+  const objectKey = parseTosObjectKeyFromAssetId(assetId)
+  if (!objectKey) return
+  const config = normalizeTosConfig()
+  if (!config) return
+  void deleteTosObject(config, { objectKey })
+    .then(() => {
+      console.info('[tos-delete] success', {
+        action: 'delete_object',
+        objectKey,
+        context: context || {}
+      })
+    })
+    .catch((error) => {
+      console.error('[tos-delete] failed', {
+        action: 'delete_object',
+        objectKey,
+        context: context || {},
+        error: error instanceof Error ? error.message : String(error)
+      })
+    })
+}
+
 export const verifyRelayConfigByListAssetGroups = async (
   config: AssetLibraryConfig
 ): Promise<void> => {
@@ -677,10 +1057,22 @@ const waitForAssetActive = async (assetId: string): Promise<RelayAssetItem> => {
 }
 
 export const deleteRemoteAsset = async (assetId?: string): Promise<void> => {
-  if (!assetId || !hasAssetRelayConfig()) return
-  await callRelay('DeleteAsset', {
+  if (!assetId) return
+  const tosObjectKey = parseTosObjectKeyFromAssetId(assetId)
+  if (tosObjectKey) {
+    scheduleTosDelete(assetId, { source: 'deleteRemoteAsset' })
+    return
+  }
+  if (!hasAssetRelayConfig()) return
+  void callRelay('DeleteAsset', {
     Id: assetId,
     ProjectName: RELAY_PROJECT_NAME
+  }).catch((error) => {
+    console.error('[relay-delete] failed', {
+      action: 'DeleteAsset',
+      assetId,
+      error: extractErrorMessage(error)
+    })
   })
 }
 
@@ -899,9 +1291,89 @@ export const uploadGeneratedAssetToRelay = async (params: {
   url?: string
   currentAssetId?: string
 }): Promise<RelayUploadResult> => {
+  const logUploadFlow = (payload: {
+    result: 'success' | 'skipped' | 'failed'
+    reason?: string
+    finalUrl?: string
+    finalAssetId?: string
+    groupId?: string
+    objectKey?: string
+    tosUploaded: boolean
+    relayUploaded: boolean
+  }) => {
+    console.info('[asset-upload-flow]', {
+      operator: 'frontend-user',
+      action: 'upload_generated_asset',
+      kind: params.kind,
+      localId: params.localId,
+      hasTosConfig: !!tosConfig,
+      hasRelayConfig: !!config,
+      ...payload
+    })
+  }
+
+  const tosConfig = normalizeTosConfig()
   const config = normalizeConfig()
+  if (!config && !tosConfig) {
+    logUploadFlow({
+      result: 'skipped',
+      reason: '未配置对象存储与素材库凭据',
+      tosUploaded: false,
+      relayUploaded: false
+    })
+    return { skipped: true, reason: '未配置对象存储与素材库凭据' }
+  }
+
+  let finalUrl = params.url
+  let tosUploaded:
+    | { assetId: string; objectKey: string; url: string }
+    | undefined
+  if (tosConfig) {
+    try {
+      tosUploaded = await uploadGeneratedAssetToTos({
+        project: params.project,
+        episode: params.episode,
+        kind: params.kind,
+        localId: params.localId,
+        url: params.url
+      })
+      finalUrl = tosUploaded.url
+      scheduleTosDelete(params.currentAssetId, {
+        source: 'uploadGeneratedAssetToRelay',
+        kind: params.kind,
+        localId: params.localId
+      })
+    } catch (error) {
+      logUploadFlow({
+        result: 'failed',
+        reason: `对象存储上传失败：${extractErrorMessage(error)}`,
+        tosUploaded: false,
+        relayUploaded: false
+      })
+      return {
+        skipped: true,
+        reason: `对象存储上传失败：${extractErrorMessage(error)}`
+      }
+    }
+  }
+
   if (!config) {
-    return { skipped: true, reason: '素材库未配置 AK/SK' }
+    logUploadFlow({
+      result: 'success',
+      finalUrl,
+      finalAssetId: tosUploaded?.assetId,
+      groupId: params.project.assetGroupId,
+      objectKey: tosUploaded?.objectKey,
+      tosUploaded: !!tosUploaded,
+      relayUploaded: false
+    })
+    return {
+      skipped: false,
+      groupId: params.project.assetGroupId,
+      assetId: tosUploaded?.assetId,
+      objectKey: tosUploaded?.objectKey,
+      url: finalUrl
+    }
   }
   if (
     !shouldUploadCandidate({
@@ -910,9 +1382,16 @@ export const uploadGeneratedAssetToRelay = async (params: {
       episodeId: params.episode.id,
       name: toAssetName(params.kind, params.localId),
       label: params.localId,
-      url: params.url
+      url: finalUrl
     })
   ) {
+    logUploadFlow({
+      result: 'skipped',
+      reason: '当前资源缺少可上传的公网 URL',
+      finalUrl,
+      tosUploaded: !!tosUploaded,
+      relayUploaded: false
+    })
     return { skipped: true, reason: '当前资源缺少可上传的公网 URL' }
   }
 
@@ -928,16 +1407,26 @@ export const uploadGeneratedAssetToRelay = async (params: {
     episodeId: params.episode.id,
     name: toAssetName(params.kind, params.localId),
     label: params.localId,
-    url: params.url,
+    url: finalUrl,
     currentAssetId: params.currentAssetId
   }
   const duplicate = findRemoteByName(remoteAssets, candidate.name)
   const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
 
   if (remoteCurrent && getAssetItemId(remoteCurrent)) {
+    scheduleTosDelete(getAssetItemId(remoteCurrent), {
+      source: 'relay-upload-replace-current',
+      kind: params.kind,
+      localId: params.localId
+    })
     await deleteRemoteAsset(getAssetItemId(remoteCurrent))
   }
   if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
+    scheduleTosDelete(getAssetItemId(duplicate), {
+      source: 'relay-upload-replace-duplicate',
+      kind: params.kind,
+      localId: params.localId
+    })
     await deleteRemoteAsset(getAssetItemId(duplicate))
   }
 
@@ -945,11 +1434,23 @@ export const uploadGeneratedAssetToRelay = async (params: {
     nextProject.assetGroupId!,
     candidate
   )
-  return {
+  const result: RelayUploadResult = {
     skipped: false,
     groupId: nextProject.assetGroupId,
-    assetId
+    assetId,
+    objectKey: tosUploaded?.objectKey,
+    url: finalUrl
   }
+  logUploadFlow({
+    result: 'success',
+    finalUrl,
+    finalAssetId: assetId,
+    groupId: nextProject.assetGroupId,
+    objectKey: tosUploaded?.objectKey,
+    tosUploaded: !!tosUploaded,
+    relayUploaded: true
+  })
+  return result
 }
 
 export const syncProjectGroupMetadataToRelay = async (params: {
