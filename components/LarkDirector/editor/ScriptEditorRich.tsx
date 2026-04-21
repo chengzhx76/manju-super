@@ -169,7 +169,7 @@ const CustomMention = Mention.extend({
 
     const suffix =
       item?.type === 'character'
-        ? '-基础形象'
+        ? `-${item?.variantName || '基础形象'}`
         : item?.type === 'scene'
           ? '_0'
           : ''

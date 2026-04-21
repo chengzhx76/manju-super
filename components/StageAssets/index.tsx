@@ -9,8 +9,7 @@ import {
   X,
   Search,
   Trash2,
-  Package,
-  Link2
+  Package
 } from 'lucide-react'
 import {
   ProjectState,
@@ -64,12 +63,8 @@ import {
   getActiveImageModel
 } from '../../services/modelRegistry'
 import { updatePromptWithVersion } from '../../services/promptVersionService'
-import CharacterLibraryPickerModal from './CharacterLibraryPicker'
-import ProjectAssetPicker from './ProjectAssetPicker'
 import { useProjectContext } from '../../contexts/ProjectContext'
-import { loadSeriesProject } from '../../services/storageService'
 import {
-  SeriesProject,
   EpisodeCharacterRef,
   EpisodeSceneRef,
   EpisodePropRef
@@ -118,10 +113,6 @@ const StageAssets: React.FC<Props> = ({
     null
   )
   const [turnaroundCharId, setTurnaroundCharId] = useState<string | null>(null)
-  const [showCharLibraryPicker, setShowCharLibraryPicker] = useState(false)
-  const [showSceneLibraryPicker, setShowSceneLibraryPicker] = useState(false)
-  const [showPropLibraryPicker, setShowPropLibraryPicker] = useState(false)
-  const [pickerProject, setPickerProject] = useState<SeriesProject | null>(null)
   const [episodeSyncingKind, setEpisodeSyncingKind] = useState<
     'character' | 'scene' | 'prop' | null
   >(null)
@@ -133,93 +124,6 @@ const StageAssets: React.FC<Props> = ({
   )
   const [syncingSceneIds, setSyncingSceneIds] = useState<string[]>([])
   const [syncingPropIds, setSyncingPropIds] = useState<string[]>([])
-
-  const loadPickerProject = async (): Promise<SeriesProject | null> => {
-    if (!project.projectId) return null
-    try {
-      const sp = await loadSeriesProject(project.projectId)
-      setPickerProject(sp)
-      return sp
-    } catch {
-      return null
-    }
-  }
-
-  const upsertEpisodeRef = <TRef,>(
-    refs: TRef[] | undefined,
-    key: string,
-    getKey: (ref: TRef) => string,
-    nextRef: TRef
-  ): TRef[] => {
-    const currentRefs = refs || []
-    const hasRef = currentRefs.some((ref) => getKey(ref) === key)
-    if (!hasRef) return [...currentRefs, nextRef]
-    return currentRefs.map((ref) => (getKey(ref) === key ? nextRef : ref))
-  }
-
-  const upsertCharacterRef = (characterId: string, syncedVersion: number) =>
-    upsertEpisodeRef(
-      project.characterRefs,
-      characterId,
-      (ref) => ref.characterId,
-      { characterId, syncedVersion, syncStatus: 'synced' as const }
-    )
-
-  const upsertSceneRef = (sceneId: string, syncedVersion: number) =>
-    upsertEpisodeRef(project.sceneRefs, sceneId, (ref) => ref.sceneId, {
-      sceneId,
-      syncedVersion,
-      syncStatus: 'synced' as const
-    })
-
-  const upsertPropRef = (propId: string, syncedVersion: number) =>
-    upsertEpisodeRef(project.propRefs, propId, (ref) => ref.propId, {
-      propId,
-      syncedVersion,
-      syncStatus: 'synced' as const
-    })
-
-  const appendLinkedLibraryAsset = <
-    TAsset extends { id: string; version?: number },
-    TField extends 'characters' | 'scenes' | 'props',
-    TRefField extends 'characterRefs' | 'sceneRefs' | 'propRefs'
-  >(params: {
-    asset: TAsset
-    idPrefix: 'char' | 'scene' | 'prop'
-    field: TField
-    refField: TRefField
-    upsertRef: (
-      assetId: string,
-      syncedVersion: number
-    ) => ProjectState[TRefField]
-    onDone: () => void
-  }) => {
-    if (!project.scriptData) return
-
-    const { asset, idPrefix, field, refField, upsertRef, onDone } = params
-    const linkedAsset = {
-      ...asset,
-      id: generateId(idPrefix),
-      libraryId: asset.id,
-      libraryVersion: asset.version || 1
-    }
-    const nextRefs = upsertRef(asset.id, asset.version || 1)
-
-    updateProject((prev) => {
-      const currentScriptData = prev.scriptData!
-      const currentItems = ((currentScriptData as any)[field] || []) as any[]
-      return {
-        ...prev,
-        scriptData: invalidateShotGenerationMeta({
-          ...currentScriptData,
-          [field]: [...currentItems, linkedAsset]
-        }),
-        [refField]: nextRefs
-      }
-    })
-
-    onDone()
-  }
 
   const cloneScriptData = <T extends ProjectState['scriptData']>(
     scriptData: T
@@ -298,17 +202,6 @@ const StageAssets: React.FC<Props> = ({
       return { ...prev, scriptData: next }
     })
   }, [project.scriptData, updateProject])
-
-  useEffect(() => {
-    const handler = () => {
-      loadPickerProject().then((sp) => {
-        if (sp) setShowCharLibraryPicker(true)
-      })
-    }
-    window.addEventListener('openCharacterLibraryPicker', handler)
-    return () =>
-      window.removeEventListener('openCharacterLibraryPicker', handler)
-  }, [project.projectId])
 
   // 横竖屏选择状态（从持久化配置读取）
   const [aspectRatio, setAspectRatioState] = useState<AspectRatio>(() =>
@@ -3558,25 +3451,6 @@ const StageAssets: React.FC<Props> = ({
                 <Users className="w-3 h-3" />
                 新建角色
               </button>
-              {project.projectId && (
-                <button
-                  onClick={() => {
-                    if (project.projectId) {
-                      loadSeriesProject(project.projectId)
-                        .then((sp) => {
-                          setPickerProject(sp)
-                          setShowCharLibraryPicker(true)
-                        })
-                        .catch(() => {})
-                    }
-                  }}
-                  disabled={!!batchProgress}
-                  className={STYLES.secondaryButton}
-                >
-                  <Link2 className="w-3 h-3" />
-                  从角色库添加
-                </button>
-              )}
               <button
                 onClick={() => openLibrary('character')}
                 disabled={!!batchProgress}
@@ -3683,20 +3557,6 @@ const StageAssets: React.FC<Props> = ({
                 <MapPin className="w-3 h-3" />
                 新建场景
               </button>
-              {project.projectId && (
-                <button
-                  onClick={() => {
-                    loadPickerProject().then((sp) => {
-                      if (sp) setShowSceneLibraryPicker(true)
-                    })
-                  }}
-                  disabled={!!batchProgress}
-                  className={STYLES.secondaryButton}
-                >
-                  <Link2 className="w-3 h-3" />
-                  从场景库添加
-                </button>
-              )}
               <button
                 onClick={() => openLibrary('scene')}
                 disabled={!!batchProgress}
@@ -3800,20 +3660,6 @@ const StageAssets: React.FC<Props> = ({
                 <Package className="w-3 h-3" />
                 新建道具
               </button>
-              {project.projectId && (
-                <button
-                  onClick={() => {
-                    loadPickerProject().then((sp) => {
-                      if (sp) setShowPropLibraryPicker(true)
-                    })
-                  }}
-                  disabled={!!batchProgress}
-                  className={STYLES.secondaryButton}
-                >
-                  <Link2 className="w-3 h-3" />
-                  从道具库添加
-                </button>
-              )}
               <button
                 onClick={() => openLibrary('prop')}
                 disabled={!!batchProgress}
@@ -3907,76 +3753,6 @@ const StageAssets: React.FC<Props> = ({
         </section>
       </div>
 
-      {/* Character Library Picker */}
-      {showCharLibraryPicker && (
-        <CharacterLibraryPickerModal
-          isOpen={showCharLibraryPicker}
-          onClose={() => setShowCharLibraryPicker(false)}
-          project={pickerProject}
-          existingCharacterIds={(project.scriptData?.characters || [])
-            .filter((c) => c.libraryId)
-            .map((c) => c.libraryId!)}
-          onSelect={(libChar) => {
-            appendLinkedLibraryAsset({
-              asset: {
-                ...libChar,
-                variations: libChar.variations?.map((v) => ({ ...v })) || []
-              },
-              idPrefix: 'char',
-              field: 'characters',
-              refField: 'characterRefs',
-              upsertRef: upsertCharacterRef,
-              onDone: () => setShowCharLibraryPicker(false)
-            })
-          }}
-        />
-      )}
-
-      {/* Scene Library Picker */}
-      {showSceneLibraryPicker && (
-        <ProjectAssetPicker
-          isOpen={showSceneLibraryPicker}
-          onClose={() => setShowSceneLibraryPicker(false)}
-          project={pickerProject}
-          assetType="scene"
-          existingIds={(project.scriptData?.scenes || [])
-            .filter((s) => !!s.libraryId)
-            .map((s) => s.libraryId!)}
-          onSelectScene={(libScene) => {
-            appendLinkedLibraryAsset({
-              asset: libScene,
-              idPrefix: 'scene',
-              field: 'scenes',
-              refField: 'sceneRefs',
-              upsertRef: upsertSceneRef,
-              onDone: () => setShowSceneLibraryPicker(false)
-            })
-          }}
-        />
-      )}
-
-      {/* Prop Library Picker */}
-      {showPropLibraryPicker && (
-        <ProjectAssetPicker
-          isOpen={showPropLibraryPicker}
-          onClose={() => setShowPropLibraryPicker(false)}
-          project={pickerProject}
-          assetType="prop"
-          existingIds={(project.scriptData?.props || [])
-            .filter((p) => !!p.libraryId)
-            .map((p) => p.libraryId!)}
-          onSelectProp={(libProp) => {
-            appendLinkedLibraryAsset({
-              asset: libProp,
-              idPrefix: 'prop',
-              field: 'props',
-              refField: 'propRefs',
-              upsertRef: upsertPropRef,
-              onDone: () => setShowPropLibraryPicker(false)
-            })
-          }}
-        />
-      )}
     </div>
   )
 }

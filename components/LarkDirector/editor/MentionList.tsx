@@ -4,93 +4,55 @@ import React, {
   useImperativeHandle,
   useState
 } from 'react'
-import { ChevronRight, User, MapPin, Package, Clock3 } from 'lucide-react'
+import { ChevronRight, Clock3 } from 'lucide-react'
 
 export default forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [libraryExpanded, setLibraryExpanded] = useState(false)
-  const [libraryFilter, setLibraryFilter] = useState<
-    'all' | 'character' | 'scene' | 'prop'
-  >('all')
-  const canAddFromLibrary = !!props.onAddFromLibrary
+  const [variationParent, setVariationParent] = useState<any | null>(null)
+  const [variationParentIndex, setVariationParentIndex] = useState(0)
   const defaultItems = props.items || []
-  const libraryItems = props.libraryItems || []
-  const filteredLibraryItems = libraryItems.filter((item: any) => {
-    if (libraryFilter === 'all') return true
-    return item?.type === libraryFilter
-  })
-  const visibleItems = libraryExpanded ? filteredLibraryItems : defaultItems
+  const variationItems =
+    variationParent?.type === 'character' && Array.isArray(variationParent?.variants)
+      ? variationParent.variants.map((variant: any, index: number) => ({
+          ...variationParent,
+          id: `${variationParent.id}::${variant.id || index}`,
+          variantName: variant.name,
+          desc: variant.desc,
+          image: variant.image || variationParent.image
+        }))
+      : []
+  const isVariationMode = variationItems.length > 0
+  const visibleItems = isVariationMode ? variationItems : defaultItems
   const quickActions =
-    props.allowDurationAction && !libraryExpanded
+    props.allowDurationAction && !isVariationMode
       ? [
           {
             key: 'duration',
             title: '添加时间',
             subtitle: '时间',
-            kind: 'duration' as const,
             Icon: Clock3
           }
         ]
       : []
-  const libraryActions =
-    canAddFromLibrary && !libraryExpanded
-      ? [
-          {
-            key: 'character',
-            title: '角色库',
-            subtitle: '从项目角色库添加',
-            kind: 'library' as const,
-            filter: 'character' as const,
-            Icon: User
-          },
-          {
-            key: 'scene',
-            title: '场景库',
-            subtitle: '从项目场景库添加',
-            kind: 'library' as const,
-            filter: 'scene' as const,
-            Icon: MapPin
-          },
-          {
-            key: 'prop',
-            title: '道具库',
-            subtitle: '从项目道具库添加',
-            kind: 'library' as const,
-            filter: 'prop' as const,
-            Icon: Package
-          }
-        ]
-      : []
-  const bottomActions = [...quickActions, ...libraryActions]
+  const bottomActions = [...quickActions]
   const actionStartIndex = visibleItems.length
   const itemCount = visibleItems.length + bottomActions.length
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([])
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null)
 
-  const openLibraryByFilter = (filter: 'character' | 'scene' | 'prop') => {
-    setLibraryExpanded(true)
-    setLibraryFilter(filter)
-    setSelectedIndex(0)
-    props.onAddFromLibrary?.(filter)
-  }
-
   const selectItem = (index: number) => {
-    if (!libraryExpanded && index >= actionStartIndex) {
+    if (index >= actionStartIndex) {
       const action = bottomActions[index - actionStartIndex]
       if (action) {
-        if (action.kind === 'duration') {
-          props.command({
-            id: 'duration-tag',
-            label: '添加时间',
-            itemData: {
-              type: 'duration',
-              name: '添加时间',
-              value: 5.0
-            }
-          })
-          return
-        }
-        openLibraryByFilter(action.filter)
+        props.command({
+          id: 'duration-tag',
+          label: '添加时间',
+          itemData: {
+            type: 'duration',
+            name: '添加时间',
+            value: 5.0
+          }
+        })
       }
       return
     }
@@ -98,8 +60,35 @@ export default forwardRef((props: any, ref) => {
     const item = visibleItems[index]
 
     if (item) {
+      if (
+        !isVariationMode &&
+        item.type === 'character' &&
+        Array.isArray(item.variants) &&
+        item.variants.length > 1
+      ) {
+        setVariationParent(item)
+        setVariationParentIndex(index)
+        setSelectedIndex(0)
+        return
+      }
       props.command({ id: item.name, label: item.name, itemData: item })
     }
+  }
+
+  const openVariationPanel = (index: number): boolean => {
+    if (isVariationMode) return false
+    const item = visibleItems[index]
+    if (
+      item?.type !== 'character' ||
+      !Array.isArray(item?.variants) ||
+      item.variants.length <= 1
+    ) {
+      return false
+    }
+    setVariationParent(item)
+    setVariationParentIndex(index)
+    setSelectedIndex(0)
+    return true
   }
 
   const upHandler = () => {
@@ -118,8 +107,8 @@ export default forwardRef((props: any, ref) => {
 
   useEffect(() => {
     setSelectedIndex(0)
-    setLibraryExpanded(false)
-    setLibraryFilter('all')
+    setVariationParent(null)
+    setVariationParentIndex(0)
   }, [props.items])
 
   useEffect(() => {
@@ -129,7 +118,7 @@ export default forwardRef((props: any, ref) => {
     } else if (scrollContainerRef.current && selectedIndex === 0) {
       scrollContainerRef.current.scrollTo({ top: 0 })
     }
-  }, [selectedIndex, libraryExpanded, visibleItems.length])
+  }, [selectedIndex, visibleItems.length, isVariationMode])
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: { event: KeyboardEvent }) => {
@@ -143,33 +132,21 @@ export default forwardRef((props: any, ref) => {
         return true
       }
 
-      if (event.key === 'ArrowRight') {
-        if (!libraryExpanded && selectedIndex >= actionStartIndex) {
-          const action = bottomActions[selectedIndex - actionStartIndex]
-          if (action && action.kind === 'library') {
-            openLibraryByFilter(action.filter)
-          }
-          return true
-        }
-      }
-
-      if (event.key === 'ArrowLeft') {
-        if (libraryExpanded) {
-          setLibraryExpanded(false)
-          const fallbackIdx = libraryActions.findIndex(
-            (action) => action.filter === libraryFilter
-          )
-          const actionIdx = fallbackIdx >= 0 ? fallbackIdx : 0
-          setSelectedIndex(
-            defaultItems.length + quickActions.length + actionIdx
-          )
-          return true
-        }
-      }
-
       if (event.key === 'Enter') {
         enterHandler()
         return true
+      }
+
+      if (event.key === 'ArrowRight') {
+        return openVariationPanel(selectedIndex)
+      }
+
+      if (event.key === 'ArrowLeft') {
+        if (isVariationMode) {
+          setVariationParent(null)
+          setSelectedIndex(variationParentIndex)
+          return true
+        }
       }
 
       return false
@@ -212,14 +189,20 @@ export default forwardRef((props: any, ref) => {
                   </span>
                 )}
               </div>
-              <div className="flex flex-col overflow-hidden">
+              <div className="flex flex-col overflow-hidden flex-1 min-w-0">
                 <span className="text-[14px] leading-5 font-medium text-gray-900 truncate">
-                  {item.name}
+                  {isVariationMode ? item.variantName || '基础形象' : item.name}
                 </span>
                 <span className="text-[11px] leading-4 text-gray-400 truncate">
                   {item.desc}
                 </span>
               </div>
+              {!isVariationMode &&
+              item.type === 'character' &&
+              Array.isArray(item.variants) &&
+              item.variants.length > 1 ? (
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              ) : null}
             </button>
           ))
         ) : (
@@ -261,9 +244,6 @@ export default forwardRef((props: any, ref) => {
                     </span>
                   </div>
                 </div>
-                {action.kind === 'library' ? (
-                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                ) : null}
               </button>
             )
           })}

@@ -461,7 +461,7 @@ const LarkDirector: React.FC<Props> = ({
                       )}
                     </div>
                     <div className="text-[10px] text-[var(--text-secondary)] text-center truncate">
-                      {char.name}-基础形象
+                      {char.name}
                     </div>
                   </div>
                 ))}

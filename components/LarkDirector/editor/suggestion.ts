@@ -9,6 +9,13 @@ export interface MentionItem {
   name: string
   desc: string
   image?: string
+  variantName?: string
+  variants?: Array<{
+    id: string
+    name: string
+    desc: string
+    image?: string
+  }>
 }
 
 const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
@@ -19,6 +26,32 @@ const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
     seen.add(key)
     return true
   })
+}
+
+const toCharacterVariants = (character: any): MentionItem['variants'] => {
+  const baseDesc = String(character?.visualPrompt || '').trim() || '基础形象'
+  const baseVariant = {
+    id: `${character?.id || character?.name || 'character'}::base`,
+    name: '基础形象',
+    desc: baseDesc,
+    image: character?.referenceImage
+  }
+  const derivedVariants = (character?.variations || [])
+    .map((variation: any, index: number) => {
+      const variantName = String(variation?.name || '').trim() || `变体形象${index + 1}`
+      const variantDesc =
+        String(variation?.visualPrompt || '').trim() || `${variantName}描述`
+      return {
+        id:
+          String(variation?.id || '').trim() ||
+          `${character?.id || character?.name || 'character'}::variation-${index + 1}`,
+        name: variantName,
+        desc: variantDesc,
+        image: variation?.referenceImage || character?.referenceImage
+      }
+    })
+    .filter((item: any) => item.name)
+  return [baseVariant, ...derivedVariants]
 }
 
 export function buildProjectLibraryMentionItems(
@@ -34,7 +67,8 @@ export function buildProjectLibraryMentionItems(
       type: 'character' as const,
       name: c.name,
       desc: '基础形象-基础形象',
-      image: c.referenceImage
+      image: c.referenceImage,
+      variants: toCharacterVariants(c)
     })),
     ...allScenes.map((s: any) => ({
       id: s.id || s.location,
@@ -72,7 +106,8 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
       type: 'character' as const,
       name: c.name,
       desc: '基础形象-基础形象',
-      image: c.referenceImage
+      image: c.referenceImage,
+      variants: toCharacterVariants(c)
     })),
     ...allScenes.map((s: any) => ({
       id: s.id || s.location,
