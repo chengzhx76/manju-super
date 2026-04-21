@@ -6,6 +6,7 @@ export interface CharacterVariation {
   negativePrompt?: string // 负面提示词，用于排除不想要的元素
   referenceImage?: string // 角色变体参考图，存储为base64格式（data:image/png;base64,...）
   status?: 'pending' | 'generating' | 'completed' | 'failed' // 生成状态，用于loading状态持久化
+  assetId?: string // 素材库资产ID，用于标记是否已同步
 }
 
 export type PromptVersionSource =
@@ -135,6 +136,7 @@ export interface CharacterTurnaroundData {
   panels: CharacterTurnaroundPanel[] // 9个格子的描述数据
   imageUrl?: string // 生成的九宫格整图 (base64)，直接作为多视角参考图使用
   prompt?: string // 生成时使用的完整提示词
+  assetId?: string // 素材库资产ID，用于标记是否已同步
   status:
     | 'pending'
     | 'generating_panels'

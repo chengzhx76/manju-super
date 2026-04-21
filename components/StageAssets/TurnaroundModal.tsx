@@ -9,7 +9,8 @@ import {
   Save,
   ArrowRight,
   Wand2,
-  ImagePlus
+  ImagePlus,
+  Upload
 } from 'lucide-react'
 import { Character, CharacterTurnaroundPanel } from '../../types'
 import { CHARACTER_TURNAROUND_LAYOUT } from '../../services/aiService'
@@ -26,6 +27,9 @@ interface TurnaroundModalProps {
   ) => void
   onRegenerate: (charId: string) => void
   onRegenerateImage: (charId: string) => void // 仅重新生成图片（保留已有的视角描述）
+  onUploadImage: (charId: string, file: File) => void
+  onSyncToLibrary: (charId: string) => void
+  isSyncingToLibrary: boolean
   onImageClick: (imageUrl: string) => void
 }
 
@@ -37,6 +41,9 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
   onUpdatePanel,
   onRegenerate,
   onRegenerateImage,
+  onUploadImage,
+  onSyncToLibrary,
+  isSyncingToLibrary,
   onImageClick
 }) => {
   const turnaround = character.turnaround
@@ -125,6 +132,30 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
               <span className="text-[10px] text-[var(--success-text)] font-bold uppercase tracking-wider bg-[var(--success-bg)] px-2 py-0.5 rounded border border-[var(--success-border)]">
                 已完成
               </span>
+            )}
+            {isCompleted && (
+              <button
+                type="button"
+                disabled={!!turnaround?.assetId || isSyncingToLibrary}
+                onClick={() =>
+                  !turnaround?.assetId &&
+                  !isSyncingToLibrary &&
+                  onSyncToLibrary(character.id)
+                }
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                  isSyncingToLibrary
+                    ? 'text-[var(--accent-text)] bg-[var(--accent-bg)] border-[var(--accent-border)] opacity-70 cursor-not-allowed'
+                    : turnaround?.assetId
+                    ? 'text-[var(--success-text)] bg-[var(--success-bg)] border-[var(--success-border)]'
+                    : 'text-[var(--warning-text)] bg-[var(--warning-bg)] border-[var(--warning-border)] hover:opacity-80 cursor-pointer'
+                }`}
+              >
+                {isSyncingToLibrary
+                  ? '同步中'
+                  : turnaround?.assetId
+                    ? '已同步'
+                    : '未同步'}
+              </button>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -471,6 +502,22 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
 
               {/* 底部操作按钮 */}
               <div className="flex justify-center gap-3 pt-2">
+                <label className="px-4 py-2 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-[var(--border-primary)] cursor-pointer">
+                  <Upload className="w-3 h-3" />
+                  上传九宫格
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        onUploadImage(character.id, file)
+                        e.target.value = ''
+                      }
+                    }}
+                  />
+                </label>
                 <button
                   onClick={() => onRegenerateImage(character.id)}
                   className="px-4 py-2 bg-[var(--accent-bg)] hover:bg-[var(--accent-hover-bg)] text-[var(--accent-text)] border border-[var(--accent-border)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"

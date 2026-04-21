@@ -122,6 +122,14 @@ const StageAssets: React.FC<Props> = ({
   const [episodeSyncingKind, setEpisodeSyncingKind] = useState<
     'character' | 'scene' | 'prop' | null
   >(null)
+  const [syncingVariationKeys, setSyncingVariationKeys] = useState<string[]>(
+    []
+  )
+  const [syncingTurnaroundKeys, setSyncingTurnaroundKeys] = useState<string[]>(
+    []
+  )
+  const [syncingSceneIds, setSyncingSceneIds] = useState<string[]>([])
+  const [syncingPropIds, setSyncingPropIds] = useState<string[]>([])
 
   const loadPickerProject = async (): Promise<SeriesProject | null> => {
     if (!project.projectId) return null
@@ -949,6 +957,190 @@ const StageAssets: React.FC<Props> = ({
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
         { type: 'warning' }
+      )
+    }
+  }
+
+  const getVariationRelayLocalId = (charId: string, varId: string): string =>
+    `${charId}__variation__${varId}`
+
+  const getTurnaroundRelayLocalId = (charId: string): string =>
+    `${charId}__turnaround`
+
+  const applyVariationAssetId = (
+    charId: string,
+    varId: string,
+    assetId?: string
+  ) => {
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const next = cloneScriptData(prev.scriptData)
+      const char = next.characters.find((item) => compareIds(item.id, charId))
+      const variation = char?.variations?.find((item) =>
+        compareIds(item.id, varId)
+      )
+      if (!variation) return prev
+      if (assetId) {
+        variation.assetId = assetId
+      } else {
+        delete variation.assetId
+      }
+      return { ...prev, scriptData: next }
+    })
+  }
+
+  const applyTurnaroundAssetId = (charId: string, assetId?: string) => {
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const next = cloneScriptData(prev.scriptData)
+      const char = next.characters.find((item) => compareIds(item.id, charId))
+      if (!char?.turnaround) return prev
+      if (assetId) {
+        char.turnaround.assetId = assetId
+      } else {
+        delete char.turnaround.assetId
+      }
+      return { ...prev, scriptData: next }
+    })
+  }
+
+  const syncCharacterDerivedAsset = async (params: {
+    localId: string
+    url?: string
+    currentAssetId?: string
+    onSynced: (assetId: string) => void
+  }): Promise<{ skipped: boolean; reason?: string }> => {
+    if (!seriesProject) return { skipped: true, reason: '无法获取项目信息' }
+    try {
+      const result = await uploadGeneratedAssetToRelay({
+        project: seriesProject,
+        seriesList: allSeries,
+        episodes: allEpisodes,
+        episode: project,
+        kind: 'character',
+        localId: params.localId,
+        url: params.url,
+        currentAssetId: params.currentAssetId
+      })
+      if (result.skipped) {
+        return { skipped: true, reason: result.reason }
+      }
+      if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
+        updateSeriesProject({ assetGroupId: result.groupId })
+      }
+      if (result.assetId) {
+        params.onSynced(result.assetId)
+      }
+      return { skipped: false }
+    } catch (error) {
+      showAlert(
+        `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'warning' }
+      )
+      return { skipped: true, reason: '素材库同步失败' }
+    }
+  }
+
+  const handleSyncVariationToLibrary = async (charId: string, varId: string) => {
+    const key = getVariationRelayLocalId(charId, varId)
+    if (syncingVariationKeys.includes(key)) return
+    const variation = project.scriptData?.characters
+      .find((item) => compareIds(item.id, charId))
+      ?.variations?.find((item) => compareIds(item.id, varId))
+    if (!variation?.referenceImage) {
+      showAlert('当前变体暂无可同步图片', { type: 'warning' })
+      return
+    }
+    setSyncingVariationKeys((prev) => [...prev, key])
+    try {
+      const result = await syncCharacterDerivedAsset({
+        localId: key,
+        url: variation.referenceImage,
+        currentAssetId: variation.assetId,
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+      })
+      if (result.skipped) {
+        showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
+      } else {
+        showAlert('变体已同步到素材库', { type: 'success' })
+      }
+    } finally {
+      setSyncingVariationKeys((prev) => prev.filter((item) => item !== key))
+    }
+  }
+
+  const handleSyncTurnaroundToLibrary = async (charId: string) => {
+    const key = getTurnaroundRelayLocalId(charId)
+    if (syncingTurnaroundKeys.includes(key)) return
+    const turnaround = project.scriptData?.characters.find((item) =>
+      compareIds(item.id, charId)
+    )?.turnaround
+    if (!turnaround?.imageUrl) {
+      showAlert('当前九宫格暂无可同步图片', { type: 'warning' })
+      return
+    }
+    setSyncingTurnaroundKeys((prev) => [...prev, key])
+    try {
+      const result = await syncCharacterDerivedAsset({
+        localId: key,
+        url: turnaround.imageUrl,
+        currentAssetId: turnaround.assetId,
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
+      })
+      if (result.skipped) {
+        showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
+      } else {
+        showAlert('九宫格已同步到素材库', { type: 'success' })
+      }
+    } finally {
+      setSyncingTurnaroundKeys((prev) => prev.filter((item) => item !== key))
+    }
+  }
+
+  const handleSyncSceneToLibrary = async (sceneId: string) => {
+    if (syncingSceneIds.includes(sceneId)) return
+    const scene = project.scriptData?.scenes.find((item) =>
+      compareIds(item.id, sceneId)
+    )
+    if (!scene?.referenceImage) {
+      showAlert('当前场景暂无可同步图片', { type: 'warning' })
+      return
+    }
+    setSyncingSceneIds((prev) => [...prev, sceneId])
+    try {
+      await syncGeneratedAsset({
+        kind: 'scene',
+        localId: sceneId,
+        url: scene.referenceImage,
+        currentAssetId: scene.assetId
+      })
+    } finally {
+      setSyncingSceneIds((prev) =>
+        prev.filter((item) => !compareIds(item, sceneId))
+      )
+    }
+  }
+
+  const handleSyncPropToLibrary = async (propId: string) => {
+    if (syncingPropIds.includes(propId)) return
+    const prop = project.scriptData?.props?.find((item) =>
+      compareIds(item.id, propId)
+    )
+    if (!prop?.referenceImage) {
+      showAlert('当前道具暂无可同步图片', { type: 'warning' })
+      return
+    }
+    setSyncingPropIds((prev) => [...prev, propId])
+    try {
+      await syncGeneratedAsset({
+        kind: 'prop',
+        localId: propId,
+        url: prop.referenceImage,
+        currentAssetId: prop.assetId
+      })
+    } finally {
+      setSyncingPropIds((prev) =>
+        prev.filter((item) => !compareIds(item, propId))
       )
     }
   }
@@ -2384,39 +2576,65 @@ const StageAssets: React.FC<Props> = ({
   /**
    * 删除角色变体
    */
-  const handleDeleteVariation = (charId: string, varId: string) => {
+  const handleDeleteVariation = async (charId: string, varId: string) => {
     if (!project.scriptData) return
-    const newData = cloneScriptData(project.scriptData)
-    const char = newData.characters.find((c) => compareIds(c.id, charId))
-    if (!char) return
+    const char = project.scriptData.characters.find((c) =>
+      compareIds(c.id, charId)
+    )
+    const variation = char?.variations?.find((v) => compareIds(v.id, varId))
+    if (variation?.assetId) {
+      try {
+        await deleteRemoteAsset(variation.assetId)
+      } catch (error) {
+        console.warn('Delete variation remote asset failed:', error)
+      }
+    }
 
-    char.variations = char.variations?.filter((v) => !compareIds(v.id, varId))
+    const newData = cloneScriptData(project.scriptData)
+    const target = newData.characters.find((c) => compareIds(c.id, charId))
+    if (!target) return
+
+    target.variations = target.variations?.filter((v) => !compareIds(v.id, varId))
     updateProject({ scriptData: newData })
   }
 
   /**
    * 生成角色变体
    */
-  const handleGenerateVariation = async (charId: string, varId: string) => {
+  const handleGenerateVariation = async (
+    charId: string,
+    varId: string,
+    promptOverride?: string
+  ) => {
     const char = project.scriptData?.characters.find((c) =>
       compareIds(c.id, charId)
     )
     const variation = char?.variations?.find((v) => compareIds(v.id, varId))
     if (!char || !variation) return
+    const currentAssetId = variation.assetId
+    const variationSyncKey = getVariationRelayLocalId(charId, varId)
+    const normalizedOverride = promptOverride?.trim()
+    const promptToUse =
+      normalizedOverride && normalizedOverride.length > 0
+        ? normalizedOverride
+        : variation.visualPrompt
 
     // 设置生成状态
     if (project.scriptData) {
       const newData = cloneScriptData(project.scriptData)
       const c = newData.characters.find((c) => compareIds(c.id, charId))
       const v = c?.variations?.find((v) => compareIds(v.id, varId))
-      if (v) v.status = 'generating'
+      if (v) {
+        v.status = 'generating'
+        v.visualPrompt = promptToUse
+      }
       updateProject({ scriptData: newData })
     }
     try {
       const refImages = char.referenceImage ? [char.referenceImage] : []
       const regionalPrefix = getRegionalPrefix(language, 'character')
       // 构建变体专用提示词：强调服装变化
-      const enhancedPrompt = `${regionalPrefix}Character "${char.name}" wearing NEW OUTFIT: ${variation.visualPrompt}. This is a costume/outfit change - the character's face and identity must remain identical to the reference, but they should be wearing the described new outfit.`
+      const enhancedPrompt = `${regionalPrefix}Character "${char.name}" wearing NEW OUTFIT: ${promptToUse}. This is a costume/outfit change - the character's face and identity must remain identical to the reference, but they should be wearing the described new outfit.`
       const negativePrompt =
         variation.negativePrompt || char.negativePrompt || ''
 
@@ -2435,11 +2653,22 @@ const StageAssets: React.FC<Props> = ({
       const c = newData.characters.find((c) => compareIds(c.id, charId))
       const v = c?.variations?.find((v) => compareIds(v.id, varId))
       if (v) {
+        v.visualPrompt = promptToUse
         v.referenceImage = imageUrl
         v.status = 'completed'
+        delete v.assetId
       }
 
       updateProject({ scriptData: newData })
+      setSyncingVariationKeys((prev) =>
+        prev.includes(variationSyncKey) ? prev : [...prev, variationSyncKey]
+      )
+      await syncCharacterDerivedAsset({
+        localId: variationSyncKey,
+        url: imageUrl,
+        currentAssetId,
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+      })
     } catch (e: any) {
       console.error(e)
       // 设置失败状态
@@ -2454,6 +2683,10 @@ const StageAssets: React.FC<Props> = ({
         return
       }
       showAlert('Variation generation failed', { type: 'error' })
+    } finally {
+      setSyncingVariationKeys((prev) =>
+        prev.filter((item) => item !== variationSyncKey)
+      )
     }
   }
 
@@ -2465,7 +2698,16 @@ const StageAssets: React.FC<Props> = ({
     varId: string,
     file: File
   ) => {
+    const variationSyncKey = getVariationRelayLocalId(charId, varId)
     try {
+      const currentAssetId =
+        project.scriptData?.characters
+          .find((item) => compareIds(item.id, charId))
+          ?.variations?.find((item) => compareIds(item.id, varId))?.assetId ||
+        undefined
+      if (currentAssetId) {
+        await deleteRemoteAsset(currentAssetId)
+      }
       const base64 = await handleImageUpload(file)
 
       updateProject((prev) => {
@@ -2476,11 +2718,25 @@ const StageAssets: React.FC<Props> = ({
         if (variation) {
           variation.referenceImage = base64
           variation.status = 'completed'
+          delete variation.assetId
         }
         return { ...prev, scriptData: newData }
       })
+      setSyncingVariationKeys((prev) =>
+        prev.includes(variationSyncKey) ? prev : [...prev, variationSyncKey]
+      )
+      await syncCharacterDerivedAsset({
+        localId: variationSyncKey,
+        url: base64,
+        currentAssetId,
+        onSynced: (assetId) => applyVariationAssetId(charId, varId, assetId)
+      })
     } catch (e: any) {
       showAlert(e.message, { type: 'error' })
+    } finally {
+      setSyncingVariationKeys((prev) =>
+        prev.filter((item) => item !== variationSyncKey)
+      )
     }
   }
 
@@ -2560,6 +2816,8 @@ const StageAssets: React.FC<Props> = ({
       compareIds(c.id, charId)
     )
     if (!char) return
+    const currentAssetId = char.turnaround?.assetId
+    const turnaroundSyncKey = getTurnaroundRelayLocalId(charId)
 
     // 设置状态为 generating_image
     updateProject((prev) => {
@@ -2590,8 +2848,18 @@ const StageAssets: React.FC<Props> = ({
         if (c && c.turnaround) {
           c.turnaround.imageUrl = imageUrl
           c.turnaround.status = 'completed'
+          delete c.turnaround.assetId
         }
         return { ...prev, scriptData: newData }
+      })
+      setSyncingTurnaroundKeys((prev) =>
+        prev.includes(turnaroundSyncKey) ? prev : [...prev, turnaroundSyncKey]
+      )
+      await syncCharacterDerivedAsset({
+        localId: turnaroundSyncKey,
+        url: imageUrl,
+        currentAssetId,
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
       })
     } catch (e: any) {
       console.error('九宫格造型图片生成失败:', e)
@@ -2606,6 +2874,10 @@ const StageAssets: React.FC<Props> = ({
       })
       if (onApiKeyError && onApiKeyError(e)) return
       showAlert('九宫格造型图片生成失败', { type: 'error' })
+    } finally {
+      setSyncingTurnaroundKeys((prev) =>
+        prev.filter((item) => item !== turnaroundSyncKey)
+      )
     }
   }
 
@@ -2655,6 +2927,47 @@ const StageAssets: React.FC<Props> = ({
 
     // 直接使用已有的面板描述重新生成图片
     handleConfirmTurnaroundPanels(charId, char.turnaround.panels)
+  }
+
+  const handleUploadTurnaroundImage = async (charId: string, file: File) => {
+    const turnaroundSyncKey = getTurnaroundRelayLocalId(charId)
+    try {
+      const currentAssetId =
+        project.scriptData?.characters.find((item) => compareIds(item.id, charId))
+          ?.turnaround?.assetId || undefined
+      if (currentAssetId) {
+        await deleteRemoteAsset(currentAssetId)
+      }
+      const base64 = await handleImageUpload(file)
+      updateProject((prev) => {
+        if (!prev.scriptData) return prev
+        const newData = cloneScriptData(prev.scriptData)
+        const char = newData.characters.find((c) => compareIds(c.id, charId))
+        if (!char) return prev
+        const currentTurnaround = char.turnaround
+        char.turnaround = {
+          panels: currentTurnaround?.panels || [],
+          status: 'completed',
+          imageUrl: base64
+        }
+        return { ...prev, scriptData: newData }
+      })
+      setSyncingTurnaroundKeys((prev) =>
+        prev.includes(turnaroundSyncKey) ? prev : [...prev, turnaroundSyncKey]
+      )
+      await syncCharacterDerivedAsset({
+        localId: turnaroundSyncKey,
+        url: base64,
+        currentAssetId,
+        onSynced: (assetId) => applyTurnaroundAssetId(charId, assetId)
+      })
+    } catch (e: any) {
+      showAlert(e.message, { type: 'error' })
+    } finally {
+      setSyncingTurnaroundKeys((prev) =>
+        prev.filter((item) => item !== turnaroundSyncKey)
+      )
+    }
   }
 
   // 空状态
@@ -2763,6 +3076,12 @@ const StageAssets: React.FC<Props> = ({
           onDeleteVariation={handleDeleteVariation}
           onGenerateVariation={handleGenerateVariation}
           onUploadVariation={handleUploadVariationImage}
+          onSyncVariation={handleSyncVariationToLibrary}
+          isVariationSyncing={(varId) =>
+            syncingVariationKeys.includes(
+              getVariationRelayLocalId(selectedChar.id, varId)
+            )
+          }
           onImageClick={setPreviewImage}
         />
       )}
@@ -2782,6 +3101,11 @@ const StageAssets: React.FC<Props> = ({
               onUpdatePanel={handleUpdateTurnaroundPanel}
               onRegenerate={handleRegenerateTurnaround}
               onRegenerateImage={handleRegenerateTurnaroundImage}
+              onUploadImage={handleUploadTurnaroundImage}
+              onSyncToLibrary={handleSyncTurnaroundToLibrary}
+              isSyncingToLibrary={syncingTurnaroundKeys.includes(
+                getTurnaroundRelayLocalId(turnaroundChar.id)
+              )}
               onImageClick={setPreviewImage}
             />
           ) : null
@@ -2991,7 +3315,7 @@ const StageAssets: React.FC<Props> = ({
             className={STYLES.secondaryButton}
           >
             <Archive className="w-4 h-4" />
-            项目库
+            资产库
           </button>
           {/* 横竖屏选择 */}
           <div className="flex items-center gap-2">
@@ -3261,6 +3585,10 @@ const StageAssets: React.FC<Props> = ({
                     ? handleRemoveSceneFromProjectLibrary(scene)
                     : handleAddSceneToProjectLibrary(scene)
                 }
+                onSyncToLibrary={() => handleSyncSceneToLibrary(scene.id)}
+                isSyncingToLibrary={syncingSceneIds.some((item) =>
+                  compareIds(item, scene.id)
+                )}
               />
             ))}
           </div>
@@ -3383,6 +3711,10 @@ const StageAssets: React.FC<Props> = ({
                       ? handleRemovePropFromProjectLibrary(prop)
                       : handleAddPropToProjectLibrary(prop)
                   }
+                  onSyncToLibrary={() => handleSyncPropToLibrary(prop.id)}
+                  isSyncingToLibrary={syncingPropIds.some((item) =>
+                    compareIds(item, prop.id)
+                  )}
                 />
               ))}
             </div>

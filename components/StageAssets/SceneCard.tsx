@@ -47,6 +47,8 @@ interface SceneCardProps {
   }) => void
   onAddToLibrary: () => void
   onAddToProjectLibrary?: () => void
+  onSyncToLibrary: () => void
+  isSyncingToLibrary: boolean
 }
 
 const SceneCard: React.FC<SceneCardProps> = ({
@@ -65,7 +67,9 @@ const SceneCard: React.FC<SceneCardProps> = ({
   onDelete,
   onUpdateInfo,
   onAddToLibrary,
-  onAddToProjectLibrary
+  onAddToProjectLibrary,
+  onSyncToLibrary,
+  isSyncingToLibrary
 }) => {
   const [showGenerateModal, setShowGenerateModal] = useState(false)
   const [promptDraft, setPromptDraft] = useState(scene.visualPrompt || '')
@@ -110,11 +114,27 @@ const SceneCard: React.FC<SceneCardProps> = ({
           : 'border-[var(--warning)] hover:border-[var(--warning)]'
       }`}
     >
-      {!hasAssetId && (
-        <div className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded border border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] text-[9px] font-mono uppercase tracking-wider">
-          未同步
-        </div>
-      )}
+      <button
+        type="button"
+        disabled={hasAssetId || isSyncingToLibrary || !scene.referenceImage}
+        onClick={() =>
+          !hasAssetId &&
+          !isSyncingToLibrary &&
+          !!scene.referenceImage &&
+          onSyncToLibrary()
+        }
+        className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider ${
+          isSyncingToLibrary
+            ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-text)] opacity-70 cursor-not-allowed'
+            : hasAssetId
+              ? 'border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-text)] cursor-not-allowed'
+              : scene.referenceImage
+                ? 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] hover:opacity-80 cursor-pointer'
+                : 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] opacity-70 cursor-not-allowed'
+        }`}
+      >
+        {isSyncingToLibrary ? '同步中' : hasAssetId ? '已同步' : '未同步'}
+      </button>
       <div
         className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
         onClick={() =>
