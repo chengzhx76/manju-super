@@ -1357,11 +1357,24 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
 
     if (imageApiFormat === 'openai') {
       const hasRequestedOpenAiReferences = openAiReferenceSources.length > 0
-      const openAiSize = mapAspectRatioToOpenAiImageSize(aspectRatio)
+      const openAiSize = mapAspectRatioToOpenAiImageSize(
+        aspectRatio,
+        imageModelId
+      )
 
       const response = await retryOperation(async () => {
+        const openAiEndpoint = resolveOpenAiImageEndpoint(
+          imageModelEndpoint,
+          hasRequestedOpenAiReferences,
+          Boolean(activeImageModel?.endpoint?.trim())
+        )
+        const endpointUsesEdits = openAiEndpoint.includes('/images/edits')
+        const usableJsonReferenceSources = openAiReferenceSources.filter(
+          (item) => typeof item === 'string' && item.trim().length > 0
+        )
+
         let usableReferenceFiles: File[] = []
-        if (hasRequestedOpenAiReferences) {
+        if (endpointUsesEdits && hasRequestedOpenAiReferences) {
           const conversionResults = await Promise.all(
             openAiReferenceSources.map((img, index) =>
               sourceToImageFile(img, `reference-${index + 1}`)
@@ -1399,48 +1412,54 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
           }
         }
 
-        const useOpenAiReferences = usableReferenceFiles.length > 0
-        if (hasRequestedOpenAiReferences && !useOpenAiReferences) {
+        const useMultipartReferences = endpointUsesEdits && usableReferenceFiles.length > 0
+        const useJsonReferences =
+          !endpointUsesEdits && usableJsonReferenceSources.length > 0
+
+        if (
+          hasRequestedOpenAiReferences &&
+          !useMultipartReferences &&
+          !useJsonReferences
+        ) {
           console.warn(
             '[Image] All OpenAI reference images are unavailable, fallback to text-only image generation.'
           )
         }
 
-        const openAiEndpoint = resolveOpenAiImageEndpoint(
-          imageModelEndpoint,
-          useOpenAiReferences
-        )
-        let res: Response
-        if (useOpenAiReferences) {
-          const formData = new FormData()
-          formData.append('model', imageModelId)
-          formData.append('prompt', finalPrompt)
-          formData.append('size', openAiSize)
-          formData.append('quality', OPENAI_IMAGE_QUALITY)
-          formData.append('output_format', OPENAI_IMAGE_OUTPUT_FORMAT)
-          formData.append(
-            'output_compression',
-            String(OPENAI_IMAGE_OUTPUT_COMPRESSION)
-          )
-          formData.append('n', '1')
-          usableReferenceFiles.forEach((file) =>
-            formData.append('image[]', file)
-          )
-
+        const sendOpenAiImageRequest = async (
+          endpoint: string,
+          referenceFiles: File[],
+          referenceImages: string[]
+        ): Promise<Response> => {
           const openAiRequestUrl = resolveBrowserProxiedImageRequestUrl(
             apiBase,
-            openAiEndpoint
+            endpoint
           )
-          res = await fetch(openAiRequestUrl, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${apiKey}`,
-              Accept: '*/*'
-            },
-            body: formData
-          })
-        } else {
-          const requestBody = {
+          const shouldUseMultipart = endpoint.includes('/images/edits')
+          if (shouldUseMultipart && referenceFiles.length > 0) {
+            const formData = new FormData()
+            formData.append('model', imageModelId)
+            formData.append('prompt', finalPrompt)
+            formData.append('size', openAiSize)
+            formData.append('quality', OPENAI_IMAGE_QUALITY)
+            formData.append('output_format', OPENAI_IMAGE_OUTPUT_FORMAT)
+            formData.append(
+              'output_compression',
+              String(OPENAI_IMAGE_OUTPUT_COMPRESSION)
+            )
+            formData.append('n', '1')
+            referenceFiles.forEach((file) => formData.append('image[]', file))
+            return await fetch(openAiRequestUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                Accept: '*/*'
+              },
+              body: formData
+            })
+          }
+
+          const requestBody: Record<string, unknown> = {
             model: imageModelId,
             prompt: finalPrompt,
             size: openAiSize,
@@ -1449,12 +1468,12 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
             output_compression: OPENAI_IMAGE_OUTPUT_COMPRESSION,
             n: 1
           }
-
-          const openAiRequestUrl = resolveBrowserProxiedImageRequestUrl(
-            apiBase,
-            openAiEndpoint
-          )
-          res = await fetch(openAiRequestUrl, {
+          if (!shouldUseMultipart && referenceImages.length > 0) {
+            requestBody.image = referenceImages.length === 1
+              ? referenceImages[0]
+              : referenceImages
+          }
+          return await fetch(openAiRequestUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1463,6 +1482,31 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
             },
             body: JSON.stringify(requestBody)
           })
+        }
+
+        let res = await sendOpenAiImageRequest(
+          openAiEndpoint,
+          useMultipartReferences ? usableReferenceFiles : [],
+          useJsonReferences ? usableJsonReferenceSources : []
+        )
+        if (
+          !res.ok &&
+          useMultipartReferences &&
+          openAiEndpoint.includes('/images/edits') &&
+          [404, 405, 415].includes(res.status)
+        ) {
+          const fallbackEndpoint = openAiEndpoint.replace(
+            '/images/edits',
+            '/images/generations'
+          )
+          console.warn(
+            `[Image] OpenAI edits endpoint failed with ${res.status}, fallback to generations with JSON image references: ${fallbackEndpoint}`
+          )
+          res = await sendOpenAiImageRequest(
+            fallbackEndpoint,
+            [],
+            usableJsonReferenceSources
+          )
         }
 
         if (!res.ok) {

@@ -46,11 +46,15 @@ export const getDefaultImageEndpoint = (
 
 export const resolveOpenAiImageEndpoint = (
   endpoint: string | undefined,
-  hasReferenceImages: boolean
+  hasReferenceImages: boolean,
+  preferConfiguredEndpoint: boolean = false
 ): string => {
   const normalized =
     (endpoint || DEFAULT_OPENAI_IMAGE_ENDPOINT).trim() ||
     DEFAULT_OPENAI_IMAGE_ENDPOINT
+  if (preferConfiguredEndpoint) {
+    return normalized
+  }
   if (!hasReferenceImages) {
     return normalized
   }
@@ -66,9 +70,36 @@ export const resolveOpenAiImageEndpoint = (
   return normalized
 }
 
+const isVolcSeedreamHighMinPixelModel = (apiModel: string): boolean => {
+  const normalized = (apiModel || '').toLowerCase()
+  return (
+    normalized.includes('seedream-5') ||
+    normalized.includes('seedream_5') ||
+    normalized.includes('seedream5') ||
+    normalized.includes('seedream-4.5') ||
+    normalized.includes('seedream_4.5') ||
+    normalized.includes('seedream-4-5') ||
+    normalized.includes('seedream_4_5') ||
+    normalized.includes('seedream45')
+  )
+}
+
 export const mapAspectRatioToOpenAiImageSize = (
-  aspectRatio: AspectRatio
+  aspectRatio: AspectRatio,
+  apiModel?: string
 ): string => {
+  if (isVolcSeedreamHighMinPixelModel(apiModel || '')) {
+    switch (aspectRatio) {
+      case '9:16':
+        return '1600x2848'
+      case '1:1':
+        return '2048x2048'
+      case '16:9':
+      default:
+        return '2848x1600'
+    }
+  }
+
   switch (aspectRatio) {
     case '9:16':
       return '1024x1536'
@@ -76,6 +107,6 @@ export const mapAspectRatioToOpenAiImageSize = (
       return '1024x1024'
     case '16:9':
     default:
-      return '2560x1440'
+      return '1536x1024'
   }
 }

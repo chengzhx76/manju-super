@@ -215,25 +215,25 @@ export const callImageApi = async (
   if (options.referenceImages && options.referenceImages.length > 0) {
     finalPrompt = `
       ⚠️⚠️⚠️ CRITICAL REQUIREMENTS - CHARACTER CONSISTENCY ⚠️⚠️⚠️
-      
+
       Reference Images Information:
       - The FIRST image is the Scene/Environment reference.
       - Any subsequent images are Character references (Base Look or Variation).
-      
+
       Task:
       Generate a cinematic shot matching this prompt: "${options.prompt}".
-      
+
       ⚠️ ABSOLUTE REQUIREMENTS (NON-NEGOTIABLE):
       1. Scene Consistency:
          - STRICTLY maintain the visual style, lighting, and environment from the scene reference.
-      
+
       2. Character Consistency - HIGHEST PRIORITY:
          If characters are present in the prompt, they MUST be IDENTICAL to the character reference images:
          • Facial Features: Eyes (color, shape, size), nose structure, mouth shape, facial contours must be EXACTLY the same
          • Hairstyle & Hair Color: Length, color, texture, and style must be PERFECTLY matched
          • Clothing & Outfit: Style, color, material, and accessories must be IDENTICAL
          • Body Type: Height, build, proportions must remain consistent
-         
+
       ⚠️ DO NOT create variations or interpretations of the character - STRICT REPLICATION ONLY!
       ⚠️ Character appearance consistency is THE MOST IMPORTANT requirement!
     `
@@ -255,13 +255,19 @@ export const callImageApi = async (
     const hasReferenceImages = Boolean(options.referenceImages?.length)
     const resolvedEndpoint = resolveOpenAiImageEndpoint(
       endpoint,
-      hasReferenceImages
+      hasReferenceImages,
+      Boolean(activeModel.endpoint?.trim())
     )
-    const openAiSize = mapAspectRatioToOpenAiImageSize(aspectRatio)
+    const openAiSize = mapAspectRatioToOpenAiImageSize(aspectRatio, apiModel)
 
     const response = await retryOperation(async () => {
       let res: Response
-      if (hasReferenceImages) {
+      const endpointUsesEdits = resolvedEndpoint.includes('/images/edits')
+      const usableJsonReferenceSources = (options.referenceImages || []).filter(
+        (item) => typeof item === 'string' && item.trim().length > 0
+      )
+
+      if (hasReferenceImages && endpointUsesEdits) {
         const files = (options.referenceImages || [])
           .map((img, index) =>
             dataUrlToImageFile(img, `reference-${index + 1}.png`)
@@ -298,7 +304,7 @@ export const callImageApi = async (
           body: formData
         })
       } else {
-        const requestBody = {
+        const requestBody: Record<string, unknown> = {
           model: apiModel,
           prompt: finalPrompt,
           size: openAiSize,
@@ -306,6 +312,11 @@ export const callImageApi = async (
           output_format: OPENAI_IMAGE_OUTPUT_FORMAT,
           output_compression: OPENAI_IMAGE_OUTPUT_COMPRESSION,
           n: 1
+        }
+        if (!endpointUsesEdits && usableJsonReferenceSources.length > 0) {
+          requestBody.image = usableJsonReferenceSources.length === 1
+            ? usableJsonReferenceSources[0]
+            : usableJsonReferenceSources
         }
 
         const requestUrl = resolveBrowserProxiedImageRequestUrl(

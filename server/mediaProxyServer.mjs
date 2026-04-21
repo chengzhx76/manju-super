@@ -41,23 +41,7 @@ const writeJson = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
-const decodeTargetUrl = (rawValue) => {
-  let value = String(rawValue || '').trim();
-  if (!value) return '';
-
-  // Support already-encoded inputs like https%3A%2F%2F...
-  for (let i = 0; i < 2; i += 1) {
-    if (!/%[0-9a-f]{2}/i.test(value)) break;
-    try {
-      const decoded = decodeURIComponent(value);
-      if (decoded === value) break;
-      value = decoded;
-    } catch {
-      break;
-    }
-  }
-  return value;
-};
+const decodeTargetUrl = (rawValue) => String(rawValue || '').trim();
 
 const isAllowedTarget = (target) => {
   if (!allowedProtocols.includes(target.protocol.replace(':', '').toLowerCase())) {
@@ -111,7 +95,8 @@ const handleProxyRequest = async (req, res, requestUrl) => {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(target.toString(), {
+    // Preserve original query bytes; re-serialization can break signed URLs.
+    const upstream = await fetch(decodedTarget, {
       method: 'GET',
       headers: buildUpstreamHeaders(req),
       redirect: 'follow',
@@ -189,7 +174,8 @@ const handleImageProxyRequest = async (req, res, requestUrl) => {
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const upstream = await fetch(target.toString(), {
+    // Preserve original query bytes; re-serialization can break signed URLs.
+    const upstream = await fetch(decodedTarget, {
       method,
       headers: buildImageProxyHeaders(req),
       body: ['GET', 'HEAD'].includes(method) ? undefined : req,

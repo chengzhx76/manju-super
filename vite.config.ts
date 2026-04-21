@@ -23,8 +23,9 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         }
 
         let targetUrl: URL
+        const rawTarget = String(target).trim()
         try {
-          targetUrl = new URL(target)
+          targetUrl = new URL(rawTarget)
         } catch {
           res.statusCode = 400
           res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -41,7 +42,8 @@ const createDevMediaProxyPlugin = (): Plugin => ({
           return
         }
 
-        const upstream = await fetch(targetUrl.toString(), {
+        // Keep the original signed URL bytes to avoid signature invalidation.
+        const upstream = await fetch(rawTarget, {
           method: 'GET',
           headers: req.headers.range
             ? { range: String(req.headers.range) }
@@ -97,8 +99,9 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         }
 
         let targetUrl: URL
+        const rawTarget = String(target).trim()
         try {
-          targetUrl = new URL(target)
+          targetUrl = new URL(rawTarget)
         } catch {
           res.statusCode = 400
           res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -133,7 +136,8 @@ const createDevMediaProxyPlugin = (): Plugin => ({
             : String(value)
         })
 
-        const upstream = await fetch(targetUrl.toString(), {
+        // Keep the original signed URL bytes to avoid signature invalidation.
+        const upstream = await fetch(rawTarget, {
           method,
           headers: passHeaders,
           body: ['GET', 'HEAD'].includes(method) ? undefined : req,
