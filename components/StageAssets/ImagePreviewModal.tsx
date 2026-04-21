@@ -14,7 +14,7 @@ const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
 
   return (
     <div
-      className="absolute inset-0 z-50 bg-[var(--bg-base)]/95 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] bg-[var(--bg-base)]/95 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
       <button

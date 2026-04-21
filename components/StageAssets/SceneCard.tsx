@@ -135,12 +135,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
       >
         {isSyncingToLibrary ? '同步中' : hasAssetId ? '已同步' : '未同步'}
       </button>
-      <div
-        className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
-        onClick={() =>
-          scene.referenceImage && onImageClick(scene.referenceImage)
-        }
-      >
+      <div className="aspect-video bg-[var(--bg-elevated)] relative">
         {isLinked && (
           <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-md flex items-center gap-1.5">
             <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
@@ -154,7 +149,8 @@ const SceneCard: React.FC<SceneCardProps> = ({
             <img
               src={scene.referenceImage}
               alt={scene.location}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-zoom-in"
+              onClick={() => onImageClick(scene.referenceImage)}
             />
             <div className="absolute top-2 right-2 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg backdrop-blur">
               <Check className="w-3 h-3" />

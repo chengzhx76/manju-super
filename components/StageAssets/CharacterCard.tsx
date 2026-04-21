@@ -115,12 +115,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
           未同步
         </div>
       )}
-      <div
-        className="aspect-video bg-[var(--bg-elevated)] relative cursor-pointer"
-        onClick={() =>
-          character.referenceImage && onImageClick(character.referenceImage)
-        }
-      >
+      <div className="aspect-video bg-[var(--bg-elevated)] relative">
         {isLinked && (
           <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-md flex items-center gap-1.5">
             <Link2 className="w-3 h-3 text-[var(--accent-text)]" />
@@ -134,7 +129,8 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
             <img
               src={character.referenceImage}
               alt={character.name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-zoom-in"
+              onClick={() => onImageClick(character.referenceImage)}
             />
             <div className="absolute top-2 right-2 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg backdrop-blur">
               <Check className="w-3 h-3" />
