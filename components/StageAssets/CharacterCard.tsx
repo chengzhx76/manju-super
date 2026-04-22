@@ -300,12 +300,12 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         </button>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col">
+      <div className="px-4 pb-4 pt-2 flex-1 flex flex-col gap-2">
         {character.referenceImage && (
           <button
             onClick={openGenerateModal}
             disabled={isGenerating}
-            className="w-full py-2 mt-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
               <>
@@ -325,7 +325,7 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         <button
           onClick={onDelete}
           disabled={isGenerating}
-          className="w-full py-2 mt-2 bg-transparent hover:bg-[var(--error-bg)] text-[var(--error-text)] hover:text-[var(--error-text)] border border-[var(--error-border)] hover:border-[var(--error-border)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-full py-2 bg-transparent hover:bg-[var(--error-bg)] text-[var(--error-text)] hover:text-[var(--error-text)] border border-[var(--error-border)] hover:border-[var(--error-border)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <Trash2 className="w-3 h-3" />
           删除角色

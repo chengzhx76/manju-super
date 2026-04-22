@@ -284,12 +284,12 @@ const PropCard: React.FC<PropCardProps> = ({
           </div>
         )}
 
-        {prop.referenceImage && (
-          <div className="mt-3 pt-3 border-t border-[var(--border-primary)]">
+        <div className="mt-auto pt-3">
+          {prop.referenceImage && (
             <button
               onClick={openGenerateModal}
               disabled={isGenerating}
-              className="w-full py-2 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="w-full py-2 mb-3 bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] border border-[var(--border-primary)] rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
                 <>
@@ -303,10 +303,7 @@ const PropCard: React.FC<PropCardProps> = ({
                 </>
               )}
             </button>
-          </div>
-        )}
-
-        <div className="mt-auto pt-3 border-t border-[var(--border-primary)]">
+          )}
           <button
             onClick={onDelete}
             disabled={isGenerating}
