@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
   MapPin,
-  Check,
   Loader2,
   Trash2,
   Edit2,
@@ -114,27 +113,22 @@ const SceneCard: React.FC<SceneCardProps> = ({
           : 'border-[var(--warning)] hover:border-[var(--warning)]'
       }`}
     >
-      <button
-        type="button"
-        disabled={hasAssetId || isSyncingToLibrary || !scene.referenceImage}
-        onClick={() =>
-          !hasAssetId &&
-          !isSyncingToLibrary &&
-          !!scene.referenceImage &&
-          onSyncToLibrary()
-        }
-        className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider ${
-          isSyncingToLibrary
-            ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-text)] opacity-70 cursor-not-allowed'
-            : hasAssetId
-              ? 'border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-text)] cursor-not-allowed'
-              : scene.referenceImage
-                ? 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] hover:opacity-80 cursor-pointer'
-                : 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] opacity-70 cursor-not-allowed'
-        }`}
-      >
-        {isSyncingToLibrary ? '同步中' : hasAssetId ? '已同步' : '未同步'}
-      </button>
+      {!hasAssetId && (
+        <button
+          type="button"
+          disabled={isSyncingToLibrary || !scene.referenceImage}
+          onClick={() =>
+            !isSyncingToLibrary && !!scene.referenceImage && onSyncToLibrary()
+          }
+          className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded border text-[9px] font-mono uppercase tracking-wider ${
+            isSyncingToLibrary
+              ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-text)] opacity-70 cursor-not-allowed'
+              : 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] hover:opacity-80 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer'
+          }`}
+        >
+          {isSyncingToLibrary ? '同步中' : '未同步'}
+        </button>
+      )}
       <div className="aspect-video bg-[var(--bg-elevated)] relative">
         {isLinked && (
           <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-[var(--accent-bg)] border border-[var(--accent-border)] rounded-md flex items-center gap-1.5">
@@ -152,9 +146,6 @@ const SceneCard: React.FC<SceneCardProps> = ({
               className="w-full h-full object-cover cursor-zoom-in"
               onClick={() => onImageClick(scene.referenceImage)}
             />
-            <div className="absolute top-2 right-2 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg backdrop-blur">
-              <Check className="w-3 h-3" />
-            </div>
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-[var(--text-muted)] p-4 text-center">
@@ -299,7 +290,7 @@ const SceneCard: React.FC<SceneCardProps> = ({
           </div>
         )}
 
-        <div className="mt-auto pt-3 border-t border-[var(--border-primary)]">
+        <div className="mt-auto pt-3 border-[var(--border-primary)]">
           {scene.referenceImage && (
             <button
               onClick={openGenerateModal}

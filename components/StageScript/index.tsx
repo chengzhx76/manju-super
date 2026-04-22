@@ -56,7 +56,7 @@ interface Props {
 
 type TabMode = 'story' | 'script'
 type AnalyzeRunStep = ScriptGenerationStep | 'done'
-const ANALYZE_DONE_TOAST_SECONDS = 3
+const ANALYZE_DONE_TOAST_SECONDS = 10
 
 const StageScript: React.FC<Props> = ({
   project,
@@ -390,6 +390,7 @@ const StageScript: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null)
   const [processingMessage, setProcessingMessage] = useState('')
   const [processingLogs, setProcessingLogs] = useState<string[]>([])
+  const [isProcessingToastHovered, setIsProcessingToastHovered] = useState(false)
   const [analyzeDoneCountdown, setAnalyzeDoneCountdown] = useState<
     number | null
   >(null)
@@ -464,15 +465,17 @@ const StageScript: React.FC<Props> = ({
 
   useEffect(() => {
     if (analyzeDoneCountdown === null) return
+    if (isProcessingToastHovered) return
     if (analyzeDoneCountdown <= 0) {
       setAnalyzeDoneCountdown(null)
+      setIsProcessingToastHovered(false)
       return
     }
     const timer = window.setTimeout(() => {
       setAnalyzeDoneCountdown((prev) => (prev === null ? null : prev - 1))
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [analyzeDoneCountdown])
+  }, [analyzeDoneCountdown, isProcessingToastHovered])
 
   useEffect(() => {
     if (isProcessing || isContinuing || isRewriting) return
@@ -1617,7 +1620,11 @@ const StageScript: React.FC<Props> = ({
   return (
     <div className="h-full bg-[var(--bg-base)]">
       {showProcessingToast && (
-        <div className="fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur">
+        <div
+          className="fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur"
+          onMouseEnter={() => setIsProcessingToastHovered(true)}
+          onMouseLeave={() => setIsProcessingToastHovered(false)}
+        >
           {showAnalyzeDoneCountdown && analyzeDoneCountdown !== null && (
             <div className="absolute right-3 top-2 text-[11px] font-mono text-zinc-300">
               {analyzeDoneCountdown}s
@@ -1636,7 +1643,7 @@ const StageScript: React.FC<Props> = ({
           {processingLogs.length > 0 && (
             <div className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-zinc-300">
               {processingLogs.map((line, index) => (
-                <div key={`${line}-${index}`} className="truncate">
+                <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
                   {line}
                 </div>
               ))}

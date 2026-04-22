@@ -482,13 +482,7 @@ export interface Episode {
   title: string
   createdAt: number
   lastModified: number
-  stage:
-    | 'script'
-    | 'assets'
-    | 'director'
-    | 'lark-director'
-    | 'export'
-    | 'prompts'
+  stage: EpisodeStage
   rawScript: string
   targetDuration: string
   language: string
@@ -506,6 +500,13 @@ export interface Episode {
 }
 
 export type ProjectState = Episode
+export type EpisodeStage =
+  | 'script'
+  | 'assets'
+  | 'shot'
+  | 'video'
+  | 'export'
+  | 'prompts'
 
 // ============================================
 // 模型管理相关类型定义

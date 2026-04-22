@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import logoImg from '../logo.png'
 import { useTheme } from '../contexts/ThemeContext'
+import { EpisodeStage } from '../types'
 import {
   USER_MANUAL_URL,
   OFFICIAL_WEBSITE_URL,
@@ -30,16 +31,8 @@ import {
 } from '../constants/links'
 
 interface SidebarProps {
-  currentStage: string
-  setStage: (
-    stage:
-      | 'script'
-      | 'assets'
-      | 'director'
-      | 'lark-director'
-      | 'export'
-      | 'prompts'
-  ) => void
+  currentStage: EpisodeStage
+  setStage: (stage: EpisodeStage) => void
   onExit: () => void
   projectName?: string
   onShowOnboarding?: () => void
@@ -70,17 +63,17 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { theme, toggleTheme } = useTheme()
   const navItems = [
-    { id: 'script', label: '剧本与故事', icon: FileText, sub: '阶段 01' },
-    { id: 'assets', label: '角色与场景', icon: Users, sub: '阶段 02' },
-    { id: 'director', label: '导演工作台', icon: Clapperboard, sub: '阶段 03' },
+    { id: 'script', label: '剧本策划', icon: FileText, enLabel: 'Script Planning' },
+    { id: 'assets', label: '视觉设定', icon: Users, enLabel: 'Visual Development' },
+    { id: 'shot', label: '镜头设计', icon: Clapperboard, enLabel: 'Shot Design' },
     {
-      id: 'lark-director',
-      label: '导演工作台(小云雀)',
+      id: 'video',
+      label: '视频创作',
       icon: Clapperboard,
-      sub: '阶段 03'
+      enLabel: 'Video Creation'
     },
-    { id: 'export', label: '成片与导出', icon: Film, sub: '阶段 04' },
-    { id: 'prompts', label: '提示词管理', icon: ListTree, sub: '高级' }
+    { id: 'export', label: '剪辑交付', icon: Film, enLabel: 'Editorial Delivery' },
+    { id: 'prompts', label: '提示词库', icon: ListTree, enLabel: 'Prompt Library' }
   ]
 
   return (
@@ -176,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.id}
-                onClick={() => setStage(item.id as any)}
+                onClick={() => setStage(item.id as EpisodeStage)}
                 className={`w-full flex items-center justify-between px-6 py-4 transition-all duration-200 group relative border-l-2 ${
                   isActive
                     ? 'border-[var(--text-primary)] bg-[var(--nav-active-bg)] text-[var(--text-primary)]'
@@ -194,14 +187,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <item.icon
                     className={`w-4 h-4 ${isActive ? 'text-[var(--text-primary)]' : isLocked ? 'text-[var(--text-muted)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-secondary)]'}`}
                   />
-                  <span className="font-medium text-xs tracking-wider uppercase">
+                  <span className="font-medium text-xs tracking-wider">
                     {item.label}
                   </span>
                 </div>
                 <span
                   className={`text-[10px] font-mono ${isActive ? 'text-[var(--text-tertiary)]' : 'text-[var(--text-muted)]'}`}
                 >
-                  {item.sub}
+                  {item.enLabel}
                 </span>
               </button>
             )

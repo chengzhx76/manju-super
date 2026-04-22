@@ -590,9 +590,11 @@ const ProjectOverview: React.FC = () => {
                                       ? '剧本阶段'
                                       : episode.stage === 'assets'
                                         ? '资产生成'
-                                        : episode.stage === 'director'
+                                        : episode.stage === 'shot'
                                           ? '导演工作台'
-                                          : '导出阶段'}
+                                          : episode.stage === 'video'
+                                            ? '视频创作'
+                                            : '导出阶段'}
                                     {' · '}
                                     {formatDate(episode.lastModified)}
                                   </div>

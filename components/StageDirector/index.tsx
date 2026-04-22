@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   LayoutGrid,
   Sparkles,
@@ -89,6 +89,8 @@ import { resolvePromptTemplateConfig } from '../../services/promptTemplateServic
 import { toFriendlyModerationMessage } from '../../services/errorMessageService'
 import { useProjectContext } from '../../contexts/ProjectContext'
 import {
+  hasAssetRelayConfig,
+  hasVolcengineTosConfig,
   deleteRemoteAsset,
   uploadGeneratedAssetToRelay
 } from '../../services/assetRelayService'
@@ -133,6 +135,16 @@ const StageDirector: React.FC<Props> = ({
   const [isNineGridRevising, setIsNineGridRevising] = useState(false) // 是否正在按指令改写九宫格描述
   const [showNineGrid, setShowNineGrid] = useState(false) // 是否显示九宫格预览弹窗
   const [toastMessage, setToastMessage] = useState('')
+  const [imageFlowMessage, setImageFlowMessage] = useState('')
+  const [imageFlowLogs, setImageFlowLogs] = useState<string[]>([])
+  const [isImageFlowRunning, setIsImageFlowRunning] = useState(false)
+  const [isBatchCancelRequested, setIsBatchCancelRequested] = useState(false)
+  const [isImageFlowHovered, setIsImageFlowHovered] = useState(false)
+  const [isImageFlowFadingOut, setIsImageFlowFadingOut] = useState(false)
+  const [imageFlowDoneCountdown, setImageFlowDoneCountdown] = useState<
+    number | null
+  >(null)
+  const batchGenerateCancelRef = useRef(false)
 
   // 关键帧生成使用的横竖屏比例（从持久化配置读取）
   const [keyframeAspectRatio, setKeyframeAspectRatioState] =
@@ -430,6 +442,47 @@ const StageDirector: React.FC<Props> = ({
   }, [toastMessage])
 
   useEffect(() => {
+    if (imageFlowDoneCountdown === null) return
+    if (imageFlowDoneCountdown <= 0) {
+      setImageFlowDoneCountdown(null)
+      if (!isImageFlowHovered) {
+        setIsImageFlowFadingOut(true)
+        window.setTimeout(() => {
+          setIsImageFlowFadingOut(false)
+          setImageFlowLogs([])
+          setImageFlowMessage('')
+          setIsImageFlowHovered(false)
+        }, 220)
+      }
+      return
+    }
+    const timerId = window.setTimeout(() => {
+      setImageFlowDoneCountdown((prev) => (prev === null ? null : prev - 1))
+    }, 1000)
+    return () => window.clearTimeout(timerId)
+  }, [imageFlowDoneCountdown, isImageFlowHovered])
+
+  const appendImageFlowLog = (line: string) => {
+    const normalized = String(line || '').trim()
+    if (!normalized) return
+    setImageFlowLogs((prev) => [...prev, normalized].slice(-12))
+  }
+
+  const startImageFlow = (message: string, resetLogs = false) => {
+    if (resetLogs) setImageFlowLogs([])
+    setImageFlowDoneCountdown(null)
+    setIsImageFlowFadingOut(false)
+    setImageFlowMessage(message)
+    setIsImageFlowRunning(true)
+  }
+
+  const completeImageFlow = (message: string, keepSeconds = 10) => {
+    setImageFlowMessage(message)
+    setIsImageFlowRunning(false)
+    setImageFlowDoneCountdown(keepSeconds)
+  }
+
+  useEffect(() => {
     const hasMissingAssessment = project.shots.some(
       (shot) => !shot.qualityAssessment
     )
@@ -467,6 +520,16 @@ const StageDirector: React.FC<Props> = ({
     currentAssetId?: string
   }) => {
     if (!seriesProject) return
+    const tosEnabled = hasVolcengineTosConfig()
+    const relayEnabled = hasAssetRelayConfig()
+    const uploadTarget = tosEnabled && relayEnabled
+      ? '对象存储 + 素材库'
+      : tosEnabled
+        ? '对象存储'
+        : relayEnabled
+          ? '素材库'
+          : '未配置上传目标'
+    appendImageFlowLog(`开始同步上传（${params.kind}）：${uploadTarget}`)
     try {
       const result = await uploadGeneratedAssetToRelay({
         project: seriesProject,
@@ -478,9 +541,19 @@ const StageDirector: React.FC<Props> = ({
         url: params.url,
         currentAssetId: params.currentAssetId
       })
-      if (result.skipped) return
+      if (result.skipped) {
+        appendImageFlowLog(
+          `上传跳过（${params.kind}）：${result.reason || '未满足同步条件'}`
+        )
+        return
+      }
       if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
         updateSeriesProject({ assetGroupId: result.groupId })
+      }
+      if (result.objectKey) {
+        appendImageFlowLog(`对象存储完成：${result.objectKey}`)
+      } else if (tosEnabled) {
+        appendImageFlowLog('对象存储完成：未返回 objectKey')
       }
       if (result.assetId) {
         updateShot(params.shotId, (shot) =>
@@ -496,8 +569,19 @@ const StageDirector: React.FC<Props> = ({
                 }
               : shot
         )
+        appendImageFlowLog(`素材库完成：assetId=${result.assetId}`)
+      } else if (relayEnabled) {
+        appendImageFlowLog('素材库完成：未返回 assetId')
+      }
+      if (result.url) {
+        const previewUrl =
+          result.url.length > 96 ? `${result.url.slice(0, 96)}...` : result.url
+        appendImageFlowLog(`最终URL：${previewUrl}`)
       }
     } catch (error) {
+      appendImageFlowLog(
+        `上传失败（${params.kind}）：${error instanceof Error ? error.message : '未知错误'}`
+      )
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
         { type: 'warning' }
@@ -575,11 +659,21 @@ const StageDirector: React.FC<Props> = ({
   /**
    * 生成关键帧
    */
-  const handleGenerateKeyframe = async (shot: Shot, type: 'start' | 'end') => {
+  const handleGenerateKeyframe = async (
+    shot: Shot,
+    type: 'start' | 'end',
+    options?: { managedFlow?: boolean }
+  ) => {
+    const managedFlow = options?.managedFlow === true
     const existingKf = shot.keyframes?.find((k) => k.type === type)
     const kfId = existingKf?.id || generateId(`kf-${shot.id}-${type}`)
     const startKf = shot.keyframes?.find((k) => k.type === 'start')
     const shouldReplaceShotAsset = type === 'start' && !shot.nineGrid?.imageUrl
+
+    if (!managedFlow) {
+      startImageFlow(type === 'start' ? '正在生成首帧...' : '正在生成尾帧...', true)
+      appendImageFlowLog(`开始生图：${shot.id} / ${type === 'start' ? '首帧' : '尾帧'}`)
+    }
 
     if (shouldReplaceShotAsset && shot.assetId) {
       try {
@@ -692,6 +786,10 @@ const StageDirector: React.FC<Props> = ({
         `关键帧预检未通过：\n${formatLintIssues(preflightResult.issues)}`,
         { type: 'warning' }
       )
+      if (!managedFlow) {
+        appendImageFlowLog('预检失败：请先处理错误项后再生成。')
+        completeImageFlow('预检未通过', 4)
+      }
       return
     }
 
@@ -700,6 +798,9 @@ const StageDirector: React.FC<Props> = ({
     )
     if (nonErrorIssues.length > 0) {
       setToastMessage(`关键帧预检提醒：\n${formatLintIssues(nonErrorIssues)}`)
+      appendImageFlowLog(
+        `预检提醒：${nonErrorIssues.map((issue) => issue.message).join('；')}`
+      )
     }
 
     const promptVersions = updatePromptWithVersion(
@@ -720,6 +821,7 @@ const StageDirector: React.FC<Props> = ({
     })
 
     try {
+      appendImageFlowLog('执行生图请求中...')
       // 使用当前设置的横竖屏比例生成关键帧，传递 hasTurnaround 标记
       const url = await generateImage(
         prompt,
@@ -740,6 +842,7 @@ const StageDirector: React.FC<Props> = ({
         }
         return updateKeyframeInShot(s, type, completedKeyframe)
       })
+      appendImageFlowLog('生图完成，已回写分镜。')
       if (shouldReplaceShotAsset) {
         await syncRelayAsset({
           kind: 'shot',
@@ -748,6 +851,12 @@ const StageDirector: React.FC<Props> = ({
           url,
           currentAssetId: shot.assetId
         })
+      }
+      if (!managedFlow) {
+        completeImageFlow(
+          type === 'start' ? '首帧生成完成' : '尾帧生成完成',
+          3
+        )
       }
     } catch (e: unknown) {
       console.error(e)
@@ -759,7 +868,14 @@ const StageDirector: React.FC<Props> = ({
         return updateKeyframeInShot(s, type, failedKeyframe)
       })
 
-      if (onApiKeyError && onApiKeyError(e)) return
+      const apiKeyHandled = !!(onApiKeyError && onApiKeyError(e))
+      appendImageFlowLog(
+        `生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`
+      )
+      if (!managedFlow) {
+        completeImageFlow('生成失败', 4)
+      }
+      if (apiKeyHandled) return
       showAlert(
         `生成失败: ${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
         { type: 'error' }
@@ -1256,6 +1372,16 @@ const StageDirector: React.FC<Props> = ({
     shotsToProcess: Shot[],
     isRegenerate: boolean
   ) => {
+    batchGenerateCancelRef.current = false
+    setIsBatchCancelRequested(false)
+    startImageFlow(
+      isRegenerate ? '正在重新生成所有首帧...' : '正在批量生成缺失首帧...',
+      true
+    )
+    appendImageFlowLog(`本次任务镜头数：${shotsToProcess.length}`)
+    appendImageFlowLog(
+      `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`
+    )
     setBatchProgress({
       current: 0,
       total: shotsToProcess.length,
@@ -1265,27 +1391,44 @@ const StageDirector: React.FC<Props> = ({
     })
 
     for (let i = 0; i < shotsToProcess.length; i++) {
+      if (batchGenerateCancelRef.current) {
+        appendImageFlowLog('已收到取消指令，停止后续镜头生成。')
+        break
+      }
       if (i > 0) await delay(DEFAULTS.batchGenerateDelay)
 
       const shot = shotsToProcess[i]
+      const shotLabel = `SHOT ${String(i + 1).padStart(3, '0')}`
       setBatchProgress({
         current: i + 1,
         total: shotsToProcess.length,
         message: `正在生成镜头 ${i + 1}/${shotsToProcess.length}...`
       })
+      appendImageFlowLog(`开始生图：${shotLabel}`)
 
       try {
-        await handleGenerateKeyframe(shot, 'start')
+        await handleGenerateKeyframe(shot, 'start', { managedFlow: true })
+        appendImageFlowLog(`完成：${shotLabel}`)
       } catch (e: unknown) {
         console.error(`Failed to generate for shot ${shot.id}`, e)
+        appendImageFlowLog(`失败：${shotLabel}`)
         if (onApiKeyError && onApiKeyError(e)) {
           setBatchProgress(null)
+          completeImageFlow('批量生图中断（鉴权错误）', 5)
+          setIsBatchCancelRequested(false)
           return
         }
       }
     }
 
     setBatchProgress(null)
+    if (batchGenerateCancelRef.current) {
+      completeImageFlow('批量生图已取消', 4)
+      setIsBatchCancelRequested(false)
+      return
+    }
+    completeImageFlow('批量生图完成', 3)
+    setIsBatchCancelRequested(false)
   }
 
   /**
@@ -1820,6 +1963,8 @@ const StageDirector: React.FC<Props> = ({
   ) => {
     const shot = getShotById(shotId)
     if (!shot) return
+    startImageFlow('正在生成九宫格分镜图...', true)
+    appendImageFlowLog(`开始生图：${shotId} / 九宫格 (${confirmedPanels.length} 格)`)
     if (shot.assetId) {
       try {
         await deleteRemoteAsset(shot.assetId)
@@ -1862,14 +2007,17 @@ const StageDirector: React.FC<Props> = ({
         setToastMessage(
           `参考图数量 ${dedupedRefCount} 超过模型上限，已自动限制为 5 张。`
         )
+        appendImageFlowLog(`参考图过多：${dedupedRefCount}，已自动裁剪为 5 张`)
       }
       if (refResult.images.length === 0) {
         console.warn(
           `[NineGrid] shot=${shotId} 没有可用参考图，将仅按文案生成。`
         )
+        appendImageFlowLog('未检测到参考图，将按文案直接生成。')
       }
 
       // 3. 生成九宫格图片
+      appendImageFlowLog('执行九宫格生图请求中...')
       const imageUrl = await generateNineGridImage(
         confirmedPanels,
         refResult.images,
@@ -1906,6 +2054,8 @@ const StageDirector: React.FC<Props> = ({
         currentAssetId: shot.assetId
       })
 
+      appendImageFlowLog('九宫格生图与上传同步完成。')
+      completeImageFlow(`${layout.label}分镜图生成完成`, 3)
       showAlert(`${layout.label}分镜图片生成完成！`, { type: 'success' })
     } catch (e: unknown) {
       console.error('网格分镜图片生成失败:', e)
@@ -1923,7 +2073,12 @@ const StageDirector: React.FC<Props> = ({
         }
       }))
 
-      if (onApiKeyError && onApiKeyError(e)) return
+      const apiKeyHandled = !!(onApiKeyError && onApiKeyError(e))
+      appendImageFlowLog(
+        `九宫格生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`
+      )
+      completeImageFlow('九宫格生图失败', 4)
+      if (apiKeyHandled) return
       showAlert(
         `网格图片生成失败: ${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
         { type: 'error' }
@@ -2190,26 +2345,99 @@ const StageDirector: React.FC<Props> = ({
     )
   }
 
+  const showImageFlowPanel =
+    isImageFlowRunning ||
+    imageFlowDoneCountdown !== null ||
+    isImageFlowHovered ||
+    isImageFlowFadingOut ||
+    imageFlowLogs.length > 0
+  const showImageFlowDoneCountdown =
+    !isImageFlowRunning && imageFlowDoneCountdown !== null
+  const batchProgressPercent = batchProgress
+    ? Math.round((batchProgress.current / Math.max(batchProgress.total, 1)) * 100)
+    : 0
+
   return (
     <div className="flex flex-col h-full bg-[var(--bg-secondary)] relative overflow-hidden">
-      {/* Batch Progress Overlay */}
-      {batchProgress && (
-        <div className="absolute inset-0 z-50 bg-[var(--bg-base)]/80 flex flex-col items-center justify-center backdrop-blur-md animate-in fade-in">
-          <Loader2 className="w-12 h-12 text-[var(--accent)] animate-spin mb-6" />
-          <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">
-            {batchProgress.message}
-          </h3>
-          <div className="w-64 h-1.5 bg-[var(--bg-hover)] rounded-full overflow-hidden">
+      {showImageFlowPanel && (
+        <div
+          className={`fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur transition-all duration-200 ${
+            isImageFlowFadingOut ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'
+          }`}
+          onMouseEnter={() => {
+            setIsImageFlowHovered(true)
+            setIsImageFlowFadingOut(false)
+          }}
+          onMouseLeave={() => {
+            setIsImageFlowHovered(false)
+            if (!isImageFlowRunning && imageFlowDoneCountdown === null) {
+              setIsImageFlowFadingOut(true)
+              window.setTimeout(() => {
+                setIsImageFlowFadingOut(false)
+                setImageFlowLogs([])
+                setImageFlowMessage('')
+              }, 220)
+            }
+          }}
+        >
+          {showImageFlowDoneCountdown && (
+            <div className="absolute right-3 top-2 text-[11px] font-mono text-zinc-300">
+              {imageFlowDoneCountdown}s
+            </div>
+          )}
+          <div className="flex items-center gap-3">
             <div
-              className="h-full bg-[var(--accent)] transition-all duration-300"
-              style={{
-                width: `${(batchProgress.current / batchProgress.total) * 100}%`
-              }}
+              className={`h-4 w-4 rounded-full border-2 ${
+                showImageFlowDoneCountdown
+                  ? 'border-emerald-400 bg-emerald-400'
+                  : 'animate-spin border-zinc-500 border-t-white'
+              }`}
             />
+            <div className="text-sm text-white">{imageFlowMessage}</div>
           </div>
-          <p className="text-[var(--text-tertiary)] mt-3 text-xs font-mono">
-            {Math.round((batchProgress.current / batchProgress.total) * 100)}%
-          </p>
+
+          {batchProgress && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[var(--accent)] transition-all duration-300"
+                  style={{
+                    width: `${batchProgressPercent}%`
+                  }}
+                />
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-300 font-mono">
+                {batchProgress.message} ({batchProgress.current}/{batchProgress.total}, {batchProgressPercent}%)
+              </div>
+            </div>
+          )}
+
+          {imageFlowLogs.length > 0 && (
+            <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
+              {imageFlowLogs.map((line, index) => (
+                <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
+                  {line}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {batchProgress && isImageFlowRunning && (
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  batchGenerateCancelRef.current = true
+                  setIsBatchCancelRequested(true)
+                  appendImageFlowLog('取消中：当前镜头完成后停止。')
+                }}
+                disabled={isBatchCancelRequested}
+                className="rounded border border-zinc-400/60 px-2 py-1 text-[11px] text-white/90 transition-colors hover:border-white hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBatchCancelRequested ? '取消中...' : '取消批量生图'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -58,7 +58,8 @@ export const DEFAULTS = {
   visualStyle: 'live-action',
   genre: 'Cinematic',
   modelVersion: 'gpt-5.2',
-  batchGenerateDelay: 3000 // 批量生成延迟（毫秒）
+  batchGenerateDelay: 3000, // 批量生成延迟（毫秒）
+  batchGenerateConcurrency: 3 // 批量生成并发数上限
 }
 
 // 地域特征配置

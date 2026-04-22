@@ -4,6 +4,7 @@ import {
   SeriesProject,
   Series,
   Episode,
+  EpisodeStage,
   Character,
   Scene,
   Prop,
@@ -106,6 +107,24 @@ const mergeByKey = <T>(
   return Array.from(merged.values())
 }
 
+const normalizeEpisodeStage = (stage: unknown): EpisodeStage => {
+  switch (stage) {
+    case 'script':
+    case 'assets':
+    case 'shot':
+    case 'video':
+    case 'export':
+    case 'prompts':
+      return stage
+    case 'director':
+      return 'shot'
+    case 'lark-director':
+      return 'video'
+    default:
+      return 'script'
+  }
+}
+
 const normalizeEpisode = (ep: Episode): Episode => {
   const scriptData = ep.scriptData
     ? {
@@ -140,6 +159,7 @@ const normalizeEpisode = (ep: Episode): Episode => {
 
   return {
     ...ep,
+    stage: normalizeEpisodeStage(ep.stage),
     scriptData,
     shots: reconcileShotSceneIds(ep.shots || [], scriptData?.scenes || []),
     renderLogs: ep.renderLogs || [],
@@ -773,7 +793,7 @@ export const importIndexedDBData = async (
           title: `第 1 集`,
           createdAt: p.createdAt || Date.now(),
           lastModified: p.lastModified || Date.now(),
-          stage: p.stage || 'script',
+          stage: normalizeEpisodeStage(p.stage),
           rawScript: p.rawScript || '',
           targetDuration: p.targetDuration || '60s',
           language: p.language || '中文',

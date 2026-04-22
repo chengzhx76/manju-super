@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { TosClient } from '@volcengine/tos-sdk';
 
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
@@ -11,6 +10,13 @@ const json = (res, statusCode, payload) => {
 
 const normalizeText = (value) => String(value || '').trim();
 
+const stripWrappingQuotes = (value) =>
+  String(value || '')
+    .trim()
+    .replace(/^["'`]+/, '')
+    .replace(/["'`]+$/, '')
+    .trim();
+
 const encodeRfc3986 = (value) =>
   encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
     `%${char.charCodeAt(0).toString(16).toUpperCase()}`
@@ -22,56 +28,35 @@ const sanitizePath = (value) =>
     .map((part) => encodeRfc3986(part))
     .join('/');
 
-const hmacSha256 = (key, value, encoding) =>
-  crypto.createHmac('sha256', key).update(value, 'utf8').digest(encoding);
+const tryDecodeBase64Secret = (rawSecret) => {
+  const normalized = normalizeText(rawSecret);
+  if (!normalized || normalized.length % 4 !== 0) return null;
+  if (!/^[A-Za-z0-9+/=]+$/.test(normalized)) return null;
+  try {
+    const decoded = Buffer.from(normalized, 'base64').toString('utf8').trim();
+    if (!decoded || decoded === normalized) return null;
+    if (!/^[\x20-\x7E]+$/.test(decoded)) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+};
 
-const sha256Hex = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const getSecretCandidates = (rawSecret) => {
+  const normalized = normalizeText(rawSecret);
+  const decoded = tryDecodeBase64Secret(normalized);
+  if (decoded) return [normalized, decoded];
+  return [normalized];
+};
 
-const buildSigningHeaders = ({
-  method,
-  url,
-  bodyBuffer,
-  accessKeyId,
-  secretAccessKey,
-  region,
-  service,
-}) => {
-  const now = new Date();
-  const tosDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const shortDate = tosDate.slice(0, 8);
-  const bodyHash = sha256Hex(bodyBuffer);
-  const canonicalHeaders = [
-    ['host', url.host],
-    ['x-tos-content-sha256', bodyHash],
-    ['x-tos-date', tosDate],
-  ];
-  const signedHeaders = canonicalHeaders.map(([key]) => key).join(';');
-  const canonicalRequest = [
-    method.toUpperCase(),
-    `/${sanitizePath(url.pathname.replace(/^\/+/, ''))}`,
-    '',
-    canonicalHeaders.map(([key, value]) => `${key}:${value}\n`).join(''),
-    signedHeaders,
-    bodyHash,
-  ].join('\n');
-  const credentialScope = `${shortDate}/${region}/${service}/request`;
-  const stringToSign = [
-    'TOS4-HMAC-SHA256',
-    tosDate,
-    credentialScope,
-    sha256Hex(Buffer.from(canonicalRequest, 'utf8')),
-  ].join('\n');
-  const kDate = hmacSha256(`TOS4${secretAccessKey}`, shortDate);
-  const kRegion = hmacSha256(kDate, region);
-  const kService = hmacSha256(kRegion, service);
-  const kSigning = hmacSha256(kService, 'request');
-  const signature = hmacSha256(kSigning, stringToSign, 'hex');
-  return {
-    host: url.host,
-    'x-tos-content-sha256': bodyHash,
-    'x-tos-date': tosDate,
-    Authorization: `TOS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
-  };
+const shouldRetryWithNextSecret = (error) => {
+  const statusCode = Number(error?.statusCode || error?.response?.statusCode || 0);
+  const code = normalizeText(error?.code || error?.data?.Code);
+  const message = normalizeText(error?.message || error?.data?.Message);
+  return (
+    statusCode === 403 &&
+    /SignatureDoesNotMatch/i.test(`${code} ${message}`)
+  );
 };
 
 const readBodyBuffer = async (req) => {
@@ -123,6 +108,27 @@ const createTosClient = ({ accessKeyId, secretAccessKey, region, bucketName }) =
     endpoint: `tos-${normalizeText(region)}.volces.com`,
   });
 
+const buildPublicBaseUrl = ({ host, bucketName, region }) => {
+  const normalizedBucket = normalizeText(bucketName);
+  const normalizedRegion = normalizeText(region);
+  const fallback = `https://${normalizedBucket}.tos-${normalizedRegion}.volces.com`;
+  const normalizedHost = stripWrappingQuotes(host).replace(/\/+$/, '');
+  if (!normalizedHost) return fallback;
+  const hostWithProtocol = /^https?:\/\//i.test(normalizedHost)
+    ? normalizedHost
+    : `https://${normalizedHost}`;
+  try {
+    const url = new URL(hostWithProtocol);
+    const endpointHost = `tos-${normalizedRegion}.volces.com`;
+    if (url.hostname === endpointHost) {
+      url.hostname = `${normalizedBucket}.${endpointHost}`;
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return fallback;
+  }
+};
+
 const uploadBytesToTos = async ({
   bodyBuffer,
   contentType,
@@ -134,36 +140,45 @@ const uploadBytesToTos = async ({
   secretAccessKey,
 }) => {
   validateCredentials({ accessKeyId, secretAccessKey, host });
-  const targetUrl = buildTosWriteUrl({ region, bucketName, objectKey });
-  const signedHeaders = buildSigningHeaders({
-    method: 'PUT',
-    url: targetUrl,
-    bodyBuffer,
-    accessKeyId: normalizeText(accessKeyId),
-    secretAccessKey: normalizeText(secretAccessKey),
-    region: normalizeText(region),
-    service: 'tos',
-  });
-  const response = await fetch(targetUrl.toString(), {
-    method: 'PUT',
-    headers: {
-      ...signedHeaders,
-      'Content-Type': normalizeText(contentType) || 'application/octet-stream',
-      'Content-Length': String(bodyBuffer.byteLength),
-    },
-    body: bodyBuffer,
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`TOS 上传失败(${response.status}) ${detail || ''}`.trim());
+  const secretCandidates = getSecretCandidates(secretAccessKey);
+  let lastError = null;
+  for (const candidateSecret of secretCandidates) {
+    const client = createTosClient({
+      accessKeyId,
+      secretAccessKey: candidateSecret,
+      region,
+      bucketName,
+    });
+    try {
+      await client.putObject({
+        bucket: normalizeText(bucketName),
+        key: String(objectKey || '').replace(/^\/+/, ''),
+        body: bodyBuffer,
+        contentType: normalizeText(contentType) || 'application/octet-stream',
+        contentLength: bodyBuffer.byteLength,
+      });
+      const baseUrl = buildPublicBaseUrl({ host, bucketName, region });
+      const publicUrl = `${baseUrl.replace(/\/+$/, '')}/${String(objectKey).replace(/^\/+/, '')}`;
+      return { objectKey: String(objectKey), url: publicUrl };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const hasNextCandidate = secretCandidates[secretCandidates.length - 1] !== candidateSecret;
+      if (!(hasNextCandidate && shouldRetryWithNextSecret(error))) {
+        const statusCode = Number(error?.statusCode || error?.response?.statusCode || 500);
+        const code = normalizeText(error?.code || error?.data?.Code);
+        const message = normalizeText(error?.message || error?.data?.Message);
+        const detail = code || message ? ` Code=${code || '-'} Message=${message || '-'}` : '';
+        throw new Error(`TOS 上传失败(${statusCode})${detail}`);
+      }
+      console.warn('[tos-proxy] upload signature mismatch, retrying with decoded secret candidate');
+    }
   }
-  const publicUrl = `${normalizeText(host).replace(/\/+$/, '')}/${String(objectKey).replace(/^\/+/, '')}`;
-  return { objectKey: String(objectKey), url: publicUrl };
+  throw lastError || new Error('TOS 上传失败');
 };
 
 const handleUploadByUrl = async (req, res) => {
   const body = await parseJsonBody(req);
-  const sourceUrl = normalizeText(body.sourceUrl);
+  const sourceUrl = stripWrappingQuotes(body.sourceUrl);
   if (!/^https?:\/\//i.test(sourceUrl)) {
     throw new Error('sourceUrl 必须是 http/https URL');
   }
@@ -231,33 +246,50 @@ const handleDeleteObject = async (req, res) => {
     secretAccessKey: body.secretAccessKey,
     host: body.host,
   });
-  const targetUrl = buildTosWriteUrl({
-    region: body.region,
-    bucketName: body.bucketName,
-    objectKey: body.objectKey,
-  });
-  const signedHeaders = buildSigningHeaders({
-    method: 'DELETE',
-    url: targetUrl,
-    bodyBuffer: Buffer.alloc(0),
-    accessKeyId: normalizeText(body.accessKeyId),
-    secretAccessKey: normalizeText(body.secretAccessKey),
-    region: normalizeText(body.region),
-    service: 'tos',
-  });
-  const response = await fetch(targetUrl.toString(), {
-    method: 'DELETE',
-    headers: signedHeaders,
-  });
-  if (!response.ok && response.status !== 404) {
-    const detail = await response.text();
-    throw new Error(`TOS 删除失败(${response.status}) ${detail || ''}`.trim());
+  const secretCandidates = getSecretCandidates(body.secretAccessKey);
+  let deleteStatus = 204;
+  let lastError = null;
+  for (const candidateSecret of secretCandidates) {
+    const client = createTosClient({
+      accessKeyId: body.accessKeyId,
+      secretAccessKey: candidateSecret,
+      region: body.region,
+      bucketName: body.bucketName,
+    });
+    try {
+      const result = await client.deleteObject({
+        bucket: normalizeText(body.bucketName),
+        key: String(body.objectKey || '').replace(/^\/+/, ''),
+      });
+      deleteStatus = Number(result?.statusCode || 204);
+      lastError = null;
+      break;
+    } catch (error) {
+      const statusCode = Number(error?.statusCode || error?.response?.statusCode || 500);
+      const code = normalizeText(error?.code || error?.data?.Code);
+      const message = normalizeText(error?.message || error?.data?.Message);
+      const hasNextCandidate = secretCandidates[secretCandidates.length - 1] !== candidateSecret;
+      if (statusCode === 404 || /NoSuchKey/i.test(`${code} ${message}`)) {
+        deleteStatus = 404;
+        lastError = null;
+        break;
+      }
+      if (!(hasNextCandidate && shouldRetryWithNextSecret(error))) {
+        const detail = code || message ? ` Code=${code || '-'} Message=${message || '-'}` : '';
+        throw new Error(`TOS 删除失败(${statusCode})${detail}`);
+      }
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn('[tos-proxy] delete signature mismatch, retrying with decoded secret candidate');
+    }
+  }
+  if (lastError) {
+    throw lastError || new Error('TOS 删除失败');
   }
   console.info('[tos-proxy] delete-object', {
     operator: 'frontend-user',
     action: 'delete_object',
     objectKey: body.objectKey,
-    result: response.status === 404 ? 'not_found' : 'deleted',
+    result: deleteStatus === 404 ? 'not_found' : 'deleted',
   });
   json(res, 200, { success: true, objectKey: body.objectKey });
 };
@@ -275,30 +307,44 @@ const handleVerifyObject = async (req, res) => {
     bucketName: body.bucketName,
     objectKey,
   }).toString();
-  const client = createTosClient({
-    accessKeyId: body.accessKeyId,
-    secretAccessKey: body.secretAccessKey,
-    region: body.region,
-    bucketName: body.bucketName,
-  });
   let verifyStatusCode = 200;
-  try {
-    const verifyResponse = await client.getObjectV2({
-      bucket: normalizeText(body.bucketName),
-      key: objectKey,
-      dataType: 'buffer',
+  const secretCandidates = getSecretCandidates(body.secretAccessKey);
+  let lastError = null;
+  for (const candidateSecret of secretCandidates) {
+    const client = createTosClient({
+      accessKeyId: body.accessKeyId,
+      secretAccessKey: candidateSecret,
+      region: body.region,
+      bucketName: body.bucketName,
     });
-    verifyStatusCode = Number(verifyResponse?.statusCode || 200);
-  } catch (error) {
-    const statusCode = Number(
-      error?.statusCode || error?.response?.statusCode || 500
-    );
-    const code = normalizeText(error?.code || error?.data?.Code);
-    const message = normalizeText(error?.message || error?.data?.Message);
-    const detail = code || message ? ` Code=${code || '-'} Message=${message || '-'}` : '';
-    throw new Error(
-      `GetObject 验证失败(${statusCode})，请确认桶内存在 ${objectKey} 文件且 AK/SK 具备读取权限。${detail}`
-    );
+    try {
+      const verifyResponse = await client.getObjectV2({
+        bucket: normalizeText(body.bucketName),
+        key: objectKey,
+        dataType: 'buffer',
+      });
+      verifyStatusCode = Number(verifyResponse?.statusCode || 200);
+      lastError = null;
+      break;
+    } catch (error) {
+      const statusCode = Number(
+        error?.statusCode || error?.response?.statusCode || 500
+      );
+      const code = normalizeText(error?.code || error?.data?.Code);
+      const message = normalizeText(error?.message || error?.data?.Message);
+      const detail = code || message ? ` Code=${code || '-'} Message=${message || '-'}` : '';
+      lastError = new Error(
+        `GetObject 验证失败(${statusCode})，请确认桶内存在 ${objectKey} 文件且 AK/SK 具备读取权限。${detail}`
+      );
+      const hasNextCandidate = secretCandidates[secretCandidates.length - 1] !== candidateSecret;
+      if (!(hasNextCandidate && /SignatureDoesNotMatch/i.test(`${code} ${message}`))) {
+        throw lastError;
+      }
+      console.warn('[tos-proxy] verify signature mismatch, retrying with decoded secret candidate');
+    }
+  }
+  if (lastError) {
+    throw lastError;
   }
   console.info('[tos-proxy] verify-object', {
     operator: 'frontend-user',

@@ -179,6 +179,24 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                 重新生成描述
               </button>
             )}
+            {isCompleted && (
+              <label className="px-3 py-1.5 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-[var(--border-primary)] cursor-pointer">
+                <Upload className="w-3 h-3" />
+                上传九宫格
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      onUploadImage(character.id, file)
+                      e.target.value = ''
+                    }
+                  }}
+                />
+              </label>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-[var(--error-hover-bg)] rounded text-[var(--text-tertiary)] hover:text-[var(--error-text)] transition-colors"
@@ -500,41 +518,6 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                 </div>
               </div>
 
-              {/* 底部操作按钮 */}
-              <div className="flex justify-center gap-3 pt-2">
-                <label className="px-4 py-2 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-[var(--border-primary)] cursor-pointer">
-                  <Upload className="w-3 h-3" />
-                  上传九宫格
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        onUploadImage(character.id, file)
-                        e.target.value = ''
-                      }
-                    }}
-                  />
-                </label>
-                <button
-                  onClick={() => onRegenerateImage(character.id)}
-                  className="px-4 py-2 bg-[var(--accent-bg)] hover:bg-[var(--accent-hover-bg)] text-[var(--accent-text)] border border-[var(--accent-border)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
-                  title="保留视角描述，仅重新生成图片"
-                >
-                  <ImagePlus className="w-3 h-3" />
-                  重新生成图片
-                </button>
-                <button
-                  onClick={() => onRegenerate(character.id)}
-                  className="px-4 py-2 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 border border-[var(--border-primary)]"
-                  title="重新生成视角描述和图片"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  重新生成描述
-                </button>
-              </div>
             </div>
           )}
         </div>

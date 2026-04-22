@@ -93,6 +93,10 @@ export interface RelayUploadResult {
   assetId?: string
   url?: string
   objectKey?: string
+  tosStatus?: 'success' | 'skipped' | 'failed'
+  relayStatus?: 'success' | 'skipped' | 'failed'
+  tosMessage?: string
+  relayMessage?: string
 }
 
 interface RelayLocalAssetCandidate {
@@ -148,11 +152,15 @@ const normalizeTosConfig = (
 ): VolcengineTosConfig | null => {
   const source = rawConfig || getVolcengineTosConfig()
   if (!source) return null
+  const normalizeHost = (rawHost: string): string => {
+    const trimmed = String(rawHost || '').trim().replace(/\/+$/, '')
+    if (!trimmed) return ''
+    if (/^https?:\/\//i.test(trimmed)) return trimmed
+    return `https://${trimmed}`
+  }
   const region = String(source.region || '').trim()
   const bucketName = String(source.bucketName || '').trim()
-  const host = String(source.host || '')
-    .trim()
-    .replace(/\/+$/, '')
+  const host = normalizeHost(source.host || '')
   const accessKeyId = String(source.accessKeyId || '').trim()
   const secretAccessKey = String(source.secretAccessKey || '').trim()
   if (!region || !bucketName || !host || !accessKeyId || !secretAccessKey) {
@@ -287,13 +295,12 @@ const buildTosObjectKey = (params: {
     safeProjectId,
     safeSeriesId,
     params.type,
-    'resource',
     fileName
   ].join('/')
 }
 
 const buildTosPublicUrl = (host: string, objectKey: string): string =>
-  `${host.replace(/\/+$/, '')}/${String(objectKey || '').replace(/^\/+/, '')}`
+  `${(/^https?:\/\//i.test(String(host || '').trim()) ? String(host || '').trim() : `https://${String(host || '').trim()}`).replace(/\/+$/, '')}/${String(objectKey || '').replace(/^\/+/, '')}`
 
 const toTosAssetId = (objectKey: string): string => `${TOS_ASSET_ID_PREFIX}${objectKey}`
 
@@ -1290,6 +1297,13 @@ export const uploadGeneratedAssetToRelay = async (params: {
   localId: string
   url?: string
   currentAssetId?: string
+  skipTosUploadWhenUrlAvailable?: boolean
+  onStage?: (
+    stage:
+      | 'start_tos_upload'
+      | 'tos_upload_success'
+      | 'start_relay_upload'
+  ) => void
 }): Promise<RelayUploadResult> => {
   const logUploadFlow = (payload: {
     result: 'success' | 'skipped' | 'failed'
@@ -1314,22 +1328,33 @@ export const uploadGeneratedAssetToRelay = async (params: {
 
   const tosConfig = normalizeTosConfig()
   const config = normalizeConfig()
-  if (!config && !tosConfig) {
+  if (!tosConfig) {
     logUploadFlow({
       result: 'skipped',
-      reason: '未配置对象存储与素材库凭据',
+      reason: '对象存储未配置，无法继续同步',
       tosUploaded: false,
       relayUploaded: false
     })
-    return { skipped: true, reason: '未配置对象存储与素材库凭据' }
+    return {
+      skipped: true,
+      reason: '对象存储未配置，无法继续同步',
+      tosStatus: 'skipped',
+      relayStatus: 'skipped',
+      tosMessage: '对象存储未配置，无法上传（请先完成对象存储配置）',
+      relayMessage: '未执行素材库同步：对象存储上传是前置步骤'
+    }
   }
 
   let finalUrl = params.url
   let tosUploaded:
     | { assetId: string; objectKey: string; url: string }
     | undefined
-  if (tosConfig) {
+  const reuseExistingTosUrl =
+    params.skipTosUploadWhenUrlAvailable === true && isHttpUrl(params.url)
+
+  if (!reuseExistingTosUrl) {
     try {
+      params.onStage?.('start_tos_upload')
       tosUploaded = await uploadGeneratedAssetToTos({
         project: params.project,
         episode: params.episode,
@@ -1337,6 +1362,7 @@ export const uploadGeneratedAssetToRelay = async (params: {
         localId: params.localId,
         url: params.url
       })
+      params.onStage?.('tos_upload_success')
       finalUrl = tosUploaded.url
       scheduleTosDelete(params.currentAssetId, {
         source: 'uploadGeneratedAssetToRelay',
@@ -1352,7 +1378,13 @@ export const uploadGeneratedAssetToRelay = async (params: {
       })
       return {
         skipped: true,
-        reason: `对象存储上传失败：${extractErrorMessage(error)}`
+        reason: `对象存储上传失败：${extractErrorMessage(error)}`,
+        tosStatus: 'failed',
+        relayStatus: 'skipped',
+        tosMessage: `上传资源到对象存储失败：${extractErrorMessage(error)}`,
+        relayMessage: config
+          ? '对象存储失败，未执行素材库同步'
+          : '素材库未配置，跳过'
       }
     }
   }
@@ -1372,7 +1404,13 @@ export const uploadGeneratedAssetToRelay = async (params: {
       groupId: params.project.assetGroupId,
       assetId: tosUploaded?.assetId,
       objectKey: tosUploaded?.objectKey,
-      url: finalUrl
+      url: finalUrl,
+      tosStatus: reuseExistingTosUrl ? 'skipped' : 'success',
+      relayStatus: 'skipped',
+      tosMessage: reuseExistingTosUrl
+        ? '对象存储已完成，跳过'
+        : '上传资源到对象存储成功',
+      relayMessage: '素材库未配置，跳过'
     }
   }
   if (
@@ -1392,65 +1430,105 @@ export const uploadGeneratedAssetToRelay = async (params: {
       tosUploaded: !!tosUploaded,
       relayUploaded: false
     })
-    return { skipped: true, reason: '当前资源缺少可上传的公网 URL' }
+    return {
+      skipped: true,
+      reason: '当前资源缺少可上传的公网 URL',
+      objectKey: tosUploaded?.objectKey,
+      url: finalUrl,
+      tosStatus: reuseExistingTosUrl ? 'skipped' : 'success',
+      relayStatus: 'skipped',
+      tosMessage: reuseExistingTosUrl
+        ? '对象存储已完成，跳过'
+        : '上传资源到对象存储成功',
+      relayMessage: '素材库同步跳过：当前资源缺少可上传的公网 URL'
+    }
   }
-
-  const nextProject = await ensureProjectGroup(
-    params.project,
-    params.seriesList,
-    params.episodes
-  )
-  const remoteAssets = await listAssetsByGroup(nextProject.assetGroupId!)
-  const candidate: RelayLocalAssetCandidate = {
-    kind: params.kind,
-    localId: params.localId,
-    episodeId: params.episode.id,
-    name: toAssetName(params.kind, params.localId),
-    label: params.localId,
-    url: finalUrl,
-    currentAssetId: params.currentAssetId
-  }
-  const duplicate = findRemoteByName(remoteAssets, candidate.name)
-  const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
-
-  if (remoteCurrent && getAssetItemId(remoteCurrent)) {
-    scheduleTosDelete(getAssetItemId(remoteCurrent), {
-      source: 'relay-upload-replace-current',
+  try {
+    const nextProject = await ensureProjectGroup(
+      params.project,
+      params.seriesList,
+      params.episodes
+    )
+    const remoteAssets = await listAssetsByGroup(nextProject.assetGroupId!)
+    const candidate: RelayLocalAssetCandidate = {
       kind: params.kind,
-      localId: params.localId
-    })
-    await deleteRemoteAsset(getAssetItemId(remoteCurrent))
-  }
-  if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
-    scheduleTosDelete(getAssetItemId(duplicate), {
-      source: 'relay-upload-replace-duplicate',
-      kind: params.kind,
-      localId: params.localId
-    })
-    await deleteRemoteAsset(getAssetItemId(duplicate))
-  }
+      localId: params.localId,
+      episodeId: params.episode.id,
+      name: toAssetName(params.kind, params.localId),
+      label: params.localId,
+      url: finalUrl,
+      currentAssetId: params.currentAssetId
+    }
+    const duplicate = findRemoteByName(remoteAssets, candidate.name)
+    const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
 
-  const assetId = await createRemoteAssetWithPolling(
-    nextProject.assetGroupId!,
-    candidate
-  )
-  const result: RelayUploadResult = {
-    skipped: false,
-    groupId: nextProject.assetGroupId,
-    assetId,
-    objectKey: tosUploaded?.objectKey,
-    url: finalUrl
+    if (remoteCurrent && getAssetItemId(remoteCurrent)) {
+      scheduleTosDelete(getAssetItemId(remoteCurrent), {
+        source: 'relay-upload-replace-current',
+        kind: params.kind,
+        localId: params.localId
+      })
+      await deleteRemoteAsset(getAssetItemId(remoteCurrent))
+    }
+    if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
+      scheduleTosDelete(getAssetItemId(duplicate), {
+        source: 'relay-upload-replace-duplicate',
+        kind: params.kind,
+        localId: params.localId
+      })
+      await deleteRemoteAsset(getAssetItemId(duplicate))
+    }
+
+    params.onStage?.('start_relay_upload')
+    const assetId = await createRemoteAssetWithPolling(
+      nextProject.assetGroupId!,
+      candidate
+    )
+    const result: RelayUploadResult = {
+      skipped: false,
+      groupId: nextProject.assetGroupId,
+      assetId,
+      objectKey: tosUploaded?.objectKey,
+      url: finalUrl,
+      tosStatus: reuseExistingTosUrl ? 'skipped' : 'success',
+      relayStatus: 'success',
+      tosMessage: reuseExistingTosUrl
+        ? '对象存储已完成，跳过'
+        : '上传资源到对象存储成功',
+      relayMessage: `上传资源到素材库成功：assetId=${assetId}`
+    }
+    logUploadFlow({
+      result: 'success',
+      finalUrl,
+      finalAssetId: assetId,
+      groupId: nextProject.assetGroupId,
+      objectKey: tosUploaded?.objectKey,
+      tosUploaded: !!tosUploaded,
+      relayUploaded: true
+    })
+    return result
+  } catch (error) {
+    logUploadFlow({
+      result: 'failed',
+      reason: `素材库上传失败：${extractErrorMessage(error)}`,
+      finalUrl,
+      objectKey: tosUploaded?.objectKey,
+      tosUploaded: !!tosUploaded,
+      relayUploaded: false
+    })
+    return {
+      skipped: true,
+      reason: `素材库上传失败：${extractErrorMessage(error)}`,
+      objectKey: tosUploaded?.objectKey,
+      url: finalUrl,
+      tosStatus: reuseExistingTosUrl ? 'skipped' : 'success',
+      relayStatus: 'failed',
+      tosMessage: reuseExistingTosUrl
+        ? '对象存储已完成，跳过'
+        : '上传资源到对象存储成功',
+      relayMessage: `上传资源到素材库失败：${extractErrorMessage(error)}（请手动同步）`
+    }
   }
-  logUploadFlow({
-    result: 'success',
-    finalUrl,
-    finalAssetId: assetId,
-    groupId: nextProject.assetGroupId,
-    objectKey: tosUploaded?.objectKey,
-    tosUploaded: !!tosUploaded,
-    relayUploaded: true
-  })
-  return result
 }
 
 export const syncProjectGroupMetadataToRelay = async (params: {

@@ -17,7 +17,7 @@ import Onboarding, {
   resetOnboarding
 } from './components/Onboarding'
 import ModelConfigModal from './components/ModelConfig'
-import { ProjectState } from './types'
+import { EpisodeStage, ProjectState } from './types'
 import { Save, CheckCircle } from 'lucide-react'
 import { saveEpisode, loadEpisode } from './services/storageService'
 import { setGlobalApiKey } from './services/aiService'
@@ -225,15 +225,7 @@ function EpisodeWorkspace() {
     updateEpisode(updates)
   }
 
-  const setStage = (
-    stage:
-      | 'script'
-      | 'assets'
-      | 'director'
-      | 'lark-director'
-      | 'export'
-      | 'prompts'
-  ) => {
+  const setStage = (stage: EpisodeStage) => {
     if (isGenerating) {
       showAlert(
         '当前正在执行生成任务，切换页面会导致生成数据丢失。\n\n确定要离开当前页面吗？',
@@ -311,7 +303,7 @@ function EpisodeWorkspace() {
             onGeneratingChange={setIsGenerating}
           />
         )
-      case 'director':
+      case 'shot':
         return (
           <StageDirector
             project={currentEpisode}
@@ -319,7 +311,7 @@ function EpisodeWorkspace() {
             onGeneratingChange={setIsGenerating}
           />
         )
-      case 'lark-director':
+      case 'video':
         return (
           <LarkDirector
             project={currentEpisode}

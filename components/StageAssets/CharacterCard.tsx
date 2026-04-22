@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
   User,
-  Check,
   Shirt,
   Trash2,
   Edit2,
@@ -11,6 +10,7 @@ import {
   Grid3x3,
   Link2,
   Upload,
+  Check,
   X,
   Loader2,
   Sparkles,
@@ -132,9 +132,6 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
               className="w-full h-full object-cover cursor-zoom-in"
               onClick={() => onImageClick(character.referenceImage)}
             />
-            <div className="absolute top-2 right-2 p-1 bg-[var(--accent)] text-[var(--text-primary)] rounded shadow-lg backdrop-blur">
-              <Check className="w-3 h-3" />
-            </div>
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-[var(--text-muted)] p-4 text-center">
