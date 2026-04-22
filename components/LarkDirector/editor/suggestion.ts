@@ -5,7 +5,7 @@ import MentionList from './MentionList'
 
 export interface MentionItem {
   id: string
-  type: 'character' | 'scene' | 'prop'
+  type: 'character' | 'scene' | 'prop' | 'image' | 'video' | 'audio'
   name: string
   desc: string
   image?: string
@@ -100,6 +100,12 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
   const allCharacters = project?.scriptData?.characters || []
   const allScenes = project?.scriptData?.scenes || []
   const allProps = project?.scriptData?.props || []
+  const allMediaAssets = project?.scriptData?.mediaAssets || []
+  const mediaTypeLabelMap = {
+    image: '图片素材',
+    video: '视频素材',
+    audio: '音频素材'
+  } as const
   const resources: MentionItem[] = [
     ...allCharacters.map((c: any) => ({
       id: c.id || c.name,
@@ -122,6 +128,14 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
       name: p.name,
       desc: p.category || '道具',
       image: p.referenceImage
+    })),
+    ...allMediaAssets.map((m: any) => ({
+      id: m.id || m.name,
+      type: (m.type || 'image') as 'image' | 'video' | 'audio',
+      name: m.name,
+      desc:
+        mediaTypeLabelMap[m.type as 'image' | 'video' | 'audio'] ||
+        '媒体素材'
     }))
   ]
 

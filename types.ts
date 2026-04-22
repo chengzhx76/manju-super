@@ -208,6 +208,18 @@ export interface Prop {
   version?: number
 }
 
+export type MediaAssetType = 'image' | 'video' | 'audio'
+
+export interface MediaAsset {
+  id: string
+  name: string
+  type: MediaAssetType
+  mimeType: string
+  dataUrl: string
+  createdAt: number
+  updatedAt: number
+}
+
 export type AssetLibraryItemType = 'character' | 'scene' | 'prop'
 
 export interface AssetLibraryItem {
@@ -381,6 +393,7 @@ export interface ScriptData {
   characters: Character[]
   scenes: Scene[]
   props: Prop[] // 道具列表，用于保持多分镜间物品视觉一致性
+  mediaAssets?: MediaAsset[] // 媒体资源（图片/视频/音频）
   storyParagraphs: { id: number; text: string; sceneRefId: string }[]
   generationMeta?: {
     // Fingerprint of raw script + language (structure extraction inputs).

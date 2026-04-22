@@ -129,7 +129,8 @@ const normalizeEpisode = (ep: Episode): Episode => {
   const scriptData = ep.scriptData
     ? {
         ...ep.scriptData,
-        props: ep.scriptData.props || []
+        props: ep.scriptData.props || [],
+        mediaAssets: ep.scriptData.mediaAssets || []
       }
     : null
 

@@ -1,22 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { Suspense, lazy, useState, useEffect, useRef, useMemo } from 'react'
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
-import StageScript from './components/StageScript'
-import StageAssets from './components/StageAssets'
-import StageDirector from './components/StageDirector'
-import StageExport from './components/StageExport'
-import StagePrompts from './components/StagePrompts'
-import LarkDirector from './components/LarkDirector'
-import AccountCenter from './components/account-center'
-import Dashboard from './components/Dashboard'
-import ProjectOverview from './components/ProjectOverview'
-import CharacterLibraryPage from './components/CharacterLibrary'
-import NewApiConsole from './components/NewApiConsole'
 import Onboarding, {
   shouldShowOnboarding,
   resetOnboarding
 } from './components/Onboarding'
-import ModelConfigModal from './components/ModelConfig'
 import { EpisodeStage, ProjectState } from './types'
 import { Save, CheckCircle } from 'lucide-react'
 import { saveEpisode, loadEpisode } from './services/storageService'
@@ -31,6 +19,18 @@ import {
 } from './services/characterSyncService'
 import AssetSyncBanner from './components/CharacterLibrary/AssetSyncBanner'
 import logoImg from './logo.png'
+
+const StageScript = lazy(() => import('./components/StageScript'))
+const StageAssets = lazy(() => import('./components/StageAssets'))
+const StageDirector = lazy(() => import('./components/StageDirector'))
+const StageExport = lazy(() => import('./components/StageExport'))
+const StagePrompts = lazy(() => import('./components/StagePrompts'))
+const LarkDirector = lazy(() => import('./components/LarkDirector'))
+const Dashboard = lazy(() => import('./components/Dashboard'))
+const ProjectOverview = lazy(() => import('./components/ProjectOverview'))
+const CharacterLibraryPage = lazy(() => import('./components/CharacterLibrary'))
+const NewApiConsole = lazy(() => import('./components/NewApiConsole'))
+const ModelConfigModal = lazy(() => import('./components/ModelConfig'))
 
 const isNineGridGenerating = (status?: string): boolean =>
   status === 'generating_panels' ||
@@ -110,6 +110,12 @@ function MobileWarning() {
   )
 }
 
+const LoadingFallback = () => (
+  <div className="h-screen flex items-center justify-center text-[var(--text-muted)]">
+    加载中...
+  </div>
+)
+
 function EpisodeWorkspace() {
   const { episodeId } = useParams<{ episodeId: string }>()
   const navigate = useNavigate()
@@ -132,8 +138,10 @@ function EpisodeWorkspace() {
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showModelConfig, setShowModelConfig] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const saveTimeoutRef = useRef<any>(null)
-  const hideStatusTimeoutRef = useRef<any>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hideStatusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
 
   useEffect(() => {
     if (!episodeId) return
@@ -141,7 +149,7 @@ function EpisodeWorkspace() {
       .then((ep) => setCurrentEpisode(ep))
       .catch(() => navigate('/'))
     return () => setCurrentEpisode(null)
-  }, [episodeId])
+  }, [episodeId, navigate, setCurrentEpisode])
 
   useEffect(() => {
     if (currentEpisode) {
@@ -155,7 +163,7 @@ function EpisodeWorkspace() {
       clearLogCallback()
     }
     return () => clearLogCallback()
-  }, [currentEpisode?.id])
+  }, [currentEpisode, updateEpisode])
 
   useEffect(() => {
     if (!currentEpisode) return
@@ -276,6 +284,29 @@ function EpisodeWorkspace() {
     navigate(`/project/${currentEpisode?.projectId || ''}`)
   }
 
+  const assetSyncStatus = useMemo(() => {
+    if (!project || !currentEpisode) return null
+    const { outdatedRefs: outdatedCharacters } = checkCharacterSync(
+      currentEpisode,
+      project
+    )
+    const { outdatedRefs: outdatedScenes } = checkSceneSync(currentEpisode, project)
+    const { outdatedRefs: outdatedProps } = checkPropSync(currentEpisode, project)
+
+    return {
+      outdatedCharacters,
+      outdatedScenes,
+      outdatedProps,
+      characterNames: new Map(
+        project.characterLibrary.map((character) => [character.id, character.name])
+      ),
+      sceneNames: new Map(
+        project.sceneLibrary.map((scene) => [scene.id, scene.location])
+      ),
+      propNames: new Map(project.propLibrary.map((prop) => [prop.id, prop.name]))
+    }
+  }, [project, currentEpisode])
+
   if (!currentEpisode) {
     return (
       <div className="h-screen flex items-center justify-center text-[var(--text-muted)]">
@@ -374,64 +405,44 @@ function EpisodeWorkspace() {
       <main
         className={`${isSidebarOpen ? 'ml-72' : 'ml-0'} transition-all duration-300 flex-1 h-screen overflow-hidden relative`}
       >
-        {project &&
-          currentEpisode &&
-          (() => {
-            const { outdatedRefs: outdatedCharacters } = checkCharacterSync(
-              currentEpisode,
-              project
-            )
-            const { outdatedRefs: outdatedScenes } = checkSceneSync(
-              currentEpisode,
-              project
-            )
-            const { outdatedRefs: outdatedProps } = checkPropSync(
-              currentEpisode,
-              project
-            )
-
-            return (
-              <>
-                <AssetSyncBanner
-                  title="Characters"
-                  outdatedRefs={outdatedCharacters.map((ref) => ({
-                    assetId: ref.characterId,
-                    syncedVersion: ref.syncedVersion
-                  }))}
-                  resolveName={(assetId) =>
-                    project.characterLibrary.find((ch) => ch.id === assetId)
-                      ?.name || assetId
-                  }
-                  onSyncAll={syncAllCharactersToEpisode}
-                />
-                <AssetSyncBanner
-                  title="Scenes"
-                  outdatedRefs={outdatedScenes.map((ref) => ({
-                    assetId: ref.sceneId,
-                    syncedVersion: ref.syncedVersion
-                  }))}
-                  resolveName={(assetId) =>
-                    project.sceneLibrary.find((sc) => sc.id === assetId)
-                      ?.location || assetId
-                  }
-                  onSyncAll={syncAllScenesToEpisode}
-                />
-                <AssetSyncBanner
-                  title="Props"
-                  outdatedRefs={outdatedProps.map((ref) => ({
-                    assetId: ref.propId,
-                    syncedVersion: ref.syncedVersion
-                  }))}
-                  resolveName={(assetId) =>
-                    project.propLibrary.find((pr) => pr.id === assetId)?.name ||
-                    assetId
-                  }
-                  onSyncAll={syncAllPropsToEpisode}
-                />
-              </>
-            )
-          })()}
-        {renderStage()}
+        {assetSyncStatus && (
+          <>
+            <AssetSyncBanner
+              title="Characters"
+              outdatedRefs={assetSyncStatus.outdatedCharacters.map((ref) => ({
+                assetId: ref.characterId,
+                syncedVersion: ref.syncedVersion
+              }))}
+              resolveName={(assetId) =>
+                assetSyncStatus.characterNames.get(assetId) || assetId
+              }
+              onSyncAll={syncAllCharactersToEpisode}
+            />
+            <AssetSyncBanner
+              title="Scenes"
+              outdatedRefs={assetSyncStatus.outdatedScenes.map((ref) => ({
+                assetId: ref.sceneId,
+                syncedVersion: ref.syncedVersion
+              }))}
+              resolveName={(assetId) =>
+                assetSyncStatus.sceneNames.get(assetId) || assetId
+              }
+              onSyncAll={syncAllScenesToEpisode}
+            />
+            <AssetSyncBanner
+              title="Props"
+              outdatedRefs={assetSyncStatus.outdatedProps.map((ref) => ({
+                assetId: ref.propId,
+                syncedVersion: ref.syncedVersion
+              }))}
+              resolveName={(assetId) =>
+                assetSyncStatus.propNames.get(assetId) || assetId
+              }
+              onSyncAll={syncAllPropsToEpisode}
+            />
+          </>
+        )}
+        <Suspense fallback={<LoadingFallback />}>{renderStage()}</Suspense>
         {showSaveStatus && (
           <div className="absolute top-4 right-6 pointer-events-none flex items-center gap-2 text-xs font-mono text-[var(--text-tertiary)] bg-[var(--overlay-medium)] px-2 py-1 rounded-full backdrop-blur-sm z-50">
             {saveStatus === 'saving' ? (
@@ -449,17 +460,21 @@ function EpisodeWorkspace() {
         )}
       </main>
       {showOnboarding && (
-        <Onboarding
-          onComplete={() => setShowOnboarding(false)}
-          onQuickStart={() => setShowOnboarding(false)}
-          currentApiKey=""
-          onSaveApiKey={() => {}}
-        />
+        <Suspense fallback={<LoadingFallback />}>
+          <Onboarding
+            onComplete={() => setShowOnboarding(false)}
+            onQuickStart={() => setShowOnboarding(false)}
+            currentApiKey=""
+            onSaveApiKey={() => {}}
+          />
+        </Suspense>
       )}
-      <ModelConfigModal
-        isOpen={showModelConfig}
-        onClose={() => setShowModelConfig(false)}
-      />
+      <Suspense fallback={null}>
+        <ModelConfigModal
+          isOpen={showModelConfig}
+          onClose={() => setShowModelConfig(false)}
+        />
+      </Suspense>
     </div>
   )
 }
@@ -519,7 +534,7 @@ function AppRoutes() {
   }
 
   return (
-    <>
+    <Suspense fallback={<LoadingFallback />}>
       <Routes>
         <Route
           path="/"
@@ -575,7 +590,7 @@ function AppRoutes() {
         isOpen={showModelConfig}
         onClose={() => setShowModelConfig(false)}
       />
-    </>
+    </Suspense>
   )
 }
 

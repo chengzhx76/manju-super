@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react'
-import { Character, ProjectState, Prop, Scene, Shot } from '../../types'
+import {
+  Character,
+  MediaAsset,
+  MediaAssetType,
+  ProjectState,
+  Prop,
+  Scene,
+  Shot
+} from '../../types'
 import { useAlert } from '../GlobalAlert'
 import { useProjectContext } from '../../contexts/ProjectContext'
 import { convertImageToBase64 } from '../../services/storageService'
@@ -11,6 +19,8 @@ import {
   Plus,
   Users,
   Image as ImageIcon,
+  Film,
+  Music2,
   Package,
   Maximize2,
   Play,
@@ -47,6 +57,13 @@ interface EditingAssetDraft {
   shapeReferenceImage: string
 }
 
+interface NewMediaAssetDraft {
+  type: MediaAssetType
+  name: string
+  mimeType: string
+  dataUrl: string
+}
+
 const LarkDirector: React.FC<Props> = ({
   project,
   updateProject,
@@ -57,6 +74,10 @@ const LarkDirector: React.FC<Props> = ({
 
   const [activeClipIndex, setActiveClipIndex] = useState(0)
   const [editingAsset, setEditingAsset] = useState<EditingAssetDraft | null>(
+    null
+  )
+  const [showAddAssetMenu, setShowAddAssetMenu] = useState(false)
+  const [newMediaAsset, setNewMediaAsset] = useState<NewMediaAssetDraft | null>(
     null
   )
 
@@ -82,6 +103,36 @@ const LarkDirector: React.FC<Props> = ({
   const activeClipTitle = activeClip
     ? `片段 ${getClipDisplayNumber(activeClip, activeClipIndex)}`
     : '片段'
+  const mediaAssets = project.scriptData?.mediaAssets || []
+  const mediaImages = mediaAssets.filter((item) => item.type === 'image')
+  const mediaVideos = mediaAssets.filter((item) => item.type === 'video')
+  const mediaAudios = mediaAssets.filter((item) => item.type === 'audio')
+  const mediaTypeText: Record<MediaAssetType, string> = {
+    image: '图片',
+    video: '视频',
+    audio: '音频'
+  }
+  const mediaAcceptType: Record<MediaAssetType, string> = {
+    image: 'image/*',
+    video: 'video/*',
+    audio: 'audio/*'
+  }
+  const mediaMaxSizeMap: Record<MediaAssetType, number> = {
+    image: 10 * 1024 * 1024,
+    video: 50 * 1024 * 1024,
+    audio: 20 * 1024 * 1024
+  }
+  const assetSectionTitleClass =
+    'flex items-center gap-2 mb-3 text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest'
+  const assetGridClass = 'grid grid-cols-2 gap-3'
+  const assetCardClass = 'flex flex-col gap-1.5 cursor-pointer group'
+  const assetImageWrapClass =
+    'aspect-video bg-[var(--bg-elevated)] rounded-lg overflow-hidden border border-[var(--border-primary)] group-hover:border-[var(--accent-border)] transition-colors relative'
+  const assetImageClass = 'w-full h-full object-cover'
+  const assetEmptyClass =
+    'w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]'
+  const assetNameClass =
+    'text-[10px] text-[var(--text-secondary)] text-center truncate'
 
   useEffect(() => {
     if (clips.length === 0) {
@@ -165,6 +216,136 @@ const LarkDirector: React.FC<Props> = ({
         shot.id === targetId ? { ...shot, actionSummary: text } : shot
       )
     }))
+  }
+
+  const convertFileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result
+        if (typeof result !== 'string') {
+          reject(new Error('文件读取失败'))
+          return
+        }
+        resolve(result)
+      }
+      reader.onerror = () => reject(new Error('文件读取失败'))
+      reader.readAsDataURL(file)
+    })
+
+  const validateMediaFile = (
+    file: File,
+    type: MediaAssetType
+  ): string | null => {
+    const expectedPrefix =
+      type === 'image' ? 'image/' : type === 'video' ? 'video/' : 'audio/'
+    if (!file.type.startsWith(expectedPrefix)) {
+      return `文件类型不正确，请上传${mediaTypeText[type]}文件`
+    }
+    const maxSize = mediaMaxSizeMap[type]
+    if (file.size > maxSize) {
+      const maxSizeMb = Math.floor(maxSize / (1024 * 1024))
+      return `${mediaTypeText[type]}文件过大，最大支持 ${maxSizeMb}MB`
+    }
+    return null
+  }
+
+  const openNewMediaAssetModal = (type: MediaAssetType) => {
+    setShowAddAssetMenu(false)
+    setNewMediaAsset({
+      type,
+      name: '',
+      mimeType: '',
+      dataUrl: ''
+    })
+  }
+
+  const handleUploadNewMediaAsset = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !newMediaAsset) return
+
+    const err = validateMediaFile(file, newMediaAsset.type)
+    if (err) {
+      showAlert(err, { type: 'warning' })
+      return
+    }
+
+    try {
+      const dataUrl = await convertFileToDataUrl(file)
+      setNewMediaAsset((prev) =>
+        prev
+          ? {
+              ...prev,
+              mimeType: file.type,
+              dataUrl
+            }
+          : prev
+      )
+      console.info('[LarkDirector] 媒体资源上传成功', {
+        actor: 'user',
+        action: 'upload-media-asset',
+        mediaType: newMediaAsset.type,
+        fileName: file.name
+      })
+    } catch (error) {
+      showAlert(
+        `上传失败: ${error instanceof Error ? error.message : '未知错误'}`,
+        { type: 'error' }
+      )
+    }
+  }
+
+  const handleSaveNewMediaAsset = () => {
+    if (!newMediaAsset) return
+    const nextName = newMediaAsset.name.trim()
+    if (!nextName) {
+      showAlert('资源名不能为空', { type: 'warning' })
+      return
+    }
+    if (!newMediaAsset.dataUrl) {
+      showAlert(`请先上传${mediaTypeText[newMediaAsset.type]}文件`, {
+        type: 'warning'
+      })
+      return
+    }
+
+    const now = Date.now()
+    const mediaAsset: MediaAsset = {
+      id: `media_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+      name: nextName,
+      type: newMediaAsset.type,
+      mimeType: newMediaAsset.mimeType || 'application/octet-stream',
+      dataUrl: newMediaAsset.dataUrl,
+      createdAt: now,
+      updatedAt: now
+    }
+
+    updateProject((prev) => {
+      if (!prev.scriptData) {
+        showAlert('当前剧本数据不可用，无法新增资源', { type: 'warning' })
+        return prev
+      }
+      return {
+        ...prev,
+        scriptData: {
+          ...prev.scriptData,
+          mediaAssets: [...(prev.scriptData.mediaAssets || []), mediaAsset]
+        }
+      }
+    })
+
+    console.info('[LarkDirector] 媒体资源新增成功', {
+      actor: 'user',
+      action: 'create-media-asset',
+      mediaType: mediaAsset.type,
+      mediaAssetId: mediaAsset.id,
+      mediaAssetName: mediaAsset.name
+    })
+    setNewMediaAsset(null)
+    showAlert(`${mediaTypeText[mediaAsset.type]}资源已添加`, { type: 'success' })
   }
 
   const openAssetEditor = (type: EditingAssetType, id: string) => {
@@ -425,42 +606,70 @@ const LarkDirector: React.FC<Props> = ({
         <aside className="w-80 border-r border-[var(--border-primary)] bg-[var(--bg-surface)] flex flex-col h-full shrink-0">
           <div className="h-14 border-b border-[var(--border-primary)] flex items-center justify-between px-6 shrink-0">
             <h2 className="text-sm font-bold tracking-wider">本集资产库</h2>
-            <button
-              onClick={() => showAlert('功能暂未实现', { type: 'warning' })}
-              className="p-1 hover:bg-[var(--bg-hover)] rounded"
+            <div
+              className="relative"
+              onMouseEnter={() => setShowAddAssetMenu(true)}
+              onMouseLeave={() => setShowAddAssetMenu(false)}
             >
-              <Plus className="w-4 h-4 text-[var(--text-muted)]" />
-            </button>
+              <button className="p-1 hover:bg-[var(--bg-hover)] rounded">
+                <Plus className="w-4 h-4 text-[var(--text-muted)]" />
+              </button>
+              {showAddAssetMenu && (
+                <div className="absolute right-0 top-8 z-30 w-36 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-elevated)] shadow-xl p-1.5">
+                  <button
+                    onClick={() => openNewMediaAssetModal('image')}
+                    className="w-full px-2 py-2 rounded-lg text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] flex items-center gap-2"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    图片
+                  </button>
+                  <button
+                    onClick={() => openNewMediaAssetModal('video')}
+                    className="w-full px-2 py-2 rounded-lg text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] flex items-center gap-2"
+                  >
+                    <Film className="w-3.5 h-3.5" />
+                    视频
+                  </button>
+                  <button
+                    onClick={() => openNewMediaAssetModal('audio')}
+                    className="w-full px-2 py-2 rounded-lg text-left text-xs text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] flex items-center gap-2"
+                  >
+                    <Music2 className="w-3.5 h-3.5" />
+                    音频
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
             {/* Characters */}
             <div>
-              <div className="flex items-center gap-2 mb-3 text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest">
+              <div className={assetSectionTitleClass}>
                 <Users className="w-3 h-3" />
                 <span>角色 ({project.scriptData?.characters.length || 0})</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={assetGridClass}>
                 {project.scriptData?.characters.map((char) => (
                   <div
                     key={char.id}
-                    className="flex flex-col gap-1.5 cursor-pointer group"
+                    className={assetCardClass}
                     onClick={() => openAssetEditor('character', char.id)}
                   >
-                    <div className="aspect-[3/4] bg-[var(--bg-elevated)] rounded-lg overflow-hidden border border-[var(--border-primary)] group-hover:border-[var(--accent-border)] transition-colors relative">
+                    <div className={assetImageWrapClass}>
                       {char.referenceImage ? (
                         <img
                           src={char.referenceImage}
                           alt={char.name}
-                          className="w-full h-full object-cover"
+                          className={assetImageClass}
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
+                        <div className={assetEmptyClass}>
                           无图片
                         </div>
                       )}
                     </div>
-                    <div className="text-[10px] text-[var(--text-secondary)] text-center truncate">
+                    <div className={assetNameClass}>
                       {char.name}
                     </div>
                   </div>
@@ -470,31 +679,31 @@ const LarkDirector: React.FC<Props> = ({
 
             {/* Scenes */}
             <div>
-              <div className="flex items-center gap-2 mb-3 text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest">
+              <div className={assetSectionTitleClass}>
                 <ImageIcon className="w-3 h-3" />
                 <span>场景 ({project.scriptData?.scenes.length || 0})</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={assetGridClass}>
                 {project.scriptData?.scenes.map((scene) => (
                   <div
                     key={scene.id}
-                    className="flex flex-col gap-1.5 cursor-pointer group"
+                    className={assetCardClass}
                     onClick={() => openAssetEditor('scene', scene.id)}
                   >
-                    <div className="aspect-video bg-[var(--bg-elevated)] rounded-lg overflow-hidden border border-[var(--border-primary)] group-hover:border-[var(--accent-border)] transition-colors relative">
+                    <div className={assetImageWrapClass}>
                       {scene.referenceImage ? (
                         <img
                           src={scene.referenceImage}
                           alt={scene.location}
-                          className="w-full h-full object-cover"
+                          className={assetImageClass}
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
+                        <div className={assetEmptyClass}>
                           无图片
                         </div>
                       )}
                     </div>
-                    <div className="text-[10px] text-[var(--text-secondary)] text-center truncate">
+                    <div className={assetNameClass}>
                       {scene.location}
                     </div>
                   </div>
@@ -504,35 +713,119 @@ const LarkDirector: React.FC<Props> = ({
 
             {/* Props */}
             <div>
-              <div className="flex items-center gap-2 mb-3 text-[10px] text-[var(--text-tertiary)] uppercase tracking-widest">
+              <div className={assetSectionTitleClass}>
                 <Package className="w-3 h-3" />
                 <span>道具 ({project.scriptData?.props.length || 0})</span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={assetGridClass}>
                 {project.scriptData?.props.map((prop) => (
                   <div
                     key={prop.id}
-                    className="flex flex-col gap-1.5 cursor-pointer group"
+                    className={assetCardClass}
                     onClick={() => openAssetEditor('prop', prop.id)}
                   >
-                    <div className="aspect-video bg-[var(--bg-elevated)] rounded-lg overflow-hidden border border-[var(--border-primary)] group-hover:border-[var(--accent-border)] transition-colors relative">
+                    <div className={assetImageWrapClass}>
                       {prop.referenceImage ? (
                         <img
                           src={prop.referenceImage}
                           alt={prop.name}
-                          className="w-full h-full object-cover"
+                          className={assetImageClass}
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">
+                        <div className={assetEmptyClass}>
                           无图片
                         </div>
                       )}
                     </div>
-                    <div className="text-[10px] text-[var(--text-secondary)] text-center truncate">
+                    <div className={assetNameClass}>
                       {prop.name}
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Media Assets */}
+            <div>
+              <div className={assetSectionTitleClass}>
+                <ImageIcon className="w-3 h-3" />
+                <span>媒体资源 ({mediaAssets.length})</span>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-2 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
+                    图片 ({mediaImages.length})
+                  </div>
+                  <div className={assetGridClass}>
+                    {mediaImages.map((item) => (
+                      <div key={item.id} className={assetCardClass}>
+                        <div className={assetImageWrapClass}>
+                          <img
+                            src={item.dataUrl}
+                            alt={item.name}
+                            className={assetImageClass}
+                          />
+                        </div>
+                        <div className={assetNameClass}>{item.name}</div>
+                      </div>
+                    ))}
+                    {mediaImages.length === 0 && (
+                      <div className="col-span-2 text-[10px] text-[var(--text-muted)] border border-dashed border-[var(--border-primary)] rounded-lg py-3 text-center">
+                        暂无图片资源
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
+                    视频 ({mediaVideos.length})
+                  </div>
+                  <div className={assetGridClass}>
+                    {mediaVideos.map((item) => (
+                      <div key={item.id} className={assetCardClass}>
+                        <div className={assetImageWrapClass}>
+                          <video src={item.dataUrl} className={assetImageClass} />
+                        </div>
+                        <div className={assetNameClass}>{item.name}</div>
+                      </div>
+                    ))}
+                    {mediaVideos.length === 0 && (
+                      <div className="col-span-2 text-[10px] text-[var(--text-muted)] border border-dashed border-[var(--border-primary)] rounded-lg py-3 text-center">
+                        暂无视频资源
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider">
+                    音频 ({mediaAudios.length})
+                  </div>
+                  <div className={assetGridClass}>
+                    {mediaAudios.map((item) => (
+                      <div key={item.id} className={assetCardClass}>
+                        <div className="rounded-lg border border-[var(--border-primary)] bg-[var(--bg-base)] p-2">
+                          <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)] mb-2">
+                            <Music2 className="w-3.5 h-3.5" />
+                            音频
+                          </div>
+                          <audio
+                            src={item.dataUrl}
+                            controls
+                            className="w-full h-8"
+                          />
+                        </div>
+                        <div className={assetNameClass}>{item.name}</div>
+                      </div>
+                    ))}
+                    {mediaAudios.length === 0 && (
+                      <div className="col-span-2 text-[10px] text-[var(--text-muted)] border border-dashed border-[var(--border-primary)] rounded-lg py-3 text-center">
+                        暂无音频资源
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -571,7 +864,7 @@ const LarkDirector: React.FC<Props> = ({
                   projectLibrary={seriesProject}
                   clipId={activeClip?.id}
                   initialText={activeClip?.actionSummary ?? ''}
-                  placeholder="输入描述，@ 引用角色/道具/场景..."
+                  placeholder="输入描述，@ 引用角色/道具/场景/媒体..."
                   autoFocusWhenEmpty={true}
                   onSaveText={handleSaveActiveClipText}
                 />
@@ -828,6 +1121,112 @@ const LarkDirector: React.FC<Props> = ({
                 className="px-6 py-2 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-[var(--btn-primary-text)] rounded-lg text-sm font-medium transition-colors"
               >
                 保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {newMediaAsset && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-[var(--bg-base)]/75 p-6"
+          onClick={() => setNewMediaAsset(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-[var(--bg-elevated)] border border-[var(--border-secondary)] rounded-xl p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[var(--text-primary)]">
+                新增{mediaTypeText[newMediaAsset.type]}资源
+              </h3>
+              <button
+                onClick={() => setNewMediaAsset(null)}
+                className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+                aria-label="关闭"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <div className="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest mb-2">
+                  资源名称
+                </div>
+                <input
+                  value={newMediaAsset.name}
+                  onChange={(e) =>
+                    setNewMediaAsset((prev) =>
+                      prev ? { ...prev, name: e.target.value } : prev
+                    )
+                  }
+                  placeholder={`输入${mediaTypeText[newMediaAsset.type]}资源名`}
+                  className="w-full px-3 py-2 bg-[var(--bg-base)] border border-[var(--border-primary)] text-sm text-[var(--text-primary)] outline-none rounded-lg focus:border-[var(--accent)]"
+                />
+              </div>
+
+              <label className="block rounded-lg border border-[var(--border-primary)] bg-[var(--bg-base)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer overflow-hidden">
+                <div className="aspect-video w-full flex items-center justify-center p-4">
+                  {newMediaAsset.dataUrl ? (
+                    newMediaAsset.type === 'image' ? (
+                      <img
+                        src={newMediaAsset.dataUrl}
+                        alt={newMediaAsset.name || '图片预览'}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : newMediaAsset.type === 'video' ? (
+                      <video
+                        src={newMediaAsset.dataUrl}
+                        controls
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="w-full max-w-md text-center">
+                        <Music2 className="w-10 h-10 mx-auto mb-3 text-[var(--text-muted)]" />
+                        <audio
+                          src={newMediaAsset.dataUrl}
+                          controls
+                          className="w-full"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <div className="text-center text-[var(--text-muted)]">
+                      <Plus className="w-10 h-10 mx-auto mb-2" />
+                      <div className="text-sm">
+                        点击上传{mediaTypeText[newMediaAsset.type]}文件
+                      </div>
+                      <div className="text-[10px] mt-1">
+                        {newMediaAsset.type === 'image'
+                          ? '支持常见图片格式，最大 10MB'
+                          : newMediaAsset.type === 'video'
+                            ? '支持常见视频格式，最大 50MB'
+                            : '支持常见音频格式，最大 20MB'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  accept={mediaAcceptType[newMediaAsset.type]}
+                  className="hidden"
+                  onChange={handleUploadNewMediaAsset}
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setNewMediaAsset(null)}
+                className="px-6 py-2 bg-[var(--bg-hover)] hover:bg-[var(--border-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg text-sm font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveNewMediaAsset}
+                className="px-6 py-2 bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-hover)] text-[var(--btn-primary-text)] rounded-lg text-sm font-medium transition-colors"
+              >
+                确定
               </button>
             </div>
           </div>

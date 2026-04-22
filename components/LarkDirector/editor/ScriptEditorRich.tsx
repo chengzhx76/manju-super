@@ -213,7 +213,7 @@ const ScriptEditorRich: React.FC<Props> = ({
   clipId,
   initialContent,
   initialText,
-  placeholder = '输入描述，@ 引用角色/道具/场景...',
+  placeholder = '输入描述，@ 引用角色/道具/场景/媒体...',
   autoFocusWhenEmpty = false,
   onSaveText
 }) => {
