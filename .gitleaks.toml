@@ -1,0 +1,17 @@
+[extend]
+useDefault = true
+
+[allowlist]
+regexes = ['''AKLT_REDACTED''', '''X-Tos-Credential=AKLT_REDACTED''']
+
+[[rules]]
+id = "volcengine-aklt"
+description = "Detect potential Volcengine AKLT token"
+regex = '''AKLT[0-9A-Za-z_%\-]{8,}'''
+tags = ["key", "volcengine"]
+
+[[rules]]
+id = "tos-signed-url-credential"
+description = "Detect signed TOS URL credential parameter"
+regex = '''X-Tos-Credential='''
+tags = ["url", "credential", "tos"]

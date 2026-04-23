@@ -175,6 +175,29 @@
 
 ## 项目启动
 
+## 提交前安全检查
+
+为避免再次触发 GitHub Push Protection（如误提交带签名的 TOS URL 或疑似 Access Key），建议在提交前执行：
+
+```bash
+npm run check:secrets
+```
+
+已接入 `pre-push` hook：执行 `git push` 时会自动运行该检查，不通过则阻断推送。
+
+若你是首次拉取该仓库，请执行一次：
+
+```bash
+npm run prepare
+```
+
+该检查会重点拦截：
+
+- `X-Tos-Credential=` 这类带签名 URL 参数
+- `AKLT...` 这类疑似火山 Access Key 前缀
+
+若需要放示例，请统一使用脱敏占位值（例如 `AKLT_REDACTED`、`https://example.com/demo.png`）。
+
 ### 方式一：本地开发
 
 ```bash
