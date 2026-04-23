@@ -725,7 +725,7 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
         <section className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-surface)] overflow-hidden">
           {renderSectionHeader(
             'context',
-            '资产上下文',
+            '资产绑定',
             '先确认场景、角色与道具绑定',
             steps[0]?.done
           )}

@@ -1,4 +1,4 @@
-import { Episode, Series, SeriesProject, Shot } from '../types'
+import { Episode, MediaAssetType, Series, SeriesProject, Shot } from '../types'
 import type { AssetLibraryConfig, VolcengineTosConfig } from '../types/model'
 import { getAssetLibraryConfig, getVolcengineTosConfig } from './modelRegistry'
 
@@ -29,6 +29,7 @@ export type TosResourceKind =
   | 'role'
   | 'scene'
   | 'prop'
+  | 'image'
   | 'audio'
   | 'video'
   | 'shot'
@@ -98,6 +99,11 @@ export interface RelayUploadResult {
   tosMessage?: string
   relayMessage?: string
 }
+
+export type MediaUploadStage =
+  | 'start_tos_upload'
+  | 'tos_upload_success'
+  | 'start_relay_upload'
 
 interface RelayLocalAssetCandidate {
   kind: RelayResourceKind
@@ -250,6 +256,7 @@ const inferExtensionFromUrl = (
 ): string => {
   const normalizedFallback = fallback.startsWith('.') ? fallback : `.${fallback}`
   if (!value) return normalizedFallback
+  let currentStage: 'tos' | 'relay' = 'tos'
   try {
     const target = new URL(value)
     const pathname = target.pathname || ''
@@ -290,11 +297,15 @@ const buildTosObjectKey = (params: {
     ? params.extension
     : `.${params.extension}`
   const fileName = `${safeResourceId}-${timestamp}${normalizedExt}`
+  const typeSegment =
+    params.type === 'image' || params.type === 'video' || params.type === 'audio'
+      ? `media/${params.type}`
+      : params.type
   return [
     TOS_PATH_PREFIX,
     safeProjectId,
     safeSeriesId,
-    params.type,
+    typeSegment,
     fileName
   ].join('/')
 }
@@ -895,6 +906,140 @@ export const uploadAssetFileToTos = async (params: {
     assetId: toTosAssetId(uploaded.objectKey),
     objectKey: uploaded.objectKey,
     url: uploaded.url
+  }
+}
+
+export const uploadMediaAssetFile = async (params: {
+  project: SeriesProject
+  seriesList: Series[]
+  episodes: Episode[]
+  episode: Episode
+  mediaType: MediaAssetType
+  resourceId: string
+  file: File
+  currentAssetId?: string
+  onStage?: (stage: MediaUploadStage) => void
+}): Promise<RelayUploadResult> => {
+  const toTosType = (type: MediaAssetType): TosResourceKind => {
+    if (type === 'video') return 'video'
+    if (type === 'audio') return 'audio'
+    return 'image'
+  }
+  const toRelayKind = (type: MediaAssetType): RelayResourceKind =>
+    type === 'video' ? 'video' : 'prop'
+  const mediaName = `media__${params.mediaType}__${params.resourceId}`
+  let currentStage: 'tos' | 'relay' = 'tos'
+
+  try {
+    params.onStage?.('start_tos_upload')
+    const tosUploaded = await uploadAssetFileToTos({
+      project: params.project,
+      episode: params.episode,
+      type: toTosType(params.mediaType),
+      resourceId: params.resourceId,
+      file: params.file
+    })
+    params.onStage?.('tos_upload_success')
+
+    if (params.mediaType === 'audio') {
+      return {
+        skipped: false,
+        assetId: tosUploaded.assetId,
+        objectKey: tosUploaded.objectKey,
+        url: tosUploaded.url,
+        tosStatus: 'success',
+        relayStatus: 'skipped',
+        tosMessage: '上传资源到对象存储成功',
+        relayMessage: '音频资源无需上传素材库，已跳过'
+      }
+    }
+
+    const config = normalizeConfig()
+    if (!config) {
+      return {
+        skipped: false,
+        assetId: tosUploaded.assetId,
+        objectKey: tosUploaded.objectKey,
+        url: tosUploaded.url,
+        tosStatus: 'success',
+        relayStatus: 'skipped',
+        tosMessage: '上传资源到对象存储成功',
+        relayMessage: '素材库未配置，跳过'
+      }
+    }
+
+    const nextProject = await ensureProjectGroup(
+      params.project,
+      params.seriesList,
+      params.episodes
+    )
+    const remoteAssets = await listAssetsByGroup(nextProject.assetGroupId!)
+    const candidate: RelayLocalAssetCandidate = {
+      kind: toRelayKind(params.mediaType),
+      localId: params.resourceId,
+      episodeId: params.episode.id,
+      name: mediaName,
+      label: mediaName,
+      url: tosUploaded.url,
+      currentAssetId: params.currentAssetId
+    }
+    const duplicate = findRemoteByName(remoteAssets, candidate.name)
+    const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
+
+    if (remoteCurrent && getAssetItemId(remoteCurrent)) {
+      scheduleTosDelete(getAssetItemId(remoteCurrent), {
+        source: 'uploadMediaAssetFile-replace-current',
+        mediaType: params.mediaType,
+        resourceId: params.resourceId
+      })
+      await deleteRemoteAsset(getAssetItemId(remoteCurrent))
+    }
+    if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
+      scheduleTosDelete(getAssetItemId(duplicate), {
+        source: 'uploadMediaAssetFile-replace-duplicate',
+        mediaType: params.mediaType,
+        resourceId: params.resourceId
+      })
+      await deleteRemoteAsset(getAssetItemId(duplicate))
+    }
+
+    currentStage = 'relay'
+    params.onStage?.('start_relay_upload')
+    const assetId = await createRemoteAssetWithPolling(
+      nextProject.assetGroupId!,
+      candidate
+    )
+    return {
+      skipped: false,
+      groupId: nextProject.assetGroupId,
+      assetId,
+      objectKey: tosUploaded.objectKey,
+      url: tosUploaded.url,
+      tosStatus: 'success',
+      relayStatus: 'success',
+      tosMessage: '上传资源到对象存储成功',
+      relayMessage: `上传资源到素材库成功：assetId=${assetId}`
+    }
+  } catch (error) {
+    const message = extractErrorMessage(error)
+    if (currentStage === 'relay') {
+      return {
+        skipped: true,
+        reason: message,
+        tosStatus: 'success',
+        relayStatus: 'failed',
+        tosMessage: '上传资源到对象存储成功',
+        relayMessage: `上传资源到素材库失败：${message}`
+      }
+    }
+    return {
+      skipped: true,
+      reason: message,
+      tosStatus: 'failed',
+      relayStatus: 'skipped',
+      tosMessage: `上传资源到对象存储失败：${message}`,
+      relayMessage: '未执行素材库同步'
+    }
   }
 }
 

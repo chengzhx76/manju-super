@@ -155,17 +155,47 @@ const CustomMention = Mention.extend({
     else if (item?.name?.includes('办公室')) colorClass = 'bg-blue-400'
 
     const colorSpan = ['span', { class: `w-2 h-2 rounded-full ${colorClass}` }]
+    const mediaIcon =
+      item?.type === 'audio'
+        ? [
+            'span',
+            {
+              class:
+                'w-4 h-4 rounded-full bg-gray-100 border border-gray-200 shrink-0 inline-flex items-center justify-center text-[10px] text-gray-600'
+            },
+            '♪'
+          ]
+        : item?.type === 'video'
+          ? [
+              'span',
+              {
+                class:
+                  'w-4 h-4 rounded-full bg-gray-100 border border-gray-200 shrink-0 inline-flex items-center justify-center text-[10px] text-gray-600'
+              },
+              '▶'
+            ]
+          : item?.type === 'image'
+            ? [
+                'span',
+                {
+                  class:
+                    'w-4 h-4 rounded-full bg-gray-100 border border-gray-200 shrink-0 inline-flex items-center justify-center text-[10px] text-gray-600'
+                },
+                '图'
+              ]
+            : colorSpan
 
     // 显示图片或颜色圆点
-    const imgOrColor = item?.image
+    const mentionImageUrl = String(item?.image || item?.url || '').trim()
+    const imgOrColor = mentionImageUrl
       ? [
           'img',
           {
-            src: item.image,
+            src: mentionImageUrl,
             class: 'w-4 h-4 rounded-full object-cover shrink-0'
           }
         ]
-      : colorSpan
+      : mediaIcon
 
     const suffix =
       item?.type === 'character'
@@ -203,9 +233,10 @@ interface Props {
   placeholder?: string
   autoFocusWhenEmpty?: boolean
   onSaveText?: (text: string) => void
+  onSaveContent?: (payload: { text: string; html: string }) => void
 }
 
-const DEFAULT_SCRIPT = `<p>分镜1 <span data-duration-tag="" value="5.0"></span> : 氛围压抑而紧张，走廊光线昏暗，只有一道门缝透出明亮的室内光。镜头从<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的肩后缓缓推近，她面部朝向门缝，正透过半开的门向泽维尔的办公室里窥视。门缝中，<span data-type="mention" data-id="泽维尔" data-item='{"type":"character","name":"泽维尔", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0171ccb7-d72e-4a9a-b061-3744361f6c05?X-Everphoto-Sum=74f5a1101e64ac618575af72b606d695503d8488&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAAKMaDNP8pfLTxE1YdgqiL8uU4GrXBW25-4aqUCNC6wyxl5GGlLvEe9YlUqikV7C2xCAwcBdVsD3ZnGXvB-ReJPg"}'>@泽维尔-基础形象</span>的手指穿过<span data-type="mention" data-id="金发女孩" data-item='{"type":"character","name":"金发女孩", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_a4fc59f5-7611-4299-99bb-12fcce1a1080?X-Everphoto-Sum=461daeaa265f7a817e29c11d4c7ed8040b53a73d&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGyzzclIKCtUB2Bz1iR3srmp3NaGmpcCp6NJIPQOHYhZnPtydlFIi_z6qN6SvtvfLDE"}'>@金发女孩-基础形象</span>的金发，嘴唇压在她脖颈上。镜头切换到<span data-type="mention" data-id="塞西莉亚" data-item='{"type":"character","name":"塞西莉亚", "image":"https://everphoto-media.jianying.com/download/bucket/everphoto-jianying-assets_0458d898-e5eb-4a8e-adff-ca7bad6b99bd?X-Everphoto-Sum=a40b8b9b7cefc363e372d8f84bca80841b585784&X-Everphoto-Token=AAAAAAAAAAAAAAAAAAAAANm8DHahmSuaIm1wwhHZzGzbwaxD6UP4qu4uZ9Okx7L1jl56Kccp9AVa1O3F1INOnYni1VIl7JKa6MOHSTN5IyY"}'>@塞西莉亚-基础形象</span>的眼部特写，她瞳孔微颤，随后镜头下移，她的手紧紧攥住文件，指节因用力而发白。画面中所有角色全程不说话。</p>`
+const DEFAULT_SCRIPT = `<p></p>`
 
 const ScriptEditorRich: React.FC<Props> = ({
   project,
@@ -215,7 +246,8 @@ const ScriptEditorRich: React.FC<Props> = ({
   initialText,
   placeholder = '输入描述，@ 引用角色/道具/场景/媒体...',
   autoFocusWhenEmpty = false,
-  onSaveText
+  onSaveText,
+  onSaveContent
 }) => {
   const extractTextFromHtml = (html: string): string => {
     return html
@@ -244,6 +276,222 @@ const ScriptEditorRich: React.FC<Props> = ({
     if (initialContent !== undefined) return initialContent
     if (initialText !== undefined) return toParagraphHtml(initialText)
     return DEFAULT_SCRIPT
+  }
+
+  const formatEditorConsoleOutput = (
+    docJson: any,
+    fallbackText: string
+  ): {
+    storyboardText: string
+    resourceReferences: {
+      images: Array<{ id: string; name: string; url: string }>
+      videos: Array<{ id: string; name: string; url: string }>
+      audios: Array<{ id: string; name: string; url: string }>
+    }
+  } => {
+    let startSec = 0
+    const formatSec = (value: number): string =>
+      Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
+    const normalizeLine = (value: string): string =>
+      value
+        .replace(/[^\S\r\n]+/g, ' ')
+        .replace(/\s*([，。！？：；,.!?;:])/g, '$1')
+        .trim()
+    const scriptData = project?.scriptData
+    const allCharacters = Array.isArray(scriptData?.characters)
+      ? scriptData.characters
+      : []
+    const allScenes = Array.isArray(scriptData?.scenes) ? scriptData.scenes : []
+    const allProps = Array.isArray(scriptData?.props) ? scriptData.props : []
+    const allMediaAssets = Array.isArray(scriptData?.mediaAssets)
+      ? scriptData.mediaAssets
+      : []
+
+    const resourceReferences = {
+      images: [] as Array<{ id: string; name: string; url: string }>,
+      videos: [] as Array<{ id: string; name: string; url: string }>,
+      audios: [] as Array<{ id: string; name: string; url: string }>
+    }
+
+    const mediaTagLabelMap = {
+      image: '图',
+      video: '视频',
+      audio: '音频'
+    } as const
+
+    const resolveMentionMediaType = (mentionType: string): 'image' | 'video' | 'audio' => {
+      if (mentionType === 'video') return 'video'
+      if (mentionType === 'audio') return 'audio'
+      return 'image'
+    }
+
+    const pushResourceReference = (
+      attrs: any
+    ): null | { mediaType: 'image' | 'video' | 'audio'; index: number } => {
+      const itemData = attrs?.itemData
+      const mentionType = String(itemData?.type || '').trim()
+      const mediaType = resolveMentionMediaType(mentionType)
+      if (
+        !['character', 'scene', 'prop', 'image', 'video', 'audio'].includes(mentionType)
+      ) {
+        return null
+      }
+      const resourceId = String(itemData?.id || attrs?.id || '').trim()
+      const resourceName = getMentionDisplayName(attrs).replace(/^@/, '')
+      if (!resourceName) return null
+      const resourceUrl = resolveMentionResourceUrl(attrs)
+      const payload = { id: resourceId, name: resourceName, url: resourceUrl }
+      if (mediaType === 'image') {
+        resourceReferences.images.push(payload)
+        return { mediaType, index: resourceReferences.images.length }
+      }
+      if (mediaType === 'video') {
+        resourceReferences.videos.push(payload)
+        return { mediaType, index: resourceReferences.videos.length }
+      }
+      resourceReferences.audios.push(payload)
+      return { mediaType, index: resourceReferences.audios.length }
+    }
+
+    const getMentionDisplayName = (attrs: any): string => {
+      const itemData = attrs?.itemData
+      const mentionType = String(itemData?.type || '').trim()
+      const baseName = String(
+        itemData?.name || attrs?.label || attrs?.id || ''
+      ).trim()
+      if (!baseName) return ''
+      if (mentionType === 'character') {
+        const variantName = String(itemData?.variantName || '').trim()
+        return variantName ? `@${baseName}-${variantName}` : `@${baseName}`
+      }
+      return `@${baseName}`
+    }
+
+    const resolveMentionResourceUrl = (attrs: any): string => {
+      const itemData = attrs?.itemData
+      const mentionType = String(itemData?.type || '').trim()
+      const itemId = String(itemData?.id || '').trim()
+      const itemName = String(itemData?.name || attrs?.label || attrs?.id || '').trim()
+      const directUrl = String(
+        itemData?.url || itemData?.image || itemData?.remoteUrl || itemData?.dataUrl || ''
+      ).trim()
+      if (directUrl) return directUrl
+
+      if (mentionType === 'video' || mentionType === 'audio' || mentionType === 'image') {
+        const media = allMediaAssets.find((asset: any) => {
+          const assetId = String(asset?.id || '').trim()
+          const assetName = String(asset?.name || '').trim()
+          return (itemId && assetId === itemId) || (itemName && assetName === itemName)
+        })
+        if (!media) return ''
+        return String(media.remoteUrl || media.dataUrl || '').trim()
+      }
+
+      if (mentionType === 'character') {
+        const baseCharacterId = itemId.split('::')[0]
+        const baseName = String(itemData?.name || '').trim()
+        const variantName = String(itemData?.variantName || '').trim()
+        const variationId = itemId.includes('::') ? itemId.split('::')[1] : ''
+        const character = allCharacters.find((char: any) => {
+          const charId = String(char?.id || '').trim()
+          const charName = String(char?.name || '').trim()
+          return (
+            (baseCharacterId && charId === baseCharacterId) ||
+            (itemId && charId === itemId) ||
+            (baseName && charName === baseName) ||
+            (itemName && charName === itemName)
+          )
+        })
+        if (!character) return ''
+        if (variantName || variationId) {
+          const variation = (character?.variations || []).find((variationItem: any) => {
+            const id = String(variationItem?.id || '').trim()
+            const name = String(variationItem?.name || '').trim()
+            return (variationId && id === variationId) || (variantName && name === variantName)
+          })
+          const variationUrl = String(variation?.referenceImage || '').trim()
+          if (variationUrl) return variationUrl
+        }
+        return String(character?.referenceImage || '').trim()
+      }
+
+      if (mentionType === 'scene') {
+        const scene = allScenes.find((item: any) => {
+          const id = String(item?.id || '').trim()
+          const name = String(item?.location || '').trim()
+          return (itemId && id === itemId) || (itemName && name === itemName)
+        })
+        return String(scene?.referenceImage || '').trim()
+      }
+
+      if (mentionType === 'prop') {
+        const prop = allProps.find((item: any) => {
+          const id = String(item?.id || '').trim()
+          const name = String(item?.name || '').trim()
+          return (itemId && id === itemId) || (itemName && name === itemName)
+        })
+        return String(prop?.referenceImage || '').trim()
+      }
+
+      return ''
+    }
+
+    const toMentionText = (attrs: any): string => {
+      return getMentionDisplayName(attrs)
+    }
+
+    const walkNodes = (nodes: any[]): string => {
+      if (!Array.isArray(nodes)) return ''
+      return nodes
+        .map((node) => {
+          if (!node || typeof node !== 'object') return ''
+          const nodeType = String(node.type || '')
+          if (nodeType === 'text') return String(node.text || '')
+          if (nodeType === 'hardBreak') return '\n'
+          if (nodeType === 'mention') {
+            const inserted = pushResourceReference(node.attrs)
+            if (!inserted) return toMentionText(node.attrs)
+            return `@${mediaTagLabelMap[inserted.mediaType]}${inserted.index}`
+          }
+          if (nodeType === 'durationTag') {
+            const rawDuration = Number.parseFloat(String(node.attrs?.value ?? '5'))
+            const durationSec =
+              Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 5
+            const endSec = startSec + durationSec
+            const rangeText = `(${formatSec(startSec)}-${formatSec(endSec)}s)`
+            startSec = endSec + 1
+            return rangeText
+          }
+          if (Array.isArray(node.content)) {
+            return walkNodes(node.content)
+          }
+          return ''
+        })
+        .join('')
+    }
+
+    const lines: string[] = []
+    const rootNodes = Array.isArray(docJson?.content) ? docJson.content : []
+    rootNodes.forEach((node: any) => {
+      const rendered = walkNodes(Array.isArray(node?.content) ? node.content : [node])
+      if (!rendered) return
+      rendered
+        .split('\n')
+        .map((line) => normalizeLine(line))
+        .filter((line) => line.length > 0)
+        .forEach((line) => lines.push(line))
+    })
+
+    if (lines.length === 0) {
+      return {
+        storyboardText: normalizeLine(fallbackText || ''),
+        resourceReferences
+      }
+    }
+    return {
+      storyboardText: lines.join('\n'),
+      resourceReferences
+    }
   }
 
   const [savedContent, setSavedContent] = useState(resolveInitialContent)
@@ -545,8 +793,18 @@ const ScriptEditorRich: React.FC<Props> = ({
                 setIsEditing(false)
                 if (editor) {
                   const html = editor.getHTML()
+                  const text = editor.getText().trim()
+                  const json = editor.getJSON()
+                  const output = formatEditorConsoleOutput(json, text)
+                  console.group('[ScriptEditorRich] 保存输出')
+                  console.log(output.storyboardText)
+                  console.log('images:', output.resourceReferences.images)
+                  console.log('videos:', output.resourceReferences.videos)
+                  console.log('audios:', output.resourceReferences.audios)
+                  console.groupEnd()
                   setSavedContent(html)
-                  onSaveText?.(editor.getText().trim())
+                  onSaveText?.(text)
+                  onSaveContent?.({ text, html })
                 }
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm"

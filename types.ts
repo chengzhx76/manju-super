@@ -216,6 +216,16 @@ export interface MediaAsset {
   type: MediaAssetType
   mimeType: string
   dataUrl: string
+  sourceFileName?: string
+  sourceFileSize?: number
+  sourceDurationSec?: number
+  sourceWidth?: number
+  sourceHeight?: number
+  sourceFps?: number
+  tosAssetId?: string
+  relayAssetId?: string
+  objectKey?: string
+  remoteUrl?: string
   createdAt: number
   updatedAt: number
 }
@@ -321,6 +331,9 @@ export interface Shot {
   id: string
   sceneId: string
   actionSummary: string
+  actionSummaryHtml?: string
+  larkActionSummary?: string
+  larkActionSummaryHtml?: string
   dialogue?: string
   cameraMovement: string
   shotSize?: string

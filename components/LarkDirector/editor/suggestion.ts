@@ -2,6 +2,7 @@ import { ReactRenderer } from '@tiptap/react'
 import tippy, { Instance } from 'tippy.js'
 import 'tippy.js/dist/tippy.css'
 import MentionList from './MentionList'
+import { resolveTosPublicUrlFromAssetId } from '../../../services/assetRelayService'
 
 export interface MentionItem {
   id: string
@@ -9,6 +10,7 @@ export interface MentionItem {
   name: string
   desc: string
   image?: string
+  url?: string
   variantName?: string
   variants?: Array<{
     id: string
@@ -16,6 +18,39 @@ export interface MentionItem {
     desc: string
     image?: string
   }>
+}
+
+const normalizeMediaType = (value: any): 'image' | 'video' | 'audio' => {
+  const normalized = String(value || 'image').trim().toLowerCase()
+  if (normalized === 'video') return 'video'
+  if (normalized === 'audio') return 'audio'
+  return 'image'
+}
+
+const normalizeRemoteUrl = (value: unknown): string =>
+  String(value || '')
+    .trim()
+    .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
+    .trim()
+
+const resolveMediaRemoteUrl = (media: any): string => {
+  const directRemote = normalizeRemoteUrl(media?.remoteUrl)
+  if (directRemote) return directRemote
+  const tosRemote = normalizeRemoteUrl(
+    resolveTosPublicUrlFromAssetId(
+    String(media?.tosAssetId || media?.assetId || '').trim()
+  )
+  )
+  return tosRemote
+}
+
+const resolveMediaPreviewUrl = (media: any): string => {
+  // Use TOS/remote URL first; fallback to local data URL only when remote is missing.
+  return String(resolveMediaRemoteUrl(media) || media?.dataUrl || '').trim()
+}
+
+const resolveMediaResourceUrl = (media: any): string => {
+  return resolveMediaPreviewUrl(media)
 }
 
 const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
@@ -129,14 +164,19 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
       desc: p.category || '道具',
       image: p.referenceImage
     })),
-    ...allMediaAssets.map((m: any) => ({
-      id: m.id || m.name,
-      type: (m.type || 'image') as 'image' | 'video' | 'audio',
-      name: m.name,
-      desc:
-        mediaTypeLabelMap[m.type as 'image' | 'video' | 'audio'] ||
-        '媒体素材'
-    }))
+    ...allMediaAssets.map((m: any) => {
+      // Some historical entries may keep uppercase/irregular media type values.
+      // Normalize once so downstream preview/icon logic is stable.
+      const mediaType = normalizeMediaType(m.type)
+      return {
+        id: m.id || m.name,
+        type: mediaType,
+        name: m.name,
+        url: resolveMediaResourceUrl(m),
+        image: mediaType === 'image' ? resolveMediaPreviewUrl(m) : undefined,
+        desc: mediaTypeLabelMap[mediaType] || '媒体素材'
+      }
+    })
   ]
 
   const normalizedQuery = (query || '').trim().toLowerCase()

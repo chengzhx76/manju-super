@@ -4,7 +4,7 @@ import React, {
   useImperativeHandle,
   useState
 } from 'react'
-import { ChevronRight, Clock3 } from 'lucide-react'
+import { ChevronRight, Clock3, Music2, Video, Image as ImageIcon } from 'lucide-react'
 
 export default forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -39,6 +39,17 @@ export default forwardRef((props: any, ref) => {
   const itemCount = visibleItems.length + bottomActions.length
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([])
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null)
+
+  const renderFallbackIcon = (item: any) => {
+    if (item?.type === 'audio') return <Music2 className="w-3.5 h-3.5 text-gray-500" />
+    if (item?.type === 'video') return <Video className="w-3.5 h-3.5 text-gray-500" />
+    if (item?.type === 'image') return <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+    return (
+      <span className="text-[10px] text-gray-500">
+        {(item?.name || '?').slice(0, 1)}
+      </span>
+    )
+  }
 
   const selectItem = (index: number) => {
     if (index >= actionStartIndex) {
@@ -184,9 +195,7 @@ export default forwardRef((props: any, ref) => {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="text-[10px] text-gray-500">
-                    {(item.name || '?').slice(0, 1)}
-                  </span>
+                  renderFallbackIcon(item)
                 )}
               </div>
               <div className="flex flex-col overflow-hidden flex-1 min-w-0">
