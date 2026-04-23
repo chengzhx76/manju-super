@@ -74,10 +74,9 @@ const ObjectStorageSettings: React.FC<ObjectStorageSettingsProps> = ({
       accessKeyId: normalizedAccessKeyId,
       secretAccessKey: normalizedSecretAccessKey
     })
-    showAlert(
-      filledCount === 5 ? '对象存储配置已保存' : '对象存储配置已清空',
-      { type: 'success' }
-    )
+    showAlert(filledCount === 5 ? '对象存储配置已保存' : '对象存储配置已清空', {
+      type: 'success'
+    })
     updateExpanded(false)
     onRefresh()
   }

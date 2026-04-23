@@ -317,13 +317,15 @@ const LarkDirector: React.FC<Props> = ({
 
   const getLarkEditorText = (clip?: Shot | null): string => {
     if (!clip) return ''
-    if (typeof clip.larkActionSummary === 'string') return clip.larkActionSummary
+    if (typeof clip.larkActionSummary === 'string')
+      return clip.larkActionSummary
     return ''
   }
 
   const getLarkEditorHtml = (clip?: Shot | null): string => {
     if (!clip) return ''
-    if (typeof clip.larkActionSummaryHtml === 'string') return clip.larkActionSummaryHtml
+    if (typeof clip.larkActionSummaryHtml === 'string')
+      return clip.larkActionSummaryHtml
     return ''
   }
 
@@ -342,7 +344,7 @@ const LarkDirector: React.FC<Props> = ({
     clip?: Shot | null
   ): 'generated' | 'ready_to_generate' | 'empty' => {
     if (!clip) return 'empty'
-    if (String(clip.videoUrl || '').trim()) return 'generated'
+    if (String(clip.interval?.videoUrl || '').trim()) return 'generated'
     return hasClipScriptContent(clip) ? 'ready_to_generate' : 'empty'
   }
 
@@ -427,7 +429,13 @@ const LarkDirector: React.FC<Props> = ({
     })
 
   const estimateVideoFps = async (video: HTMLVideoElement): Promise<number> => {
-    const requestFrame = (video as any).requestVideoFrameCallback
+    const requestFrame = (
+      video as HTMLVideoElement & {
+        requestVideoFrameCallback?: (
+          callback: (now: number, metadata: { mediaTime: number }) => void
+        ) => number
+      }
+    ).requestVideoFrameCallback
     if (typeof requestFrame !== 'function') {
       throw new Error('当前浏览器不支持视频帧率检测')
     }
@@ -547,7 +555,11 @@ const LarkDirector: React.FC<Props> = ({
       try {
         const parsed = await readMediaElementMetadata(audio, objectUrl)
         const durationSec = Number(parsed.duration || 0)
-        if (!Number.isFinite(durationSec) || durationSec < 2 || durationSec > 15) {
+        if (
+          !Number.isFinite(durationSec) ||
+          durationSec < 2 ||
+          durationSec > 15
+        ) {
           throw new Error('音频时长需在 2-15 秒之间')
         }
         return { durationSec }
@@ -563,13 +575,17 @@ const LarkDirector: React.FC<Props> = ({
       const objectUrl = URL.createObjectURL(file)
       const video = document.createElement('video')
       video.muted = true
-      ;(video as any).playsInline = true
+      video.playsInline = true
       try {
         const parsed = await readMediaElementMetadata(video, objectUrl)
         const durationSec = Number(parsed.duration || 0)
         const width = Number(parsed.videoWidth || 0)
         const height = Number(parsed.videoHeight || 0)
-        if (!Number.isFinite(durationSec) || durationSec < 2 || durationSec > 15) {
+        if (
+          !Number.isFinite(durationSec) ||
+          durationSec < 2 ||
+          durationSec > 15
+        ) {
           throw new Error('视频时长需在 2-15 秒之间')
         }
         if (width < 300 || width > 6000 || height < 300 || height > 6000) {
@@ -581,9 +597,7 @@ const LarkDirector: React.FC<Props> = ({
         }
         const pixels = width * height
         if (pixels < 409600 || pixels > 927408) {
-          throw new Error(
-            '视频总像素需在 409600-927408 之间（宽×高）'
-          )
+          throw new Error('视频总像素需在 409600-927408 之间（宽×高）')
         }
         const shortEdge = Math.min(width, height)
         if (![480, 720].includes(shortEdge)) {
@@ -658,7 +672,8 @@ const LarkDirector: React.FC<Props> = ({
   const buildMediaDownloadName = (): string => {
     if (!newMediaAsset) return 'media-asset'
     if (newMediaAsset.file?.name) return newMediaAsset.file.name
-    if (editingMediaAsset?.sourceFileName) return editingMediaAsset.sourceFileName
+    if (editingMediaAsset?.sourceFileName)
+      return editingMediaAsset.sourceFileName
     const name = (newMediaAsset.name || 'media-asset').trim() || 'media-asset'
     const mime = newMediaAsset.mimeType || editingMediaAsset?.mimeType || ''
     if (mime.includes('jpeg')) return `${name}.jpg`
@@ -838,14 +853,18 @@ const LarkDirector: React.FC<Props> = ({
       })
 
       if (uploadResult.tosStatus !== 'success') {
-        throw new Error(uploadResult.tosMessage || uploadResult.reason || 'TOS上传失败')
+        throw new Error(
+          uploadResult.tosMessage || uploadResult.reason || 'TOS上传失败'
+        )
       }
       appendMediaUploadLog(uploadResult.tosMessage || '上传资源到TOS成功')
 
       if (newMediaAsset.type === 'audio') {
         appendMediaUploadLog('音频资源无需上传素材库，已跳过')
       } else if (uploadResult.relayStatus === 'success') {
-        appendMediaUploadLog(uploadResult.relayMessage || '上传资源到素材库成功')
+        appendMediaUploadLog(
+          uploadResult.relayMessage || '上传资源到素材库成功'
+        )
       } else if (uploadResult.relayStatus === 'failed') {
         throw new Error(uploadResult.relayMessage || '上传资源到素材库失败')
       } else {
@@ -865,7 +884,9 @@ const LarkDirector: React.FC<Props> = ({
       if (!uploadRemoteUrl && resolvedTosRemoteUrl) {
         appendMediaUploadLog('上传返回URL缺失，已使用TOS objectKey回填公网URL')
       } else if (!uploadRemoteUrl && !resolvedTosRemoteUrl) {
-        appendMediaUploadLog('上传返回URL缺失且TOS URL回填失败，已回退本地预览URL')
+        appendMediaUploadLog(
+          '上传返回URL缺失且TOS URL回填失败，已回退本地预览URL'
+        )
         console.warn('[LarkDirector] 媒体资源URL回填失败，已回退本地预览URL', {
           actor: 'system',
           action: 'fallback-media-remote-url',
@@ -888,7 +909,9 @@ const LarkDirector: React.FC<Props> = ({
         sourceFps: mediaMeta.fps,
         tosAssetId,
         relayAssetId:
-          uploadResult.relayStatus === 'success' ? uploadResult.assetId : undefined,
+          uploadResult.relayStatus === 'success'
+            ? uploadResult.assetId
+            : undefined,
         objectKey: uploadResult.objectKey,
         remoteUrl: ensuredRemoteUrl,
         createdAt: editingAssetCreatedAt || now,
@@ -966,7 +989,9 @@ const LarkDirector: React.FC<Props> = ({
     }
 
     if (type === 'character') {
-      const character = project.scriptData.characters.find((item) => item.id === id)
+      const character = project.scriptData.characters.find(
+        (item) => item.id === id
+      )
       if (!character) return
       const draft: EditingAssetDraft = {
         type,
@@ -1031,7 +1056,9 @@ const LarkDirector: React.FC<Props> = ({
     }
   }
 
-  const handleUploadMainImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadMainImage = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
@@ -1166,7 +1193,9 @@ const LarkDirector: React.FC<Props> = ({
   const originalAssetName = (originalEditingAsset?.name || '').trim()
   const originalAssetDesc = (originalEditingAsset?.description || '').trim()
   const originalAssetImage = (originalEditingAsset?.imageUrl || '').trim()
-  const originalAssetShape = (originalEditingAsset?.shapeReferenceImage || '').trim()
+  const originalAssetShape = (
+    originalEditingAsset?.shapeReferenceImage || ''
+  ).trim()
   const hasEditingAssetChanged =
     editingAssetName !== originalAssetName ||
     editingAssetDesc !== originalAssetDesc ||
@@ -1193,7 +1222,10 @@ const LarkDirector: React.FC<Props> = ({
           </div>
           <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
             {mediaUploadLogs.map((line, index) => (
-              <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
+              <div
+                key={`${line}-${index}`}
+                className="whitespace-pre-wrap break-words"
+              >
                 {line}
               </div>
             ))}
@@ -1329,10 +1361,7 @@ const LarkDirector: React.FC<Props> = ({
               </div>
               <div className={assetGridClass}>
                 {project.scriptData?.characters.map((char) => (
-                  <div
-                    key={char.id}
-                    className={`${assetCardClass} group`}
-                  >
+                  <div key={char.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {char.referenceImage ? (
                         <img
@@ -1341,9 +1370,7 @@ const LarkDirector: React.FC<Props> = ({
                           className={assetImageClass}
                         />
                       ) : (
-                        <div className={assetEmptyClass}>
-                          无图片
-                        </div>
+                        <div className={assetEmptyClass}>无图片</div>
                       )}
                       <button
                         type="button"
@@ -1357,9 +1384,7 @@ const LarkDirector: React.FC<Props> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className={assetNameClass}>
-                      {char.name}
-                    </div>
+                    <div className={assetNameClass}>{char.name}</div>
                   </div>
                 ))}
               </div>
@@ -1373,10 +1398,7 @@ const LarkDirector: React.FC<Props> = ({
               </div>
               <div className={assetGridClass}>
                 {project.scriptData?.scenes.map((scene) => (
-                  <div
-                    key={scene.id}
-                    className={`${assetCardClass} group`}
-                  >
+                  <div key={scene.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {scene.referenceImage ? (
                         <img
@@ -1385,9 +1407,7 @@ const LarkDirector: React.FC<Props> = ({
                           className={assetImageClass}
                         />
                       ) : (
-                        <div className={assetEmptyClass}>
-                          无图片
-                        </div>
+                        <div className={assetEmptyClass}>无图片</div>
                       )}
                       <button
                         type="button"
@@ -1401,9 +1421,7 @@ const LarkDirector: React.FC<Props> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className={assetNameClass}>
-                      {scene.location}
-                    </div>
+                    <div className={assetNameClass}>{scene.location}</div>
                   </div>
                 ))}
               </div>
@@ -1417,10 +1435,7 @@ const LarkDirector: React.FC<Props> = ({
               </div>
               <div className={assetGridClass}>
                 {project.scriptData?.props.map((prop) => (
-                  <div
-                    key={prop.id}
-                    className={`${assetCardClass} group`}
-                  >
+                  <div key={prop.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {prop.referenceImage ? (
                         <img
@@ -1429,9 +1444,7 @@ const LarkDirector: React.FC<Props> = ({
                           className={assetImageClass}
                         />
                       ) : (
-                        <div className={assetEmptyClass}>
-                          无图片
-                        </div>
+                        <div className={assetEmptyClass}>无图片</div>
                       )}
                       <button
                         type="button"
@@ -1445,9 +1458,7 @@ const LarkDirector: React.FC<Props> = ({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <div className={assetNameClass}>
-                      {prop.name}
-                    </div>
+                    <div className={assetNameClass}>{prop.name}</div>
                   </div>
                 ))}
               </div>
@@ -1466,10 +1477,7 @@ const LarkDirector: React.FC<Props> = ({
                   </div>
                   <div className={assetGridClass}>
                     {mediaImages.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`${assetCardClass} group`}
-                      >
+                      <div key={item.id} className={`${assetCardClass} group`}>
                         <div className={assetImageWrapClass}>
                           <img
                             src={resolveMediaRenderUrl(item)}
@@ -1505,10 +1513,7 @@ const LarkDirector: React.FC<Props> = ({
                   </div>
                   <div className={assetGridClass}>
                     {mediaVideos.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`${assetCardClass} group`}
-                      >
+                      <div key={item.id} className={`${assetCardClass} group`}>
                         <div className={assetImageWrapClass}>
                           <video
                             src={resolveMediaRenderUrl(item)}
@@ -1543,10 +1548,7 @@ const LarkDirector: React.FC<Props> = ({
                   </div>
                   <div className={assetGridClass}>
                     {mediaAudios.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`${assetCardClass} group`}
-                      >
+                      <div key={item.id} className={`${assetCardClass} group`}>
                         <div className="relative rounded-lg border border-[var(--border-primary)] bg-[var(--bg-base)] p-2">
                           <div className="flex items-center gap-1.5 text-[10px] text-[var(--text-secondary)] mb-2">
                             <Music2 className="w-3.5 h-3.5" />
@@ -1719,7 +1721,10 @@ const LarkDirector: React.FC<Props> = ({
 
                         {renderState === 'generated' ? (
                           <>
-                            <video src={clip.videoUrl} className="w-full h-full object-cover" />
+                            <video
+                              src={clip.videoUrl}
+                              className="w-full h-full object-cover"
+                            />
                             <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/45 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
                               00:
                               {Math.floor(clip.duration || 5)
@@ -2065,8 +2070,10 @@ const LarkDirector: React.FC<Props> = ({
                     <Loader2 className="w-4 h-4 animate-spin" />
                     上传中
                   </>
+                ) : editingMediaAsset ? (
+                  '保存'
                 ) : (
-                  editingMediaAsset ? '保存' : '确定'
+                  '确定'
                 )}
               </button>
             </div>

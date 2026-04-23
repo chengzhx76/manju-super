@@ -9,17 +9,20 @@
 ### 1. 简化基础模板 (`components/StageDirector/utils.ts`)
 
 **之前**: `buildKeyframePrompt` 包含大量固定的技术规格和视觉细节(约80行)
+
 - ❌ 固定的技术规格(画面比例、分辨率等)
 - ❌ 固定的视觉细节(光影层次、色彩饱和度等)
 - ❌ 固定的角色要求、环境要求、氛围营造等
 
 **现在**: 简化为轻量级基础模板(约20行)
+
 - ✅ 保留核心的视觉风格、镜头运动、构图指导
 - ✅ 移除冗长的固定描述
 
-### 2. 新增AI增强函数 
+### 2. 新增AI增强函数
 
 #### `utils.ts` - `buildKeyframePromptWithAI`
+
 ```typescript
 export const buildKeyframePromptWithAI = async (
   basePrompt: string,
@@ -29,11 +32,13 @@ export const buildKeyframePromptWithAI = async (
   enhanceWithAI: boolean = true
 ): Promise<string>
 ```
+
 - 先构建基础提示词
 - 如果开启AI增强,调用LLM动态生成详细规格
 - 失败时自动降级到基础提示词
 
 #### `geminiService.ts` - `enhanceKeyframePrompt`
+
 ```typescript
 export const enhanceKeyframePrompt = async (
   basePrompt: string,
@@ -43,6 +48,7 @@ export const enhanceKeyframePrompt = async (
   model: string = 'gpt-5.1'
 ): Promise<string>
 ```
+
 - 调用LLM生成以下专业内容:
   - **技术规格**: 画面比例、分辨率、镜头语言、景深
   - **视觉细节**: 光影层次、色彩饱和度、材质质感、大气效果
@@ -56,12 +62,13 @@ export const enhanceKeyframePrompt = async (
 在导演工作台工具栏添加AI增强开关:
 
 ```tsx
-const [useAIEnhancement, setUseAIEnhancement] = useState(true);
+const [useAIEnhancement, setUseAIEnhancement] = useState(true)
 ```
 
 **界面位置**: 导演工作台顶部工具栏,左侧标题和右侧进度之间
 
 **控件样式**:
+
 - 复选框控件
 - Sparkles图标(根据状态改变颜色)
 - 标签文字: "AI增强提示词"
@@ -69,6 +76,7 @@ const [useAIEnhancement, setUseAIEnhancement] = useState(true);
 ## 🔄 工作流程
 
 ### 基础模式 (AI增强关闭)
+
 ```
 用户点击生成关键帧
   ↓
@@ -78,6 +86,7 @@ buildKeyframePrompt (简化模板)
 ```
 
 ### AI增强模式 (AI增强开启,默认)
+
 ```
 用户点击生成关键帧
   ↓
@@ -91,6 +100,7 @@ enhanceKeyframePrompt (LLM动态生成详细规格)
 ```
 
 ### 容错机制
+
 - AI增强失败时自动降级到基础模板
 - 不影响用户体验
 - 控制台会记录失败信息
@@ -98,12 +108,14 @@ enhanceKeyframePrompt (LLM动态生成详细规格)
 ## 💡 优势
 
 ### 之前 (固定模板)
+
 - ❌ 所有镜头使用相同的技术描述
 - ❌ 无法根据具体场景灵活调整
 - ❌ 提示词冗长但不够精准
 - ❌ 代码维护困难(80行字符串)
 
 ### 现在 (AI动态生成)
+
 - ✅ 根据每个镜头的实际情况定制描述
 - ✅ LLM理解场景上下文并生成适配的技术规格
 - ✅ 用户可选择是否使用AI增强
@@ -120,11 +132,13 @@ enhanceKeyframePrompt (LLM动态生成详细规格)
 ## 🎨 使用建议
 
 ### 建议开启AI增强的场景:
+
 - 复杂的电影级镜头
 - 需要精细视觉控制的场景
 - 重要的关键镜头
 
 ### 建议关闭AI增强的场景:
+
 - 快速预览和测试
 - 简单的镜头
 - API配额有限时
@@ -133,6 +147,7 @@ enhanceKeyframePrompt (LLM动态生成详细规格)
 ## 🔧 技术细节
 
 ### 文件修改列表:
+
 1. `components/StageDirector/utils.ts`
    - 简化 `buildKeyframePrompt`
    - 新增 `buildKeyframePromptWithAI`
@@ -146,6 +161,7 @@ enhanceKeyframePrompt (LLM动态生成详细规格)
    - 添加UI控制开关
 
 ### 依赖关系:
+
 ```
 index.tsx
   ↓ 调用

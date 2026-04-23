@@ -23,37 +23,37 @@
 
 ```typescript
 export interface CharacterVariation {
-  id: string;
-  name: string;
-  visualPrompt: string;
-  negativePrompt?: string;
-  referenceImage?: string;
-  status?: 'pending' | 'generating' | 'completed' | 'failed'; // ✅ 新增
+  id: string
+  name: string
+  visualPrompt: string
+  negativePrompt?: string
+  referenceImage?: string
+  status?: 'pending' | 'generating' | 'completed' | 'failed' // ✅ 新增
 }
 
 export interface Character {
-  id: string;
-  name: string;
-  gender: string;
-  age: string;
-  personality: string;
-  visualPrompt?: string;
-  negativePrompt?: string;
-  coreFeatures?: string;
-  referenceImage?: string;
-  variations: CharacterVariation[];
-  status?: 'pending' | 'generating' | 'completed' | 'failed'; // ✅ 新增
+  id: string
+  name: string
+  gender: string
+  age: string
+  personality: string
+  visualPrompt?: string
+  negativePrompt?: string
+  coreFeatures?: string
+  referenceImage?: string
+  variations: CharacterVariation[]
+  status?: 'pending' | 'generating' | 'completed' | 'failed' // ✅ 新增
 }
 
 export interface Scene {
-  id: string;
-  location: string;
-  time: string;
-  atmosphere: string;
-  visualPrompt?: string;
-  negativePrompt?: string;
-  referenceImage?: string;
-  status?: 'pending' | 'generating' | 'completed' | 'failed'; // ✅ 新增
+  id: string
+  location: string
+  time: string
+  atmosphere: string
+  visualPrompt?: string
+  negativePrompt?: string
+  referenceImage?: string
+  status?: 'pending' | 'generating' | 'completed' | 'failed' // ✅ 新增
 }
 ```
 
@@ -63,7 +63,7 @@ export interface Scene {
 
 ```typescript
 // ❌ 移除
-const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
+const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set())
 
 // ✅ 改为直接使用数据模型的 status 字段
 ```
@@ -76,54 +76,53 @@ const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
 const handleGenerateAsset = async (type: 'character' | 'scene', id: string) => {
   // ✅ 开始生成前设置 status 为 'generating'
   if (project.scriptData) {
-    const newData = { ...project.scriptData };
+    const newData = { ...project.scriptData }
     if (type === 'character') {
-      const c = newData.characters.find(c => compareIds(c.id, id));
-      if (c) c.status = 'generating';
+      const c = newData.characters.find((c) => compareIds(c.id, id))
+      if (c) c.status = 'generating'
     } else {
-      const s = newData.scenes.find(s => compareIds(s.id, id));
-      if (s) s.status = 'generating';
+      const s = newData.scenes.find((s) => compareIds(s.id, id))
+      if (s) s.status = 'generating'
     }
-    updateProject({ scriptData: newData });
+    updateProject({ scriptData: newData })
   }
 
   try {
     // ... 生成逻辑 ...
-    
+
     // ✅ 成功后设置为 'completed'
     if (project.scriptData) {
-      const newData = { ...project.scriptData };
+      const newData = { ...project.scriptData }
       if (type === 'character') {
-        const c = newData.characters.find(c => compareIds(c.id, id));
+        const c = newData.characters.find((c) => compareIds(c.id, id))
         if (c) {
-          c.referenceImage = imageUrl;
-          c.status = 'completed';
+          c.referenceImage = imageUrl
+          c.status = 'completed'
         }
       } else {
-        const s = newData.scenes.find(s => compareIds(s.id, id));
+        const s = newData.scenes.find((s) => compareIds(s.id, id))
         if (s) {
-          s.referenceImage = imageUrl;
-          s.status = 'completed';
+          s.referenceImage = imageUrl
+          s.status = 'completed'
         }
       }
-      updateProject({ scriptData: newData });
+      updateProject({ scriptData: newData })
     }
-
   } catch (e: any) {
     // ✅ 失败后设置为 'failed'
     if (project.scriptData) {
-      const newData = { ...project.scriptData };
+      const newData = { ...project.scriptData }
       if (type === 'character') {
-        const c = newData.characters.find(c => compareIds(c.id, id));
-        if (c) c.status = 'failed';
+        const c = newData.characters.find((c) => compareIds(c.id, id))
+        if (c) c.status = 'failed'
       } else {
-        const s = newData.scenes.find(s => compareIds(s.id, id));
-        if (s) s.status = 'failed';
+        const s = newData.scenes.find((s) => compareIds(s.id, id))
+        if (s) s.status = 'failed'
       }
-      updateProject({ scriptData: newData });
+      updateProject({ scriptData: newData })
     }
   }
-};
+}
 ```
 
 **handleGenerateVariation** (角色变体生成):
@@ -132,34 +131,33 @@ const handleGenerateAsset = async (type: 'character' | 'scene', id: string) => {
 const handleGenerateVariation = async (charId: string, varId: string) => {
   // ✅ 设置生成状态
   if (project.scriptData) {
-    const newData = { ...project.scriptData };
-    const c = newData.characters.find(c => compareIds(c.id, charId));
-    const v = c?.variations?.find(v => compareIds(v.id, varId));
-    if (v) v.status = 'generating';
-    updateProject({ scriptData: newData });
+    const newData = { ...project.scriptData }
+    const c = newData.characters.find((c) => compareIds(c.id, charId))
+    const v = c?.variations?.find((v) => compareIds(v.id, varId))
+    if (v) v.status = 'generating'
+    updateProject({ scriptData: newData })
   }
 
   try {
     // ... 生成逻辑 ...
-    
-    // ✅ 成功后设置 'completed'
-    const v = c?.variations?.find(v => compareIds(v.id, varId));
-    if (v) {
-      v.referenceImage = imageUrl;
-      v.status = 'completed';
-    }
 
+    // ✅ 成功后设置 'completed'
+    const v = c?.variations?.find((v) => compareIds(v.id, varId))
+    if (v) {
+      v.referenceImage = imageUrl
+      v.status = 'completed'
+    }
   } catch (e: any) {
     // ✅ 失败后设置 'failed'
     if (project.scriptData) {
-      const newData = { ...project.scriptData };
-      const c = newData.characters.find(c => compareIds(c.id, charId));
-      const v = c?.variations?.find(v => compareIds(v.id, varId));
-      if (v) v.status = 'failed';
-      updateProject({ scriptData: newData });
+      const newData = { ...project.scriptData }
+      const c = newData.characters.find((c) => compareIds(c.id, charId))
+      const v = c?.variations?.find((v) => compareIds(v.id, varId))
+      if (v) v.status = 'failed'
+      updateProject({ scriptData: newData })
     }
   }
-};
+}
 ```
 
 #### 修改UI渲染逻辑
@@ -181,16 +179,16 @@ isGenerating={scene.status === 'generating'}
 ```typescript
 // ❌ 旧接口
 interface WardrobeModalProps {
-  character: Character;
-  generatingIds: Set<string>; // 删除此行
-  onClose: () => void;
+  character: Character
+  generatingIds: Set<string> // 删除此行
+  onClose: () => void
   // ...
 }
 
 // ✅ 新接口
 interface WardrobeModalProps {
-  character: Character;
-  onClose: () => void;
+  character: Character
+  onClose: () => void
   // ...
 }
 ```
@@ -205,7 +203,7 @@ interface WardrobeModalProps {
   </div>
 )}
 
-<button 
+<button
   disabled={generatingIds.has(variation.id)}
 >
   <RefreshCw className={`w-3 h-3 ${generatingIds.has(variation.id) ? 'animate-spin' : ''}`} />
@@ -218,7 +216,7 @@ interface WardrobeModalProps {
   </div>
 )}
 
-<button 
+<button
   disabled={variation.status === 'generating'}
 >
   <RefreshCw className={`w-3 h-3 ${variation.status === 'generating' ? 'animate-spin' : ''}`} />
@@ -228,11 +226,13 @@ interface WardrobeModalProps {
 ## 状态流转
 
 ### 角色/场景生成
+
 ```
 undefined → generating → completed/failed
 ```
 
 ### 角色变体生成
+
 ```
 undefined → generating → completed/failed
 ```

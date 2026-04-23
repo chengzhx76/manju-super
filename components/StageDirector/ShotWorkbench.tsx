@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -198,7 +198,8 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
       ? 'storyboard-grid'
       : 'keyframes'
   const effectiveVideoInputMode = videoInputMode || recommendedInputMode
-  const resolveStoredGridPanelCount = (): StoryboardGridPanelCount | null => {
+  const resolveStoredGridPanelCount = useCallback(
+    (): StoryboardGridPanelCount | null => {
     const fromLayout = nineGrid?.layout?.panelCount
     if (fromLayout === 4 || fromLayout === 6 || fromLayout === 9) {
       return fromLayout
@@ -210,8 +211,11 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
     }
 
     return null
-  }
-  const resolveDefaultGridPanelCount = (): StoryboardGridPanelCount => {
+    },
+    [nineGrid?.layout?.panelCount, nineGrid?.panels?.length]
+  )
+  const resolveDefaultGridPanelCount = useCallback(
+    (): StoryboardGridPanelCount => {
     const intervalDuration = Number(shot.interval?.duration)
     if (Number.isFinite(intervalDuration) && intervalDuration === 8) {
       return 6
@@ -219,16 +223,30 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
 
     const modelId =
       localVideoModelId || currentVideoModelId || shot.videoModel || 'sora-2'
-    const model = getModelById(modelId) as any
-    const modelDefaultDuration = Number(model?.params?.defaultDuration)
+    const model = getModelById(modelId)
+    const modelParams =
+      model && typeof model === 'object' && 'params' in model
+        ? (model as { params?: { defaultDuration?: number | string } }).params
+        : undefined
+    const modelDefaultDuration = Number(modelParams?.defaultDuration)
     if (Number.isFinite(modelDefaultDuration) && modelDefaultDuration === 8) {
       return 6
     }
 
     return 9
-  }
-  const resolvePreferredGridPanelCount = (): StoryboardGridPanelCount =>
-    resolveStoredGridPanelCount() ?? resolveDefaultGridPanelCount()
+    },
+    [
+      shot.interval?.duration,
+      localVideoModelId,
+      currentVideoModelId,
+      shot.videoModel
+    ]
+  )
+  const resolvePreferredGridPanelCount = useCallback(
+    (): StoryboardGridPanelCount =>
+      resolveStoredGridPanelCount() ?? resolveDefaultGridPanelCount(),
+    [resolveStoredGridPanelCount, resolveDefaultGridPanelCount]
+  )
   const [selectedGridPanelCount, setSelectedGridPanelCount] =
     useState<StoryboardGridPanelCount>(() => resolvePreferredGridPanelCount())
   const selectedGridLayout = resolveStoryboardGridLayout(selectedGridPanelCount)
@@ -242,7 +260,12 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
 
   useEffect(() => {
     setSelectedGridPanelCount(resolvePreferredGridPanelCount())
-  }, [shot.id, nineGrid?.layout?.panelCount, nineGrid?.panels?.length])
+  }, [
+    shot.id,
+    nineGrid?.layout?.panelCount,
+    nineGrid?.panels?.length,
+    resolvePreferredGridPanelCount
+  ])
 
   const showEndFrame = modelRouting.supportsEndFrame
   const hasStartFrame = !!startKf?.imageUrl
@@ -383,7 +406,7 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
   const isGridGenerating =
     nineGrid?.status === 'generating_panels' ||
     nineGrid?.status === 'generating_image'
-  const openOrGenerateGridStoryboard = () => {
+  const openOrGenerateGridStoryboard = useCallback(() => {
     if (
       hasSameGridLayout &&
       (nineGrid?.status === 'completed' ||
@@ -394,7 +417,13 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
       return
     }
     onGenerateNineGrid(selectedGridPanelCount)
-  }
+  }, [
+    hasSameGridLayout,
+    nineGrid?.status,
+    onShowNineGrid,
+    onGenerateNineGrid,
+    selectedGridPanelCount
+  ])
 
   const primaryAction = useMemo(() => {
     if (!hasActionSummary) {
@@ -478,7 +507,6 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
     hasStartFrame,
     isAdvancedMode,
     selectedGridLayout.label,
-    selectedGridPanelCount,
     isGridGenerating,
     openOrGenerateGridStoryboard,
     startKf?.status,

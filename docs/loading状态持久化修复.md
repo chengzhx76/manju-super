@@ -22,40 +22,45 @@
    - 改用`Keyframe`和`VideoInterval`的`status`字段
 
 2. **生成图片时的状态管理**
+
    ```tsx
    // 开始生成前设置status为'generating'
    updateProject((prevProject: ProjectState) => ({
      ...prevProject,
-     shots: prevProject.shots.map(s => {
-       if (s.id !== shot.id) return s;
-       const newKeyframes = [...(s.keyframes || [])];
+     shots: prevProject.shots.map((s) => {
+       if (s.id !== shot.id) return s
+       const newKeyframes = [...(s.keyframes || [])]
        // 设置keyframe status为'generating'
        const generatingKf: Keyframe = {
          id: kfId,
          type,
          visualPrompt: prompt,
          status: 'generating'
-       };
+       }
        // ... 更新keyframes数组
      })
-   }));
-   
+   }))
+
    // 生成成功后设置为'completed'
    // 生成失败后设置为'failed'
    ```
 
 3. **生成视频时的状态管理**
+
    ```tsx
    // 开始生成前设置interval status为'generating'
    updateShot(shot.id, (s) => ({
      ...s,
-     interval: s.interval ? { ...s.interval, status: 'generating' } : {
-       // 创建新的interval对象，status为'generating'
-     }
-   }));
+     interval: s.interval
+       ? { ...s.interval, status: 'generating' }
+       : {
+           // 创建新的interval对象，status为'generating'
+         }
+   }))
    ```
 
 4. **UI显示loading状态**
+
    ```tsx
    {/* 根据keyframe的status显示loading */}
    {startKf?.status === 'generating' && (
@@ -63,7 +68,7 @@
        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
      </div>
    )}
-   
+
    {/* 根据interval的status禁用按钮 */}
    disabled={!startKf?.imageUrl || activeShot.interval?.status === 'generating'}
    ```
@@ -71,11 +76,13 @@
 ### 状态流转
 
 **图片生成（Keyframe）**
+
 ```
 pending → generating → completed/failed
 ```
 
 **视频生成（VideoInterval）**
+
 ```
 pending → generating → completed/failed
 ```

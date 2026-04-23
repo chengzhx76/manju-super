@@ -4,7 +4,13 @@ import React, {
   useImperativeHandle,
   useState
 } from 'react'
-import { ChevronRight, Clock3, Music2, Video, Image as ImageIcon } from 'lucide-react'
+import {
+  ChevronRight,
+  Clock3,
+  Music2,
+  Video,
+  Image as ImageIcon
+} from 'lucide-react'
 
 export default forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -12,7 +18,8 @@ export default forwardRef((props: any, ref) => {
   const [variationParentIndex, setVariationParentIndex] = useState(0)
   const defaultItems = props.items || []
   const variationItems =
-    variationParent?.type === 'character' && Array.isArray(variationParent?.variants)
+    variationParent?.type === 'character' &&
+    Array.isArray(variationParent?.variants)
       ? variationParent.variants.map((variant: any, index: number) => ({
           ...variationParent,
           id: `${variationParent.id}::${variant.id || index}`,
@@ -41,9 +48,12 @@ export default forwardRef((props: any, ref) => {
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null)
 
   const renderFallbackIcon = (item: any) => {
-    if (item?.type === 'audio') return <Music2 className="w-3.5 h-3.5 text-gray-500" />
-    if (item?.type === 'video') return <Video className="w-3.5 h-3.5 text-gray-500" />
-    if (item?.type === 'image') return <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
+    if (item?.type === 'audio')
+      return <Music2 className="w-3.5 h-3.5 text-gray-500" />
+    if (item?.type === 'video')
+      return <Video className="w-3.5 h-3.5 text-gray-500" />
+    if (item?.type === 'image')
+      return <ImageIcon className="w-3.5 h-3.5 text-gray-500" />
     return (
       <span className="text-[10px] text-gray-500">
         {(item?.name || '?').slice(0, 1)}

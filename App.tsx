@@ -1,4 +1,11 @@
-import React, { Suspense, lazy, useState, useEffect, useRef, useMemo } from 'react'
+import React, {
+  Suspense,
+  lazy,
+  useState,
+  useEffect,
+  useRef,
+  useMemo
+} from 'react'
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import Onboarding, {
@@ -290,20 +297,31 @@ function EpisodeWorkspace() {
       currentEpisode,
       project
     )
-    const { outdatedRefs: outdatedScenes } = checkSceneSync(currentEpisode, project)
-    const { outdatedRefs: outdatedProps } = checkPropSync(currentEpisode, project)
+    const { outdatedRefs: outdatedScenes } = checkSceneSync(
+      currentEpisode,
+      project
+    )
+    const { outdatedRefs: outdatedProps } = checkPropSync(
+      currentEpisode,
+      project
+    )
 
     return {
       outdatedCharacters,
       outdatedScenes,
       outdatedProps,
       characterNames: new Map(
-        project.characterLibrary.map((character) => [character.id, character.name])
+        project.characterLibrary.map((character) => [
+          character.id,
+          character.name
+        ])
       ),
       sceneNames: new Map(
         project.sceneLibrary.map((scene) => [scene.id, scene.location])
       ),
-      propNames: new Map(project.propLibrary.map((prop) => [prop.id, prop.name]))
+      propNames: new Map(
+        project.propLibrary.map((prop) => [prop.id, prop.name])
+      )
     }
   }, [project, currentEpisode])
 

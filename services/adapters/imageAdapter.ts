@@ -314,9 +314,10 @@ export const callImageApi = async (
           n: 1
         }
         if (!endpointUsesEdits && usableJsonReferenceSources.length > 0) {
-          requestBody.image = usableJsonReferenceSources.length === 1
-            ? usableJsonReferenceSources[0]
-            : usableJsonReferenceSources
+          requestBody.image =
+            usableJsonReferenceSources.length === 1
+              ? usableJsonReferenceSources[0]
+              : usableJsonReferenceSources
         }
 
         const requestUrl = resolveBrowserProxiedImageRequestUrl(

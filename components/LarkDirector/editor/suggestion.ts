@@ -3,6 +3,13 @@ import tippy, { Instance } from 'tippy.js'
 import 'tippy.js/dist/tippy.css'
 import MentionList from './MentionList'
 import { resolveTosPublicUrlFromAssetId } from '../../../services/assetRelayService'
+import type {
+  Character,
+  CharacterVariation,
+  MediaAsset,
+  ProjectState,
+  SeriesProject
+} from '@/types'
 
 export interface MentionItem {
   id: string
@@ -20,8 +27,24 @@ export interface MentionItem {
   }>
 }
 
-const normalizeMediaType = (value: any): 'image' | 'video' | 'audio' => {
-  const normalized = String(value || 'image').trim().toLowerCase()
+interface MentionListRef {
+  onKeyDown?: (payload: { event: KeyboardEvent }) => boolean
+}
+
+interface SuggestionPropsLike {
+  editor?: unknown
+  clientRect?: (() => DOMRect | ClientRect) | null
+  event?: KeyboardEvent
+}
+
+type MentionMediaLike = Partial<MediaAsset> & {
+  assetId?: string
+}
+
+const normalizeMediaType = (value: unknown): 'image' | 'video' | 'audio' => {
+  const normalized = String(value || 'image')
+    .trim()
+    .toLowerCase()
   if (normalized === 'video') return 'video'
   if (normalized === 'audio') return 'audio'
   return 'image'
@@ -33,23 +56,22 @@ const normalizeRemoteUrl = (value: unknown): string =>
     .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
     .trim()
 
-const resolveMediaRemoteUrl = (media: any): string => {
+const resolveMediaRemoteUrl = (media: MentionMediaLike): string => {
   const directRemote = normalizeRemoteUrl(media?.remoteUrl)
   if (directRemote) return directRemote
   const tosRemote = normalizeRemoteUrl(
     resolveTosPublicUrlFromAssetId(
-    String(media?.tosAssetId || media?.assetId || '').trim()
-  )
+      String(media?.tosAssetId || media?.assetId || '').trim()
+    )
   )
   return tosRemote
 }
 
-const resolveMediaPreviewUrl = (media: any): string => {
-  // Use TOS/remote URL first; fallback to local data URL only when remote is missing.
+const resolveMediaPreviewUrl = (media: MentionMediaLike): string => {
   return String(resolveMediaRemoteUrl(media) || media?.dataUrl || '').trim()
 }
 
-const resolveMediaResourceUrl = (media: any): string => {
+const resolveMediaResourceUrl = (media: MentionMediaLike): string => {
   return resolveMediaPreviewUrl(media)
 }
 
@@ -63,7 +85,7 @@ const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
   })
 }
 
-const toCharacterVariants = (character: any): MentionItem['variants'] => {
+const toCharacterVariants = (character: Character): MentionItem['variants'] => {
   const baseDesc = String(character?.visualPrompt || '').trim() || '基础形象'
   const baseVariant = {
     id: `${character?.id || character?.name || 'character'}::base`,
@@ -72,8 +94,9 @@ const toCharacterVariants = (character: any): MentionItem['variants'] => {
     image: character?.referenceImage
   }
   const derivedVariants = (character?.variations || [])
-    .map((variation: any, index: number) => {
-      const variantName = String(variation?.name || '').trim() || `变体形象${index + 1}`
+    .map((variation: CharacterVariation, index: number) => {
+      const variantName =
+        String(variation?.name || '').trim() || `变体形象${index + 1}`
       const variantDesc =
         String(variation?.visualPrompt || '').trim() || `${variantName}描述`
       return {
@@ -85,19 +108,19 @@ const toCharacterVariants = (character: any): MentionItem['variants'] => {
         image: variation?.referenceImage || character?.referenceImage
       }
     })
-    .filter((item: any) => item.name)
+    .filter((item) => item.name)
   return [baseVariant, ...derivedVariants]
 }
 
 export function buildProjectLibraryMentionItems(
-  projectLibrary: any,
+  projectLibrary: SeriesProject | null | undefined,
   query = ''
 ): MentionItem[] {
   const allCharacters = projectLibrary?.characterLibrary || []
   const allScenes = projectLibrary?.sceneLibrary || []
   const allProps = projectLibrary?.propLibrary || []
   const resources: MentionItem[] = [
-    ...allCharacters.map((c: any) => ({
+    ...allCharacters.map((c) => ({
       id: c.id || c.name,
       type: 'character' as const,
       name: c.name,
@@ -105,14 +128,14 @@ export function buildProjectLibraryMentionItems(
       image: c.referenceImage,
       variants: toCharacterVariants(c)
     })),
-    ...allScenes.map((s: any) => ({
+    ...allScenes.map((s) => ({
       id: s.id || s.location,
       type: 'scene' as const,
       name: s.location,
       desc: `${s.location}_0`,
       image: s.referenceImage
     })),
-    ...allProps.map((p: any) => ({
+    ...allProps.map((p) => ({
       id: p.id || p.name,
       type: 'prop' as const,
       name: p.name,
@@ -131,7 +154,10 @@ export function buildProjectLibraryMentionItems(
     .slice(0, 80)
 }
 
-export function buildMentionItems(project: any, query = ''): MentionItem[] {
+export function buildMentionItems(
+  project: ProjectState | null | undefined,
+  query = ''
+): MentionItem[] {
   const allCharacters = project?.scriptData?.characters || []
   const allScenes = project?.scriptData?.scenes || []
   const allProps = project?.scriptData?.props || []
@@ -142,7 +168,7 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
     audio: '音频素材'
   } as const
   const resources: MentionItem[] = [
-    ...allCharacters.map((c: any) => ({
+    ...allCharacters.map((c) => ({
       id: c.id || c.name,
       type: 'character' as const,
       name: c.name,
@@ -150,23 +176,21 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
       image: c.referenceImage,
       variants: toCharacterVariants(c)
     })),
-    ...allScenes.map((s: any) => ({
+    ...allScenes.map((s) => ({
       id: s.id || s.location,
       type: 'scene' as const,
       name: s.location,
       desc: `${s.location}_0`,
       image: s.referenceImage
     })),
-    ...allProps.map((p: any) => ({
+    ...allProps.map((p) => ({
       id: p.id || p.name,
       type: 'prop' as const,
       name: p.name,
       desc: p.category || '道具',
       image: p.referenceImage
     })),
-    ...allMediaAssets.map((m: any) => {
-      // Some historical entries may keep uppercase/irregular media type values.
-      // Normalize once so downstream preview/icon logic is stable.
+    ...allMediaAssets.map((m) => {
       const mediaType = normalizeMediaType(m.type)
       return {
         id: m.id || m.name,
@@ -190,8 +214,8 @@ export function buildMentionItems(project: any, query = ''): MentionItem[] {
 }
 
 export default function getSuggestion(
-  getProject: () => any,
-  getProjectLibrary?: () => any
+  getProject: () => ProjectState | null | undefined,
+  getProjectLibrary?: () => SeriesProject | null | undefined
 ) {
   return {
     char: '@',
@@ -210,7 +234,7 @@ export default function getSuggestion(
       const createAddFromLibraryHandler = () => () => {}
 
       return {
-        onStart: (props: any) => {
+        onStart: (props: SuggestionPropsLike) => {
           const libraryItems = buildProjectLibraryMentionItems(
             getProjectLibrary?.(),
             ''
@@ -222,7 +246,7 @@ export default function getSuggestion(
               allowDurationAction: true,
               onAddFromLibrary: createAddFromLibraryHandler()
             },
-            editor: props.editor
+            editor: props.editor as never
           })
 
           if (!props.clientRect) {
@@ -242,7 +266,7 @@ export default function getSuggestion(
             maxWidth: 'none'
           })
         },
-        onUpdate(props: any) {
+        onUpdate(props: SuggestionPropsLike) {
           const libraryItems = buildProjectLibraryMentionItems(
             getProjectLibrary?.(),
             ''
@@ -278,13 +302,21 @@ export default function getSuggestion(
           }
         },
 
-        onKeyDown(props: any) {
-          if (props.event.key === 'Escape') {
+        onKeyDown(props: SuggestionPropsLike) {
+          if (props.event?.key === 'Escape') {
             popup?.[0]?.hide()
             return true
           }
 
-          return (component.ref as any)?.onKeyDown(props)
+          if (!props.event) {
+            return false
+          }
+
+          return (
+            (component.ref as MentionListRef | null)?.onKeyDown?.({
+              event: props.event
+            }) || false
+          )
         },
 
         onExit() {

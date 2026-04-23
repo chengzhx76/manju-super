@@ -1412,7 +1412,8 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
           }
         }
 
-        const useMultipartReferences = endpointUsesEdits && usableReferenceFiles.length > 0
+        const useMultipartReferences =
+          endpointUsesEdits && usableReferenceFiles.length > 0
         const useJsonReferences =
           !endpointUsesEdits && usableJsonReferenceSources.length > 0
 
@@ -1469,9 +1470,10 @@ NEGATIVE PROMPT (strictly avoid): ${compactNegativePrompt}`
             n: 1
           }
           if (!shouldUseMultipart && referenceImages.length > 0) {
-            requestBody.image = referenceImages.length === 1
-              ? referenceImages[0]
-              : referenceImages
+            requestBody.image =
+              referenceImages.length === 1
+                ? referenceImages[0]
+                : referenceImages
           }
           return await fetch(openAiRequestUrl, {
             method: 'POST',

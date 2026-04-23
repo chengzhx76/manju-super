@@ -84,8 +84,13 @@ interface Props {
   updateProject: (
     updates: Partial<ProjectState> | ((prev: ProjectState) => ProjectState)
   ) => void
-  onApiKeyError?: (error: any) => boolean
+  onApiKeyError?: (error: unknown) => boolean
   onGeneratingChange?: (isGenerating: boolean) => void
+}
+
+type BatchTargetItem = {
+  id: string
+  name?: string
 }
 
 const StageAssets: React.FC<Props> = ({
@@ -128,9 +133,7 @@ const StageAssets: React.FC<Props> = ({
   const [episodeSyncingKind, setEpisodeSyncingKind] = useState<
     'character' | 'scene' | 'prop' | null
   >(null)
-  const [syncingVariationKeys, setSyncingVariationKeys] = useState<string[]>(
-    []
-  )
+  const [syncingVariationKeys, setSyncingVariationKeys] = useState<string[]>([])
   const [syncingTurnaroundKeys, setSyncingTurnaroundKeys] = useState<string[]>(
     []
   )
@@ -308,7 +311,7 @@ const StageAssets: React.FC<Props> = ({
 
       updateProject({ scriptData: newData })
     }
-  }, []) // 进入资产页时执行一次，清理离开页面后遗留的 generating 状态
+  }, [project.scriptData, updateProject])
 
   /**
    * 上报生成状态给父组件，用于导航锁定
@@ -339,14 +342,14 @@ const StageAssets: React.FC<Props> = ({
       hasGeneratingScenes ||
       hasGeneratingProps
     onGeneratingChange?.(generating)
-  }, [batchProgress, project.scriptData])
+  }, [batchProgress, project.scriptData, onGeneratingChange])
 
   // 组件卸载时重置生成状态
   useEffect(() => {
     return () => {
       onGeneratingChange?.(false)
     }
-  }, [])
+  }, [onGeneratingChange])
 
   useEffect(() => {
     if (imageFlowDoneCountdown === null) return
@@ -466,10 +469,17 @@ const StageAssets: React.FC<Props> = ({
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
     if (!managedFlow) {
-      startImageFlow(type === 'character' ? '正在生成角色图...' : '正在生成场景图...', true)
-      appendImageFlowLog(`开始生图：${id} / ${type === 'character' ? '角色' : '场景'}`)
+      startImageFlow(
+        type === 'character' ? '正在生成角色图...' : '正在生成场景图...',
+        true
+      )
+      appendImageFlowLog(
+        `开始生图：${id} / ${type === 'character' ? '角色' : '场景'}`
+      )
     }
-    if (!ensureTosConfigured(type === 'character' ? '生成角色图' : '生成场景图')) {
+    if (
+      !ensureTosConfigured(type === 'character' ? '生成角色图' : '生成场景图')
+    ) {
       if (!managedFlow) {
         completeImageFlow('生成失败', 4)
       }
@@ -667,7 +677,7 @@ const StageAssets: React.FC<Props> = ({
           3
         )
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e)
       // 设置失败状态
       updateProject((prev) => {
@@ -759,7 +769,7 @@ const StageAssets: React.FC<Props> = ({
   }
 
   const executeBatchGenerate = async (
-    targetItems: any[],
+    targetItems: BatchTargetItem[],
     type: 'character' | 'scene'
   ) => {
     batchFlowKindRef.current = type
@@ -771,7 +781,11 @@ const StageAssets: React.FC<Props> = ({
     appendImageFlowLog(
       `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`
     )
-    if (!ensureTosConfigured(type === 'character' ? '批量生成角色图' : '批量生成场景图')) {
+    if (
+      !ensureTosConfigured(
+        type === 'character' ? '批量生成角色图' : '批量生成场景图'
+      )
+    ) {
       batchFlowKindRef.current = null
       completeImageFlow('生成失败', 4)
       return
@@ -828,7 +842,7 @@ const StageAssets: React.FC<Props> = ({
         currentAssetId,
         fromSyncButton: true
       })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     }
   }
@@ -842,7 +856,11 @@ const StageAssets: React.FC<Props> = ({
       const currentAssetId =
         project.scriptData?.scenes.find((item) => compareIds(item.id, sceneId))
           ?.assetId || undefined
-      const tosUploaded = await uploadFileViaTosIfEnabled('scene', sceneId, file)
+      const tosUploaded = await uploadFileViaTosIfEnabled(
+        'scene',
+        sceneId,
+        file
+      )
       if (!tosUploaded?.url) {
         throw new Error('上传资源到对象存储失败：未返回可用 URL')
       }
@@ -866,7 +884,7 @@ const StageAssets: React.FC<Props> = ({
         currentAssetId,
         fromSyncButton: true
       })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     }
   }
@@ -878,12 +896,19 @@ const StageAssets: React.FC<Props> = ({
   ) => {
     try {
       if (!ensureTosConfigured('上传参考图')) return
-      const typeMapping: Record<'character' | 'scene' | 'prop', 'role' | 'scene' | 'prop'> = {
+      const typeMapping: Record<
+        'character' | 'scene' | 'prop',
+        'role' | 'scene' | 'prop'
+      > = {
         character: 'role',
         scene: 'scene',
         prop: 'prop'
       }
-      const tosUploaded = await uploadFileViaTosIfEnabled(typeMapping[type], id, file)
+      const tosUploaded = await uploadFileViaTosIfEnabled(
+        typeMapping[type],
+        id,
+        file
+      )
       if (!tosUploaded?.url) {
         throw new Error('上传资源到对象存储失败：未返回可用 URL')
       }
@@ -899,7 +924,7 @@ const StageAssets: React.FC<Props> = ({
         `已设置${typeLabel}参考图。生成时将保持当前剧本风格，仅参考构图和外形。`,
         { type: 'success' }
       )
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     }
   }
@@ -1055,7 +1080,10 @@ const StageAssets: React.FC<Props> = ({
     )
     if (!tosEnabled) {
       appendImageFlowLog('对象存储未配置，无法继续（请先完成对象存储配置）')
-      completeImageFlow(manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`, 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`,
+        6
+      )
       showAlert('对象存储未配置，无法同步资源', { type: 'error' })
       return
     }
@@ -1074,7 +1102,10 @@ const StageAssets: React.FC<Props> = ({
           if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
             tosUploadStartedLogged = true
             appendImageFlowLog('开始上传资源到对象存储')
-          } else if (stage === 'tos_upload_success' && !tosUploadSuccessLogged) {
+          } else if (
+            stage === 'tos_upload_success' &&
+            !tosUploadSuccessLogged
+          ) {
             tosUploadSuccessLogged = true
             appendImageFlowLog('上传资源到对象存储成功')
           } else if (
@@ -1108,7 +1139,8 @@ const StageAssets: React.FC<Props> = ({
           )
         }
         if (
-          (result.relayStatus === 'success' || result.relayStatus === 'failed') &&
+          (result.relayStatus === 'success' ||
+            result.relayStatus === 'failed') &&
           !relayUploadStartedLogged
         ) {
           relayUploadStartedLogged = true
@@ -1153,7 +1185,10 @@ const StageAssets: React.FC<Props> = ({
         if (result.assetId) {
           applyEpisodeAssetId(params.kind, params.localId, result.assetId)
         }
-        completeImageFlow(manualSyncOnly ? '素材库同步结束' : `${kindLabel}同步结束`, 5)
+        completeImageFlow(
+          manualSyncOnly ? '素材库同步结束' : `${kindLabel}同步结束`,
+          5
+        )
         return
       }
       if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
@@ -1188,7 +1223,8 @@ const StageAssets: React.FC<Props> = ({
       }
       if (result.relayStatus === 'success' || result.assetId) {
         appendImageFlowLog(
-          result.relayMessage || `上传资源到素材库成功：assetId=${result.assetId || '-'}`
+          result.relayMessage ||
+            `上传资源到素材库成功：assetId=${result.assetId || '-'}`
         )
       } else if (result.relayStatus === 'failed') {
         appendImageFlowLog(
@@ -1229,12 +1265,18 @@ const StageAssets: React.FC<Props> = ({
           return { ...prev, scriptData: next }
         })
       }
-      completeImageFlow(manualSyncOnly ? '素材库同步完成' : `${kindLabel}同步完成`, 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步完成' : `${kindLabel}同步完成`,
+        6
+      )
     } catch (error) {
       appendImageFlowLog(
         `上传失败（${params.kind}）：${error instanceof Error ? error.message : '未知错误'}`
       )
-      completeImageFlow(manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`, 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`,
+        6
+      )
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
         { type: 'warning' }
@@ -1311,7 +1353,10 @@ const StageAssets: React.FC<Props> = ({
     )
     if (!tosEnabled) {
       appendImageFlowLog('对象存储未配置，无法继续（请先完成对象存储配置）')
-      completeImageFlow(manualSyncOnly ? '素材库同步失败' : '角色衍生资源同步失败', 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步失败' : '角色衍生资源同步失败',
+        6
+      )
       showAlert('对象存储未配置，无法同步角色衍生资源', { type: 'error' })
       return { skipped: true, reason: '对象存储未配置' }
     }
@@ -1330,7 +1375,10 @@ const StageAssets: React.FC<Props> = ({
           if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
             tosUploadStartedLogged = true
             appendImageFlowLog('开始上传资源到对象存储')
-          } else if (stage === 'tos_upload_success' && !tosUploadSuccessLogged) {
+          } else if (
+            stage === 'tos_upload_success' &&
+            !tosUploadSuccessLogged
+          ) {
             tosUploadSuccessLogged = true
             appendImageFlowLog('上传资源到对象存储成功')
           } else if (
@@ -1364,7 +1412,8 @@ const StageAssets: React.FC<Props> = ({
           )
         }
         if (
-          (result.relayStatus === 'success' || result.relayStatus === 'failed') &&
+          (result.relayStatus === 'success' ||
+            result.relayStatus === 'failed') &&
           !relayUploadStartedLogged
         ) {
           relayUploadStartedLogged = true
@@ -1377,7 +1426,10 @@ const StageAssets: React.FC<Props> = ({
             result.relayMessage || '上传资源到素材库失败（请手动同步）'
           )
         }
-        completeImageFlow(manualSyncOnly ? '素材库同步结束' : '角色衍生资源同步结束', 5)
+        completeImageFlow(
+          manualSyncOnly ? '素材库同步结束' : '角色衍生资源同步结束',
+          5
+        )
         return { skipped: true, reason: result.reason }
       }
       if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
@@ -1412,7 +1464,8 @@ const StageAssets: React.FC<Props> = ({
       }
       if (result.relayStatus === 'success' || result.assetId) {
         appendImageFlowLog(
-          result.relayMessage || `上传资源到素材库成功：assetId=${result.assetId || '-'}`
+          result.relayMessage ||
+            `上传资源到素材库成功：assetId=${result.assetId || '-'}`
         )
       } else if (result.relayStatus === 'failed') {
         appendImageFlowLog(
@@ -1427,13 +1480,19 @@ const StageAssets: React.FC<Props> = ({
       if (result.url) {
         params.onUrlUpdated?.(result.url)
       }
-      completeImageFlow(manualSyncOnly ? '素材库同步完成' : '角色衍生资源同步完成', 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步完成' : '角色衍生资源同步完成',
+        6
+      )
       return { skipped: false }
     } catch (error) {
       appendImageFlowLog(
         `上传失败（character-derived）：${error instanceof Error ? error.message : '未知错误'}`
       )
-      completeImageFlow(manualSyncOnly ? '素材库同步失败' : '角色衍生资源同步失败', 6)
+      completeImageFlow(
+        manualSyncOnly ? '素材库同步失败' : '角色衍生资源同步失败',
+        6
+      )
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
         { type: 'warning' }
@@ -1463,7 +1522,10 @@ const StageAssets: React.FC<Props> = ({
     return { url: uploaded.url, assetId: uploaded.assetId }
   }
 
-  const handleSyncVariationToLibrary = async (charId: string, varId: string) => {
+  const handleSyncVariationToLibrary = async (
+    charId: string,
+    varId: string
+  ) => {
     const key = getVariationRelayLocalId(charId, varId)
     if (syncingVariationKeys.includes(key)) return
     const variation = project.scriptData?.characters
@@ -1485,7 +1547,9 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             const target = char?.variations?.find((item) =>
               compareIds(item.id, varId)
             )
@@ -1496,7 +1560,9 @@ const StageAssets: React.FC<Props> = ({
         }
       })
       if (result.skipped) {
-        showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
+        showAlert(result.reason || '当前资源无法同步到素材库', {
+          type: 'warning'
+        })
       } else {
         showAlert('变体已同步到素材库', { type: 'success' })
       }
@@ -1527,7 +1593,9 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             if (!char?.turnaround) return prev
             char.turnaround.imageUrl = url
             return { ...prev, scriptData: next }
@@ -1535,7 +1603,9 @@ const StageAssets: React.FC<Props> = ({
         }
       })
       if (result.skipped) {
-        showAlert(result.reason || '当前资源无法同步到素材库', { type: 'warning' })
+        showAlert(result.reason || '当前资源无法同步到素材库', {
+          type: 'warning'
+        })
       } else {
         showAlert('九宫格已同步到素材库', { type: 'success' })
       }
@@ -1664,7 +1734,7 @@ const StageAssets: React.FC<Props> = ({
           { type: 'success' }
         )
         refreshLibrary()
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入全局资产库失败', { type: 'error' })
       }
     }
@@ -1723,7 +1793,7 @@ const StageAssets: React.FC<Props> = ({
             prev.filter((item) => item.id !== existing.id)
           )
           showAlert(`已从全局资产库移除：${char.name}`, { type: 'success' })
-        } catch (e: any) {
+        } catch (e) {
           showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
         }
       }
@@ -1814,7 +1884,7 @@ const StageAssets: React.FC<Props> = ({
         showAlert(`已${existing ? '更新' : '加入'}项目角色库：${char.name}`, {
           type: 'success'
         })
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入项目角色库失败', { type: 'error' })
       }
     }
@@ -1961,7 +2031,7 @@ const StageAssets: React.FC<Props> = ({
           `已${existing ? '更新' : '加入'}项目场景库：${scene.location}`,
           { type: 'success' }
         )
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入项目场景库失败', { type: 'error' })
       }
     }
@@ -2039,7 +2109,7 @@ const StageAssets: React.FC<Props> = ({
           { type: 'success' }
         )
         refreshLibrary()
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入全局资产库失败', { type: 'error' })
       }
     }
@@ -2102,7 +2172,7 @@ const StageAssets: React.FC<Props> = ({
           showAlert(`已从全局资产库移除：${scene.location}`, {
             type: 'success'
           })
-        } catch (e: any) {
+        } catch (e) {
           showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
         }
       }
@@ -2117,7 +2187,7 @@ const StageAssets: React.FC<Props> = ({
         scriptData: invalidateShotGenerationMeta(updated.scriptData)
       }))
       showAlert(`已导入：${item.name}`, { type: 'success' })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e?.message || '导入失败', { type: 'error' })
     }
   }
@@ -2184,7 +2254,7 @@ const StageAssets: React.FC<Props> = ({
     try {
       await deleteAssetFromLibrary(itemId)
       setLibraryItems((prev) => prev.filter((item) => item.id !== itemId))
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e?.message || '删除资产失败', { type: 'error' })
     }
   }
@@ -2678,7 +2748,7 @@ const StageAssets: React.FC<Props> = ({
       if (!managedFlow) {
         completeImageFlow('道具图生成完成', 3)
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e)
       updateProject((prev) => {
         if (!prev.scriptData) return prev
@@ -2723,7 +2793,7 @@ const StageAssets: React.FC<Props> = ({
         currentAssetId,
         fromSyncButton: true
       })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     }
   }
@@ -2853,7 +2923,7 @@ const StageAssets: React.FC<Props> = ({
         showAlert(`已${existing ? '更新' : '加入'}项目道具库：${prop.name}`, {
           type: 'success'
         })
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入项目道具库失败', { type: 'error' })
       }
     }
@@ -2929,7 +2999,7 @@ const StageAssets: React.FC<Props> = ({
           { type: 'success' }
         )
         refreshLibrary()
-      } catch (e: any) {
+      } catch (e) {
         showAlert(e?.message || '加入全局资产库失败', { type: 'error' })
       }
     }
@@ -2988,7 +3058,7 @@ const StageAssets: React.FC<Props> = ({
             prev.filter((item) => item.id !== existing.id)
           )
           showAlert(`已从全局资产库移除：${prop.name}`, { type: 'success' })
-        } catch (e: any) {
+        } catch (e) {
           showAlert(e?.message || '从全局资产库移除失败', { type: 'error' })
         }
       }
@@ -3081,7 +3151,9 @@ const StageAssets: React.FC<Props> = ({
     const target = newData.characters.find((c) => compareIds(c.id, charId))
     if (!target) return
 
-    target.variations = target.variations?.filter((v) => !compareIds(v.id, varId))
+    target.variations = target.variations?.filter(
+      (v) => !compareIds(v.id, varId)
+    )
     updateProject({ scriptData: newData })
     if (variation?.assetId) {
       void deleteRemoteAsset(variation.assetId).catch((error) => {
@@ -3112,7 +3184,9 @@ const StageAssets: React.FC<Props> = ({
         : variation.visualPrompt
     startImageFlow('正在生成服装/变体图...', true)
     const variationLabel =
-      String(variation.name || '').trim() || promptToUse || `${char.name || charId}`
+      String(variation.name || '').trim() ||
+      promptToUse ||
+      `${char.name || charId}`
     appendImageFlowLog(`开始生图:${variationLabel}`)
     if (!ensureTosConfigured('生成角色变体图')) {
       completeImageFlow('生成失败', 4)
@@ -3175,7 +3249,9 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             const target = char?.variations?.find((item) =>
               compareIds(item.id, varId)
             )
@@ -3185,7 +3261,7 @@ const StageAssets: React.FC<Props> = ({
           })
         }
       })
-    } catch (e: any) {
+    } catch (e) {
       console.error(e)
       // 设置失败状态
       if (project.scriptData) {
@@ -3259,7 +3335,9 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             const target = char?.variations?.find((item) =>
               compareIds(item.id, varId)
             )
@@ -3269,7 +3347,7 @@ const StageAssets: React.FC<Props> = ({
           })
         }
       })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     } finally {
       setSyncingVariationKeys((prev) =>
@@ -3332,7 +3410,7 @@ const StageAssets: React.FC<Props> = ({
       })
       appendImageFlowLog('九宫格视角描述生成完成，请确认后生成图片。')
       completeImageFlow('九宫格视角描述生成完成', 6)
-    } catch (e: any) {
+    } catch (e) {
       console.error('九宫格视角描述生成失败:', e)
       updateProject((prev) => {
         if (!prev.scriptData) return prev
@@ -3418,14 +3496,16 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             if (!char?.turnaround) return prev
             char.turnaround.imageUrl = url
             return { ...prev, scriptData: next }
           })
         }
       })
-    } catch (e: any) {
+    } catch (e) {
       console.error('九宫格造型图片生成失败:', e)
       updateProject((prev) => {
         if (!prev.scriptData) return prev
@@ -3500,8 +3580,9 @@ const StageAssets: React.FC<Props> = ({
     try {
       if (!ensureTosConfigured('上传九宫格参考图')) return
       const currentAssetId =
-        project.scriptData?.characters.find((item) => compareIds(item.id, charId))
-          ?.turnaround?.assetId || undefined
+        project.scriptData?.characters.find((item) =>
+          compareIds(item.id, charId)
+        )?.turnaround?.assetId || undefined
       const tosUploaded = await uploadFileViaTosIfEnabled(
         'role',
         turnaroundSyncKey,
@@ -3538,14 +3619,16 @@ const StageAssets: React.FC<Props> = ({
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
-            const char = next.characters.find((item) => compareIds(item.id, charId))
+            const char = next.characters.find((item) =>
+              compareIds(item.id, charId)
+            )
             if (!char?.turnaround) return prev
             char.turnaround.imageUrl = url
             return { ...prev, scriptData: next }
           })
         }
       })
-    } catch (e: any) {
+    } catch (e) {
       showAlert(e.message, { type: 'error' })
     } finally {
       setSyncingTurnaroundKeys((prev) =>
@@ -3553,6 +3636,34 @@ const StageAssets: React.FC<Props> = ({
       )
     }
   }
+
+  const globalCharacterNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'character')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
+  const globalSceneNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'scene')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
+  const globalPropNames = useMemo(
+    () =>
+      new Set(
+        libraryItems
+          .filter((item) => item.type === 'prop')
+          .map((item) => item.name)
+      ),
+    [libraryItems]
+  )
 
   // 空状态
   if (!project.scriptData) {
@@ -3594,33 +3705,6 @@ const StageAssets: React.FC<Props> = ({
     const query = libraryQuery.trim().toLowerCase()
     return item.name.toLowerCase().includes(query)
   })
-  const globalCharacterNames = useMemo(
-    () =>
-      new Set(
-        libraryItems
-          .filter((item) => item.type === 'character')
-          .map((item) => item.name)
-      ),
-    [libraryItems]
-  )
-  const globalSceneNames = useMemo(
-    () =>
-      new Set(
-        libraryItems
-          .filter((item) => item.type === 'scene')
-          .map((item) => item.name)
-      ),
-    [libraryItems]
-  )
-  const globalPropNames = useMemo(
-    () =>
-      new Set(
-        libraryItems
-          .filter((item) => item.type === 'prop')
-          .map((item) => item.name)
-      ),
-    [libraryItems]
-  )
   const showImageFlowPanel =
     isImageFlowRunning ||
     imageFlowDoneCountdown !== null ||
@@ -3630,7 +3714,9 @@ const StageAssets: React.FC<Props> = ({
   const showImageFlowDoneCountdown =
     !isImageFlowRunning && imageFlowDoneCountdown !== null
   const batchProgressPercent = batchProgress
-    ? Math.round((batchProgress.current / Math.max(batchProgress.total, 1)) * 100)
+    ? Math.round(
+        (batchProgress.current / Math.max(batchProgress.total, 1)) * 100
+      )
     : 0
 
   return (
@@ -3644,7 +3730,9 @@ const StageAssets: React.FC<Props> = ({
       {showImageFlowPanel && (
         <div
           className={`fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur transition-all duration-200 ${
-            isImageFlowFadingOut ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'
+            isImageFlowFadingOut
+              ? 'translate-y-1 opacity-0'
+              : 'translate-y-0 opacity-100'
           }`}
           onMouseEnter={() => {
             setIsImageFlowHovered(true)
@@ -3687,7 +3775,8 @@ const StageAssets: React.FC<Props> = ({
                 />
               </div>
               <div className="mt-1 text-[11px] text-zinc-300 font-mono">
-                进度: {batchProgress.current}/{batchProgress.total} ({batchProgressPercent}%)
+                进度: {batchProgress.current}/{batchProgress.total} (
+                {batchProgressPercent}%)
               </div>
             </div>
           )}
@@ -3695,7 +3784,10 @@ const StageAssets: React.FC<Props> = ({
           {imageFlowLogs.length > 0 && (
             <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
               {imageFlowLogs.map((line, index) => (
-                <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
+                <div
+                  key={`${line}-${index}`}
+                  className="whitespace-pre-wrap break-words"
+                >
                   {line}
                 </div>
               ))}
@@ -4020,7 +4112,9 @@ const StageAssets: React.FC<Props> = ({
               </button>
               <button
                 onClick={() => reconcileEpisodeAssets('character', '角色')}
-                disabled={isImageFlowRunning || episodeSyncingKind === 'character'}
+                disabled={
+                  isImageFlowRunning || episodeSyncingKind === 'character'
+                }
                 className={STYLES.secondaryButton}
               >
                 <RefreshCw
@@ -4311,9 +4405,9 @@ const StageAssets: React.FC<Props> = ({
           )}
         </section>
       </div>
-
     </div>
   )
 }
 
 export default StageAssets
+

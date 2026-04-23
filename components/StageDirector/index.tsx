@@ -522,13 +522,14 @@ const StageDirector: React.FC<Props> = ({
     if (!seriesProject) return
     const tosEnabled = hasVolcengineTosConfig()
     const relayEnabled = hasAssetRelayConfig()
-    const uploadTarget = tosEnabled && relayEnabled
-      ? '对象存储 + 素材库'
-      : tosEnabled
-        ? '对象存储'
-        : relayEnabled
-          ? '素材库'
-          : '未配置上传目标'
+    const uploadTarget =
+      tosEnabled && relayEnabled
+        ? '对象存储 + 素材库'
+        : tosEnabled
+          ? '对象存储'
+          : relayEnabled
+            ? '素材库'
+            : '未配置上传目标'
     appendImageFlowLog(`开始同步上传（${params.kind}）：${uploadTarget}`)
     try {
       const result = await uploadGeneratedAssetToRelay({
@@ -671,8 +672,13 @@ const StageDirector: React.FC<Props> = ({
     const shouldReplaceShotAsset = type === 'start' && !shot.nineGrid?.imageUrl
 
     if (!managedFlow) {
-      startImageFlow(type === 'start' ? '正在生成首帧...' : '正在生成尾帧...', true)
-      appendImageFlowLog(`开始生图：${shot.id} / ${type === 'start' ? '首帧' : '尾帧'}`)
+      startImageFlow(
+        type === 'start' ? '正在生成首帧...' : '正在生成尾帧...',
+        true
+      )
+      appendImageFlowLog(
+        `开始生图：${shot.id} / ${type === 'start' ? '首帧' : '尾帧'}`
+      )
     }
 
     if (shouldReplaceShotAsset && shot.assetId) {
@@ -853,10 +859,7 @@ const StageDirector: React.FC<Props> = ({
         })
       }
       if (!managedFlow) {
-        completeImageFlow(
-          type === 'start' ? '首帧生成完成' : '尾帧生成完成',
-          3
-        )
+        completeImageFlow(type === 'start' ? '首帧生成完成' : '尾帧生成完成', 3)
       }
     } catch (e: unknown) {
       console.error(e)
@@ -1964,7 +1967,9 @@ const StageDirector: React.FC<Props> = ({
     const shot = getShotById(shotId)
     if (!shot) return
     startImageFlow('正在生成九宫格分镜图...', true)
-    appendImageFlowLog(`开始生图：${shotId} / 九宫格 (${confirmedPanels.length} 格)`)
+    appendImageFlowLog(
+      `开始生图：${shotId} / 九宫格 (${confirmedPanels.length} 格)`
+    )
     if (shot.assetId) {
       try {
         await deleteRemoteAsset(shot.assetId)
@@ -2354,7 +2359,9 @@ const StageDirector: React.FC<Props> = ({
   const showImageFlowDoneCountdown =
     !isImageFlowRunning && imageFlowDoneCountdown !== null
   const batchProgressPercent = batchProgress
-    ? Math.round((batchProgress.current / Math.max(batchProgress.total, 1)) * 100)
+    ? Math.round(
+        (batchProgress.current / Math.max(batchProgress.total, 1)) * 100
+      )
     : 0
 
   return (
@@ -2362,7 +2369,9 @@ const StageDirector: React.FC<Props> = ({
       {showImageFlowPanel && (
         <div
           className={`fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur transition-all duration-200 ${
-            isImageFlowFadingOut ? 'translate-y-1 opacity-0' : 'translate-y-0 opacity-100'
+            isImageFlowFadingOut
+              ? 'translate-y-1 opacity-0'
+              : 'translate-y-0 opacity-100'
           }`}
           onMouseEnter={() => {
             setIsImageFlowHovered(true)
@@ -2407,7 +2416,8 @@ const StageDirector: React.FC<Props> = ({
                 />
               </div>
               <div className="mt-1 text-[11px] text-zinc-300 font-mono">
-                {batchProgress.message} ({batchProgress.current}/{batchProgress.total}, {batchProgressPercent}%)
+                {batchProgress.message} ({batchProgress.current}/
+                {batchProgress.total}, {batchProgressPercent}%)
               </div>
             </div>
           )}
@@ -2415,7 +2425,10 @@ const StageDirector: React.FC<Props> = ({
           {imageFlowLogs.length > 0 && (
             <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
               {imageFlowLogs.map((line, index) => (
-                <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
+                <div
+                  key={`${line}-${index}`}
+                  className="whitespace-pre-wrap break-words"
+                >
                   {line}
                 </div>
               ))}

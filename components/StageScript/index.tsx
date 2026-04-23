@@ -390,7 +390,8 @@ const StageScript: React.FC<Props> = ({
   const [error, setError] = useState<string | null>(null)
   const [processingMessage, setProcessingMessage] = useState('')
   const [processingLogs, setProcessingLogs] = useState<string[]>([])
-  const [isProcessingToastHovered, setIsProcessingToastHovered] = useState(false)
+  const [isProcessingToastHovered, setIsProcessingToastHovered] =
+    useState(false)
   const [analyzeDoneCountdown, setAnalyzeDoneCountdown] = useState<
     number | null
   >(null)
@@ -1643,7 +1644,10 @@ const StageScript: React.FC<Props> = ({
           {processingLogs.length > 0 && (
             <div className="mt-2 max-h-40 space-y-1 overflow-auto text-xs text-zinc-300">
               {processingLogs.map((line, index) => (
-                <div key={`${line}-${index}`} className="whitespace-pre-wrap break-words">
+                <div
+                  key={`${line}-${index}`}
+                  className="whitespace-pre-wrap break-words"
+                >
                   {line}
                 </div>
               ))}

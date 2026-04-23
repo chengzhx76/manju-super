@@ -25,6 +25,7 @@ Source Assets 功能允许用户一键下载项目中所有生成的源资源文
 ### 3. 等待下载完成
 
 系统会：
+
 - 显示下载进度
 - 自动收集所有可用资源
 - 打包成 ZIP 文件
@@ -35,6 +36,7 @@ Source Assets 功能允许用户一键下载项目中所有生成的源资源文
 下载的 ZIP 文件命名格式：`{项目名称}_source_assets.zip`
 
 解压后的目录结构：
+
 ```
 project_source_assets/
 ├── characters/           # 角色资源
@@ -76,6 +78,7 @@ export async function downloadSourceAssets(
 ### 进度回调
 
 函数支持进度回调，用于实时更新 UI：
+
 - 0-5%: 加载 ZIP 库
 - 5-85%: 下载资源文件
 - 85-95%: 生成 ZIP 文件

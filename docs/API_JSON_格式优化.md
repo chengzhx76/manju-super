@@ -1,14 +1,17 @@
 # API JSON 格式响应优化
 
 ## 更新日期
+
 2025-01-03
 
 ## 更新内容
 
 ### 问题描述
+
 之前调用 `chatCompletion` 时，AI 返回的 JSON 格式不稳定，有时会包含 Markdown 代码块标记（如 \`\`\`json），需要额外的清理步骤。
 
 ### 解决方案
+
 为 `chatCompletion` 函数添加 `responseFormat` 参数，当设置为 `'json_object'` 时，API 会强制返回纯 JSON 格式，提高响应的稳定性。
 
 ### 技术实现
@@ -17,10 +20,10 @@
 
 ```typescript
 const chatCompletion = async (
-  prompt: string, 
-  model: string = 'gpt-5.1', 
-  temperature: number = 0.7, 
-  maxTokens: number = 8192, 
+  prompt: string,
+  model: string = 'gpt-5.1',
+  temperature: number = 0.7,
+  maxTokens: number = 8192,
   responseFormat?: 'json_object'  // 新增参数
 ): Promise<string>
 ```
@@ -33,11 +36,11 @@ const requestBody: any = {
   messages: [{ role: 'user', content: prompt }],
   temperature: temperature,
   max_tokens: maxTokens
-};
+}
 
 // 如果指定了响应格式为json_object，添加response_format参数
 if (responseFormat === 'json_object') {
-  requestBody.response_format = { type: 'json_object' };
+  requestBody.response_format = { type: 'json_object' }
 }
 ```
 
@@ -46,16 +49,19 @@ if (responseFormat === 'json_object') {
 以下函数的 `chatCompletion` 调用已添加 `'json_object'` 参数：
 
 1. **`parseScriptToData`** - 剧本解析，返回结构化剧本数据
+
    ```typescript
    chatCompletion(prompt, model, 0.7, 8192, 'json_object')
    ```
 
 2. **`generateShotList`** - 分镜生成，返回镜头列表
+
    ```typescript
    chatCompletion(prompt, model, 0.7, 8192, 'json_object')
    ```
 
 3. **`optimizeBothKeyframes`** - 关键帧优化，返回起始帧和结束帧描述
+
    ```typescript
    chatCompletion(prompt, model, 0.7, 2048, 'json_object')
    ```
@@ -100,4 +106,3 @@ if (responseFormat === 'json_object') {
 ## 相关文件
 
 - `services/geminiService.ts` - 主要修改文件
-

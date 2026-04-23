@@ -62,12 +62,10 @@ const normalizeAssetLibraryConfig = (
   const normalizedAccessKeyId = (config?.accessKeyId || '').trim()
   const normalizedSecretAccessKey = (config?.secretAccessKey || '').trim()
   const normalizedAccessKey = (
-    config?.access_key ||
-    normalizedAccessKeyId
+    config?.access_key || normalizedAccessKeyId
   ).trim()
   const normalizedSecretKey = (
-    config?.secret_key ||
-    normalizedSecretAccessKey
+    config?.secret_key || normalizedSecretAccessKey
   ).trim()
 
   return {

@@ -1,33 +1,40 @@
 # API Key 错误处理机制说明
 
 ## 问题描述
+
 系统偶尔会出现 `API Key missing. Please configure your AntSK API Key.` 错误，这意味着运行时 API Key 丢失或未正确配置。
 
 ## 解决方案
 
 ### 1. 自定义错误类 (`ApiKeyError`)
+
 在 `geminiService.ts` 中创建了自定义的 `ApiKeyError` 类：
 
 ```typescript
 export class ApiKeyError extends Error {
   constructor(message: string) {
-    super(message);
-    this.name = 'ApiKeyError';
+    super(message)
+    this.name = 'ApiKeyError'
   }
 }
 ```
 
 ### 2. 统一错误抛出
+
 所有 API Key 检查现在都抛出 `ApiKeyError`：
 
 ```typescript
 const checkApiKey = () => {
-  if (!runtimeApiKey) throw new ApiKeyError("API Key missing. Please configure your AntSK API Key.");
-  return runtimeApiKey;
-};
+  if (!runtimeApiKey)
+    throw new ApiKeyError(
+      'API Key missing. Please configure your AntSK API Key.'
+    )
+  return runtimeApiKey
+}
 ```
 
 ### 3. 全局错误监听器
+
 在 `App.tsx` 中添加了两个全局错误监听器：
 
 - **`error` 事件**：捕获同步代码中的错误
@@ -36,31 +43,35 @@ const checkApiKey = () => {
 ```typescript
 useEffect(() => {
   const handleError = (event: ErrorEvent) => {
-    if (event.error?.name === 'ApiKeyError' || 
-        event.error?.message?.includes('API Key missing')) {
-      console.warn('🔐 检测到 API Key 错误，正在返回登录页...');
-      handleClearKey(); // 清除 API Key 并返回登录页
-      event.preventDefault();
+    if (
+      event.error?.name === 'ApiKeyError' ||
+      event.error?.message?.includes('API Key missing')
+    ) {
+      console.warn('🔐 检测到 API Key 错误，正在返回登录页...')
+      handleClearKey() // 清除 API Key 并返回登录页
+      event.preventDefault()
     }
-  };
+  }
 
   const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-    if (event.reason?.name === 'ApiKeyError' ||
-        event.reason?.message?.includes('API Key missing')) {
-      console.warn('🔐 检测到 API Key 错误，正在返回登录页...');
-      handleClearKey();
-      event.preventDefault();
+    if (
+      event.reason?.name === 'ApiKeyError' ||
+      event.reason?.message?.includes('API Key missing')
+    ) {
+      console.warn('🔐 检测到 API Key 错误，正在返回登录页...')
+      handleClearKey()
+      event.preventDefault()
     }
-  };
+  }
 
-  window.addEventListener('error', handleError);
-  window.addEventListener('unhandledrejection', handleUnhandledRejection);
+  window.addEventListener('error', handleError)
+  window.addEventListener('unhandledrejection', handleUnhandledRejection)
 
   return () => {
-    window.removeEventListener('error', handleError);
-    window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-  };
-}, []);
+    window.removeEventListener('error', handleError)
+    window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+  }
+}, [])
 ```
 
 ## 工作流程

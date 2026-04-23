@@ -380,7 +380,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    onBlur={(e) => handleCustomFieldBlur('name', e.target.value)}
+                    onBlur={(e) =>
+                      handleCustomFieldBlur('name', e.target.value)
+                    }
                     className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
                   />
                 </div>

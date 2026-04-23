@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import {
   useEditor,
   EditorContent,
@@ -9,17 +9,96 @@ import {
 import StarterKit from '@tiptap/starter-kit'
 import Mention from '@tiptap/extension-mention'
 import { mergeAttributes, Node } from '@tiptap/core'
-import { TextSelection } from '@tiptap/pm/state'
 import tippy, { Instance } from 'tippy.js'
 import getSuggestion, {
   buildMentionItems,
   buildProjectLibraryMentionItems
 } from './suggestion'
 import MentionList from './MentionList'
-import { ProjectState, SeriesProject } from '../../../types'
-import { Clock, PlusCircle, Edit2, Film } from 'lucide-react'
+import {
+  Character,
+  MediaAsset,
+  ProjectState,
+  Prop,
+  Scene,
+  SeriesProject
+} from '../../../types'
+import { Clock, Edit2, Film } from 'lucide-react'
 
-const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
+interface DurationTagNodeViewProps {
+  node: { attrs: { value?: number } }
+  updateAttributes: (attrs: { value: number }) => void
+  editor?: { commands: { focus: () => void } }
+}
+
+interface MentionItemData {
+  id?: string
+  name?: string
+  type?: string
+  variantName?: string
+  image?: string
+  url?: string
+  remoteUrl?: string
+  dataUrl?: string
+}
+
+interface MentionNodeAttrs {
+  id?: string
+  label?: string
+  value?: number
+  itemData?: MentionItemData | null
+}
+
+interface RichDocNode {
+  type?: string
+  text?: string
+  attrs?: MentionNodeAttrs
+  content?: RichDocNode[]
+}
+
+interface RichDocRoot {
+  content?: RichDocNode[]
+}
+
+interface MentionCommandPayload {
+  id?: string
+  label?: string
+  name?: string
+  type?: string
+  value?: number
+  itemData?: MentionItemData | null
+}
+
+const extractDurationValue = (
+  selected: MentionItemData | MentionCommandPayload | null | undefined
+): number => {
+  if (!selected || typeof selected !== 'object') return 5.0
+  if ('value' in selected && typeof selected.value === 'number') {
+    return selected.value
+  }
+  return 5.0
+}
+
+interface MentionCommandEditor {
+  chain: () => {
+    focus: () => {
+      insertContentAt: (
+        range: unknown,
+        content: Array<Record<string, unknown>>
+      ) => { run: () => void }
+    }
+  }
+}
+
+interface MentionListHandle {
+  onKeyDown?: (payload: { event: KeyboardEvent }) => boolean
+}
+
+const DurationTagComponent = ({
+  node,
+  updateAttributes,
+  editor
+}: DurationTagNodeViewProps) => {
   const formatDurationValue = (value: number): string => {
     return Number.isInteger(value) ? value.toFixed(1) : value.toString()
   }
@@ -45,7 +124,7 @@ const DurationTagComponent = ({ node, updateAttributes, editor }: any) => {
         }
       }
     }
-  }, [node.attrs.value])
+  }, [localValue, node.attrs.value])
 
   const handleBlur = () => {
     let val = parseFloat(localValue)
@@ -272,14 +351,14 @@ const ScriptEditorRich: React.FC<Props> = ({
     return `<p>${escaped}</p>`
   }
 
-  const resolveInitialContent = (): string => {
+  const resolveInitialContent = useCallback((): string => {
     if (initialContent !== undefined) return initialContent
     if (initialText !== undefined) return toParagraphHtml(initialText)
     return DEFAULT_SCRIPT
-  }
+  }, [initialContent, initialText])
 
   const formatEditorConsoleOutput = (
-    docJson: any,
+    docJson: RichDocRoot | null | undefined,
     fallbackText: string
   ): {
     storyboardText: string
@@ -291,19 +370,25 @@ const ScriptEditorRich: React.FC<Props> = ({
   } => {
     let startSec = 0
     const formatSec = (value: number): string =>
-      Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '')
+      Number.isInteger(value)
+        ? String(value)
+        : value.toFixed(1).replace(/\.0$/, '')
     const normalizeLine = (value: string): string =>
       value
         .replace(/[^\S\r\n]+/g, ' ')
         .replace(/\s*([，。！？：；,.!?;:])/g, '$1')
         .trim()
     const scriptData = project?.scriptData
-    const allCharacters = Array.isArray(scriptData?.characters)
+    const allCharacters: Character[] = Array.isArray(scriptData?.characters)
       ? scriptData.characters
       : []
-    const allScenes = Array.isArray(scriptData?.scenes) ? scriptData.scenes : []
-    const allProps = Array.isArray(scriptData?.props) ? scriptData.props : []
-    const allMediaAssets = Array.isArray(scriptData?.mediaAssets)
+    const allScenes: Scene[] = Array.isArray(scriptData?.scenes)
+      ? scriptData.scenes
+      : []
+    const allProps: Prop[] = Array.isArray(scriptData?.props)
+      ? scriptData.props
+      : []
+    const allMediaAssets: MediaAsset[] = Array.isArray(scriptData?.mediaAssets)
       ? scriptData.mediaAssets
       : []
 
@@ -319,20 +404,24 @@ const ScriptEditorRich: React.FC<Props> = ({
       audio: '音频'
     } as const
 
-    const resolveMentionMediaType = (mentionType: string): 'image' | 'video' | 'audio' => {
+    const resolveMentionMediaType = (
+      mentionType: string
+    ): 'image' | 'video' | 'audio' => {
       if (mentionType === 'video') return 'video'
       if (mentionType === 'audio') return 'audio'
       return 'image'
     }
 
     const pushResourceReference = (
-      attrs: any
+      attrs?: MentionNodeAttrs
     ): null | { mediaType: 'image' | 'video' | 'audio'; index: number } => {
       const itemData = attrs?.itemData
       const mentionType = String(itemData?.type || '').trim()
       const mediaType = resolveMentionMediaType(mentionType)
       if (
-        !['character', 'scene', 'prop', 'image', 'video', 'audio'].includes(mentionType)
+        !['character', 'scene', 'prop', 'image', 'video', 'audio'].includes(
+          mentionType
+        )
       ) {
         return null
       }
@@ -353,7 +442,7 @@ const ScriptEditorRich: React.FC<Props> = ({
       return { mediaType, index: resourceReferences.audios.length }
     }
 
-    const getMentionDisplayName = (attrs: any): string => {
+    const getMentionDisplayName = (attrs?: MentionNodeAttrs): string => {
       const itemData = attrs?.itemData
       const mentionType = String(itemData?.type || '').trim()
       const baseName = String(
@@ -367,21 +456,34 @@ const ScriptEditorRich: React.FC<Props> = ({
       return `@${baseName}`
     }
 
-    const resolveMentionResourceUrl = (attrs: any): string => {
+    const resolveMentionResourceUrl = (attrs?: MentionNodeAttrs): string => {
       const itemData = attrs?.itemData
       const mentionType = String(itemData?.type || '').trim()
       const itemId = String(itemData?.id || '').trim()
-      const itemName = String(itemData?.name || attrs?.label || attrs?.id || '').trim()
+      const itemName = String(
+        itemData?.name || attrs?.label || attrs?.id || ''
+      ).trim()
       const directUrl = String(
-        itemData?.url || itemData?.image || itemData?.remoteUrl || itemData?.dataUrl || ''
+        itemData?.url ||
+          itemData?.image ||
+          itemData?.remoteUrl ||
+          itemData?.dataUrl ||
+          ''
       ).trim()
       if (directUrl) return directUrl
 
-      if (mentionType === 'video' || mentionType === 'audio' || mentionType === 'image') {
-        const media = allMediaAssets.find((asset: any) => {
+      if (
+        mentionType === 'video' ||
+        mentionType === 'audio' ||
+        mentionType === 'image'
+      ) {
+        const media = allMediaAssets.find((asset) => {
           const assetId = String(asset?.id || '').trim()
           const assetName = String(asset?.name || '').trim()
-          return (itemId && assetId === itemId) || (itemName && assetName === itemName)
+          return (
+            (itemId && assetId === itemId) ||
+            (itemName && assetName === itemName)
+          )
         })
         if (!media) return ''
         return String(media.remoteUrl || media.dataUrl || '').trim()
@@ -392,7 +494,7 @@ const ScriptEditorRich: React.FC<Props> = ({
         const baseName = String(itemData?.name || '').trim()
         const variantName = String(itemData?.variantName || '').trim()
         const variationId = itemId.includes('::') ? itemId.split('::')[1] : ''
-        const character = allCharacters.find((char: any) => {
+        const character = allCharacters.find((char) => {
           const charId = String(char?.id || '').trim()
           const charName = String(char?.name || '').trim()
           return (
@@ -404,11 +506,16 @@ const ScriptEditorRich: React.FC<Props> = ({
         })
         if (!character) return ''
         if (variantName || variationId) {
-          const variation = (character?.variations || []).find((variationItem: any) => {
-            const id = String(variationItem?.id || '').trim()
-            const name = String(variationItem?.name || '').trim()
-            return (variationId && id === variationId) || (variantName && name === variantName)
-          })
+          const variation = (character?.variations || []).find(
+            (variationItem) => {
+              const id = String(variationItem?.id || '').trim()
+              const name = String(variationItem?.name || '').trim()
+              return (
+                (variationId && id === variationId) ||
+                (variantName && name === variantName)
+              )
+            }
+          )
           const variationUrl = String(variation?.referenceImage || '').trim()
           if (variationUrl) return variationUrl
         }
@@ -416,7 +523,7 @@ const ScriptEditorRich: React.FC<Props> = ({
       }
 
       if (mentionType === 'scene') {
-        const scene = allScenes.find((item: any) => {
+        const scene = allScenes.find((item) => {
           const id = String(item?.id || '').trim()
           const name = String(item?.location || '').trim()
           return (itemId && id === itemId) || (itemName && name === itemName)
@@ -425,7 +532,7 @@ const ScriptEditorRich: React.FC<Props> = ({
       }
 
       if (mentionType === 'prop') {
-        const prop = allProps.find((item: any) => {
+        const prop = allProps.find((item) => {
           const id = String(item?.id || '').trim()
           const name = String(item?.name || '').trim()
           return (itemId && id === itemId) || (itemName && name === itemName)
@@ -436,11 +543,11 @@ const ScriptEditorRich: React.FC<Props> = ({
       return ''
     }
 
-    const toMentionText = (attrs: any): string => {
+    const toMentionText = (attrs?: MentionNodeAttrs): string => {
       return getMentionDisplayName(attrs)
     }
 
-    const walkNodes = (nodes: any[]): string => {
+    const walkNodes = (nodes: RichDocNode[]): string => {
       if (!Array.isArray(nodes)) return ''
       return nodes
         .map((node) => {
@@ -454,7 +561,9 @@ const ScriptEditorRich: React.FC<Props> = ({
             return `@${mediaTagLabelMap[inserted.mediaType]}${inserted.index}`
           }
           if (nodeType === 'durationTag') {
-            const rawDuration = Number.parseFloat(String(node.attrs?.value ?? '5'))
+            const rawDuration = Number.parseFloat(
+              String(node.attrs?.value ?? '5')
+            )
             const durationSec =
               Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 5
             const endSec = startSec + durationSec
@@ -472,8 +581,10 @@ const ScriptEditorRich: React.FC<Props> = ({
 
     const lines: string[] = []
     const rootNodes = Array.isArray(docJson?.content) ? docJson.content : []
-    rootNodes.forEach((node: any) => {
-      const rendered = walkNodes(Array.isArray(node?.content) ? node.content : [node])
+    rootNodes.forEach((node) => {
+      const rendered = walkNodes(
+        Array.isArray(node?.content) ? node.content : [node]
+      )
       if (!rendered) return
       rendered
         .split('\n')
@@ -549,7 +660,15 @@ const ScriptEditorRich: React.FC<Props> = ({
           ),
           allowedPrefixes: null, // null allows any prefix in Tiptap
           allowSpaces: true,
-          command: ({ editor, range, props: mentionProps }: any) => {
+          command: ({
+            editor,
+            range,
+            props: mentionProps
+          }: {
+            editor: MentionCommandEditor
+            range: unknown
+            props?: MentionCommandPayload
+          }) => {
             const selected = mentionProps?.itemData || mentionProps
 
             if (selected?.type === 'duration') {
@@ -559,7 +678,7 @@ const ScriptEditorRich: React.FC<Props> = ({
                 .insertContentAt(range, [
                   {
                     type: 'durationTag',
-                    attrs: { value: selected.value ?? 5.0 }
+                    attrs: { value: extractDurationValue(selected) }
                   },
                   { type: 'text', text: ' ' }
                 ])
@@ -592,7 +711,7 @@ const ScriptEditorRich: React.FC<Props> = ({
       attributes: {
         class: 'focus:outline-none min-h-[200px] outline-none'
       },
-      handleClickOn: (view, pos, node, nodePos, event, direct) => {
+      handleClickOn: (view, _pos, node, nodePos, event, _direct) => {
         if (node.type.name === 'mention' && view.editable) {
           event.preventDefault()
           destroyMentionPicker()
@@ -602,16 +721,18 @@ const ScriptEditorRich: React.FC<Props> = ({
             ''
           )
           const target = event.target as HTMLElement | null
+          const currentTarget =
+            event.currentTarget instanceof Element ? event.currentTarget : null
           const getAnchorRect = () =>
             target?.getBoundingClientRect?.() ||
-            event.currentTarget?.getBoundingClientRect?.()
+            currentTarget?.getBoundingClientRect?.()
           const component = new ReactRenderer(MentionList, {
             props: {
               items: scriptItems,
               libraryItems,
               allowDurationAction: false,
               onAddFromLibrary: () => {},
-              command: (payload: any) => {
+              command: (payload: MentionCommandPayload) => {
                 const selected = payload?.itemData || payload
                 const currentNode = view.state.doc.nodeAt(nodePos)
                 if (!currentNode || currentNode.type.name !== 'mention') {
@@ -666,7 +787,7 @@ const ScriptEditorRich: React.FC<Props> = ({
               destroyMentionPicker()
               return
             }
-            const handled = (component.ref as any)?.onKeyDown?.({
+            const handled = (component.ref as MentionListHandle | null)?.onKeyDown?.({
               event: keydownEvent
             })
             if (handled) {
@@ -714,7 +835,7 @@ const ScriptEditorRich: React.FC<Props> = ({
     if (shouldAutoFocus) {
       setTimeout(() => editor.commands.focus('end'), 0)
     }
-  }, [clipId, initialContent, initialText, editor, autoFocusWhenEmpty])
+  }, [clipId, editor, autoFocusWhenEmpty, resolveInitialContent])
 
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl p-4 h-full min-h-0 flex flex-col shadow-sm transition-all duration-200">
@@ -778,7 +899,7 @@ const ScriptEditorRich: React.FC<Props> = ({
         {isEditing ? (
           <>
             <button
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
                 setIsEditing(false)
                 editor?.commands.setContent(savedContent)
@@ -788,7 +909,7 @@ const ScriptEditorRich: React.FC<Props> = ({
               取消
             </button>
             <button
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
                 setIsEditing(false)
                 if (editor) {
@@ -815,7 +936,7 @@ const ScriptEditorRich: React.FC<Props> = ({
         ) : (
           <>
             <button
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
                 setIsEditing(true)
                 setTimeout(() => editor?.commands.focus(), 0)
@@ -826,7 +947,7 @@ const ScriptEditorRich: React.FC<Props> = ({
               编辑脚本
             </button>
             <button
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm flex items-center gap-2"

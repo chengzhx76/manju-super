@@ -32,8 +32,13 @@ const GlobalSettings: React.FC<GlobalSettingsProps> = ({ onRefresh }) => {
         <ul className="text-[10px] text-[var(--text-muted)] space-y-1 list-disc list-inside">
           <li>你可以在各模型类别中调整模型参数（温度、Token 等）</li>
           <li>支持添加自定义模型，使用其他 API 服务</li>
-          <li>素材库配置用于管理素材库 API 地址与访问凭证（地址、access_key、secret_key）</li>
-          <li>对象存储配置为独立配置项（region、bucketName、host、accessKeyId、secretAccessKey）</li>
+          <li>
+            素材库配置用于管理素材库 API
+            地址与访问凭证（地址、access_key、secret_key）
+          </li>
+          <li>
+            对象存储配置为独立配置项（region、bucketName、host、accessKeyId、secretAccessKey）
+          </li>
           <li>所有配置仅保存在本地浏览器，不会上传到服务器</li>
         </ul>
       </div>

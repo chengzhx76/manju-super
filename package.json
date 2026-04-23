@@ -9,9 +9,10 @@
     "build": "pnpm run check:utf8 && vite build",
     "preview": "vite preview",
     "media-proxy": "node server/mediaProxyServer.mjs",
-    "lint": "eslint . --fix",
-    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
-    "check:format": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,scss,md}\"",
+    "lint": "eslint . --fix --ignore-pattern \".trae/**\"",
+    "format": "prettier --ignore-path .prettierignore --write \"App.tsx\" \"index.tsx\" \"vite.config.ts\" \"global.d.ts\" \"components/**/*.{ts,tsx}\" \"services/**/*.{ts,tsx}\" \"hooks/**/*.{ts,tsx}\" \"types/**/*.ts\" \"types.ts\" \"styles/**/*.{css,scss}\" \"public/styles/**/*.css\"",
+    "check:format": "prettier --ignore-path .prettierignore --check \"App.tsx\" \"index.tsx\" \"vite.config.ts\" \"global.d.ts\" \"components/**/*.{ts,tsx}\" \"services/**/*.{ts,tsx}\" \"hooks/**/*.{ts,tsx}\" \"types/**/*.ts\" \"types.ts\" \"styles/**/*.{css,scss}\" \"public/styles/**/*.css\"",
+    "check:code": "pnpm run lint && pnpm run check:format",
     "prepare": "husky"
   },
   "lint-staged": {

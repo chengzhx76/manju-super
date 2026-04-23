@@ -63,17 +63,42 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { theme, toggleTheme } = useTheme()
   const navItems = [
-    { id: 'script', label: '剧本策划', icon: FileText, enLabel: 'Script Planning' },
-    { id: 'assets', label: '视觉设定', icon: Users, enLabel: 'Visual Development' },
-    { id: 'shot', label: '镜头设计', icon: Clapperboard, enLabel: 'Shot Design' },
+    {
+      id: 'script',
+      label: '剧本策划',
+      icon: FileText,
+      enLabel: 'Script Planning'
+    },
+    {
+      id: 'assets',
+      label: '视觉设定',
+      icon: Users,
+      enLabel: 'Visual Development'
+    },
+    {
+      id: 'shot',
+      label: '镜头设计',
+      icon: Clapperboard,
+      enLabel: 'Shot Design'
+    },
     {
       id: 'video',
       label: '视频创作',
       icon: Clapperboard,
       enLabel: 'Video Creation'
     },
-    { id: 'export', label: '剪辑交付', icon: Film, enLabel: 'Editorial Delivery' },
-    { id: 'prompts', label: '提示词库', icon: ListTree, enLabel: 'Prompt Library' }
+    {
+      id: 'export',
+      label: '剪辑交付',
+      icon: Film,
+      enLabel: 'Editorial Delivery'
+    },
+    {
+      id: 'prompts',
+      label: '提示词库',
+      icon: ListTree,
+      enLabel: 'Prompt Library'
+    }
   ]
 
   return (

@@ -146,8 +146,8 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                   isSyncingToLibrary
                     ? 'text-[var(--accent-text)] bg-[var(--accent-bg)] border-[var(--accent-border)] opacity-70 cursor-not-allowed'
                     : turnaround?.assetId
-                    ? 'text-[var(--success-text)] bg-[var(--success-bg)] border-[var(--success-border)]'
-                    : 'text-[var(--warning-text)] bg-[var(--warning-bg)] border-[var(--warning-border)] hover:opacity-80 cursor-pointer'
+                      ? 'text-[var(--success-text)] bg-[var(--success-bg)] border-[var(--success-border)]'
+                      : 'text-[var(--warning-text)] bg-[var(--warning-bg)] border-[var(--warning-border)] hover:opacity-80 cursor-pointer'
                 }`}
               >
                 {isSyncingToLibrary
@@ -517,7 +517,6 @@ const TurnaroundModal: React.FC<TurnaroundModalProps> = ({
                   ))}
                 </div>
               </div>
-
             </div>
           )}
         </div>

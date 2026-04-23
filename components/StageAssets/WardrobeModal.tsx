@@ -38,7 +38,9 @@ const WardrobeModal: React.FC<WardrobeModalProps> = ({
 }) => {
   const [newVarName, setNewVarName] = useState('')
   const [newVarPrompt, setNewVarPrompt] = useState('')
-  const [editingVariationId, setEditingVariationId] = useState<string | null>(null)
+  const [editingVariationId, setEditingVariationId] = useState<string | null>(
+    null
+  )
   const [editingVariationPrompt, setEditingVariationPrompt] = useState('')
 
   const handleAddVariation = () => {
@@ -149,128 +151,129 @@ const WardrobeModal: React.FC<WardrobeModalProps> = ({
                 {/* List */}
                 {(character.variations || []).map((variation) => {
                   const isSyncing = isVariationSyncing(variation.id)
-                  const canSync = !variation.assetId && !!variation.referenceImage
+                  const canSync =
+                    !variation.assetId && !!variation.referenceImage
                   return (
-                  <div
-                    key={variation.id}
-                    className="flex gap-4 p-4 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl group hover:border-[var(--border-secondary)] transition-colors"
-                  >
-                    <div className="w-20 h-24 bg-[var(--bg-elevated)] rounded-lg flex-shrink-0 overflow-hidden relative border border-[var(--border-primary)]">
-                      {variation.referenceImage ? (
-                        <img
-                          src={variation.referenceImage}
-                          className="w-full h-full object-cover cursor-pointer"
-                          alt={variation.name}
-                          onClick={() =>
-                            onImageClick(variation.referenceImage!)
-                          }
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          {variation.status === 'failed' ? (
-                            <AlertCircle className="w-6 h-6 text-[var(--error)]" />
-                          ) : (
-                            <Shirt className="w-6 h-6 text-[var(--text-muted)]" />
-                          )}
-                        </div>
-                      )}
-                      {variation.status === 'generating' && (
-                        <div className="absolute inset-0 bg-[var(--bg-base)]/60 flex items-center justify-center">
-                          <Loader2 className="w-4 h-4 text-[var(--text-primary)] animate-spin" />
-                        </div>
-                      )}
-                      {variation.status === 'failed' &&
-                        !variation.referenceImage && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-[var(--error-hover-bg-strong)] text-[var(--text-primary)] text-[8px] text-center py-0.5">
-                            失败
+                    <div
+                      key={variation.id}
+                      className="flex gap-4 p-4 bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl group hover:border-[var(--border-secondary)] transition-colors"
+                    >
+                      <div className="w-20 h-24 bg-[var(--bg-elevated)] rounded-lg flex-shrink-0 overflow-hidden relative border border-[var(--border-primary)]">
+                        {variation.referenceImage ? (
+                          <img
+                            src={variation.referenceImage}
+                            className="w-full h-full object-cover cursor-pointer"
+                            alt={variation.name}
+                            onClick={() =>
+                              onImageClick(variation.referenceImage!)
+                            }
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            {variation.status === 'failed' ? (
+                              <AlertCircle className="w-6 h-6 text-[var(--error)]" />
+                            ) : (
+                              <Shirt className="w-6 h-6 text-[var(--text-muted)]" />
+                            )}
                           </div>
                         )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-start mb-2">
-                        <h5 className="font-bold text-[var(--text-secondary)] text-sm">
-                          {variation.name}
-                        </h5>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            disabled={!canSync || isSyncing}
-                            onClick={() =>
-                              canSync &&
-                              !isSyncing &&
-                              onSyncVariation(character.id, variation.id)
-                            }
-                            className={`px-1.5 py-0.5 rounded border text-[9px] font-mono tracking-wider ${
-                              isSyncing
-                                ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-text)] opacity-70 cursor-not-allowed'
+                        {variation.status === 'generating' && (
+                          <div className="absolute inset-0 bg-[var(--bg-base)]/60 flex items-center justify-center">
+                            <Loader2 className="w-4 h-4 text-[var(--text-primary)] animate-spin" />
+                          </div>
+                        )}
+                        {variation.status === 'failed' &&
+                          !variation.referenceImage && (
+                            <div className="absolute bottom-0 left-0 right-0 bg-[var(--error-hover-bg-strong)] text-[var(--text-primary)] text-[8px] text-center py-0.5">
+                              失败
+                            </div>
+                          )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <h5 className="font-bold text-[var(--text-secondary)] text-sm">
+                            {variation.name}
+                          </h5>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={!canSync || isSyncing}
+                              onClick={() =>
+                                canSync &&
+                                !isSyncing &&
+                                onSyncVariation(character.id, variation.id)
+                              }
+                              className={`px-1.5 py-0.5 rounded border text-[9px] font-mono tracking-wider ${
+                                isSyncing
+                                  ? 'border-[var(--accent-border)] bg-[var(--accent-bg)] text-[var(--accent-text)] opacity-70 cursor-not-allowed'
+                                  : variation.assetId
+                                    ? 'border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-text)]'
+                                    : canSync
+                                      ? 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] hover:opacity-80 cursor-pointer'
+                                      : 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] opacity-70 cursor-not-allowed'
+                              }`}
+                            >
+                              {isSyncing
+                                ? '同步中'
                                 : variation.assetId
-                                ? 'border-[var(--success-border)] bg-[var(--success-bg)] text-[var(--success-text)]'
-                                : canSync
-                                  ? 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] hover:opacity-80 cursor-pointer'
-                                  : 'border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)] opacity-70 cursor-not-allowed'
+                                  ? '已同步'
+                                  : '未同步'}
+                            </button>
+                            <button
+                              onClick={() =>
+                                onDeleteVariation(character.id, variation.id)
+                              }
+                              className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-[var(--text-tertiary)] line-clamp-2 mb-3 font-mono">
+                          {variation.visualPrompt}
+                        </p>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => openRegenerateDialog(variation)}
+                            disabled={variation.status === 'generating'}
+                            className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors disabled:opacity-50 ${
+                              variation.status === 'failed'
+                                ? 'text-[var(--error-text)] hover:text-[var(--error-text)]'
+                                : 'text-[var(--accent-text)] hover:text-[var(--text-primary)]'
                             }`}
                           >
-                            {isSyncing
-                              ? '同步中'
-                              : variation.assetId
-                                ? '已同步'
-                                : '未同步'}
+                            <RefreshCw
+                              className={`w-3 h-3 ${variation.status === 'generating' ? 'animate-spin' : ''}`}
+                            />
+                            {variation.status === 'failed'
+                              ? '重试'
+                              : variation.referenceImage
+                                ? '重新生成'
+                                : '生成造型'}
                           </button>
-                          <button
-                            onClick={() =>
-                              onDeleteVariation(character.id, variation.id)
-                            }
-                            className="text-[var(--text-muted)] hover:text-[var(--error)] transition-colors"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--success-text)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer">
+                            <Upload className="w-3 h-3" />
+                            上传
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (file) {
+                                  onUploadVariation(
+                                    character.id,
+                                    variation.id,
+                                    file
+                                  )
+                                  e.target.value = ''
+                                }
+                              }}
+                            />
+                          </label>
                         </div>
                       </div>
-                      <p className="text-[10px] text-[var(--text-tertiary)] line-clamp-2 mb-3 font-mono">
-                        {variation.visualPrompt}
-                      </p>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => openRegenerateDialog(variation)}
-                          disabled={variation.status === 'generating'}
-                          className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors disabled:opacity-50 ${
-                            variation.status === 'failed'
-                              ? 'text-[var(--error-text)] hover:text-[var(--error-text)]'
-                              : 'text-[var(--accent-text)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <RefreshCw
-                            className={`w-3 h-3 ${variation.status === 'generating' ? 'animate-spin' : ''}`}
-                          />
-                          {variation.status === 'failed'
-                            ? '重试'
-                            : variation.referenceImage
-                              ? '重新生成'
-                              : '生成造型'}
-                        </button>
-                        <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--success-text)] hover:text-[var(--text-primary)] flex items-center gap-1 transition-colors cursor-pointer">
-                          <Upload className="w-3 h-3" />
-                          上传
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) {
-                                onUploadVariation(
-                                  character.id,
-                                  variation.id,
-                                  file
-                                )
-                                e.target.value = ''
-                              }
-                            }}
-                          />
-                        </label>
-                      </div>
                     </div>
-                  </div>
                   )
                 })}
 

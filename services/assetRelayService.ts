@@ -137,7 +137,9 @@ const normalizeConfig = (
 ): AssetLibraryConfig | null => {
   const source = rawConfig || getAssetLibraryConfig()
   if (!source) return null
-  const address = String(source.address || '').trim().replace(/\/+$/, '')
+  const address = String(source.address || '')
+    .trim()
+    .replace(/\/+$/, '')
   const accessKey = String(source.access_key || '').trim()
   const secretKey = String(source.secret_key || '').trim()
   if (!address || !accessKey || !secretKey) {
@@ -159,7 +161,9 @@ const normalizeTosConfig = (
   const source = rawConfig || getVolcengineTosConfig()
   if (!source) return null
   const normalizeHost = (rawHost: string): string => {
-    const trimmed = String(rawHost || '').trim().replace(/\/+$/, '')
+    const trimmed = String(rawHost || '')
+      .trim()
+      .replace(/\/+$/, '')
     if (!trimmed) return ''
     if (/^https?:\/\//i.test(trimmed)) return trimmed
     return `https://${trimmed}`
@@ -181,7 +185,8 @@ const normalizeTosConfig = (
   }
 }
 
-export const hasVolcengineTosConfig = (): boolean => normalizeTosConfig() !== null
+export const hasVolcengineTosConfig = (): boolean =>
+  normalizeTosConfig() !== null
 
 type TosVerifyResponse = {
   success?: boolean
@@ -254,13 +259,19 @@ const inferExtensionFromUrl = (
   value: string | undefined,
   fallback: string
 ): string => {
-  const normalizedFallback = fallback.startsWith('.') ? fallback : `.${fallback}`
+  const normalizedFallback = fallback.startsWith('.')
+    ? fallback
+    : `.${fallback}`
   if (!value) return normalizedFallback
-  let currentStage: 'tos' | 'relay' = 'tos'
+  const currentStage: 'tos' | 'relay' = 'tos'
   try {
     const target = new URL(value)
     const pathname = target.pathname || ''
-    const suffix = pathname.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const suffix = pathname
+      .split('.')
+      .pop()
+      ?.toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
     if (!suffix) return normalizedFallback
     return `.${suffix}`
   } catch {
@@ -298,7 +309,9 @@ const buildTosObjectKey = (params: {
     : `.${params.extension}`
   const fileName = `${safeResourceId}-${timestamp}${normalizedExt}`
   const typeSegment =
-    params.type === 'image' || params.type === 'video' || params.type === 'audio'
+    params.type === 'image' ||
+    params.type === 'video' ||
+    params.type === 'audio'
       ? `media/${params.type}`
       : params.type
   return [
@@ -313,7 +326,8 @@ const buildTosObjectKey = (params: {
 const buildTosPublicUrl = (host: string, objectKey: string): string =>
   `${(/^https?:\/\//i.test(String(host || '').trim()) ? String(host || '').trim() : `https://${String(host || '').trim()}`).replace(/\/+$/, '')}/${String(objectKey || '').replace(/^\/+/, '')}`
 
-const toTosAssetId = (objectKey: string): string => `${TOS_ASSET_ID_PREFIX}${objectKey}`
+const toTosAssetId = (objectKey: string): string =>
+  `${TOS_ASSET_ID_PREFIX}${objectKey}`
 
 const parseTosObjectKeyFromAssetId = (assetId?: string): string | null => {
   const normalized = String(assetId || '').trim()
@@ -582,19 +596,21 @@ const hex = (buffer: ArrayBuffer): string =>
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
 
-const encodeUtf8 = (value: string): Uint8Array =>
-  new TextEncoder().encode(value)
+const encodeUtf8 = (value: string): Uint8Array<ArrayBuffer> =>
+  Uint8Array.from(new TextEncoder().encode(value))
 
 const sha256Hex = async (value: string): Promise<string> =>
   hex(await crypto.subtle.digest('SHA-256', encodeUtf8(value)))
 
 const hmac = async (
-  key: ArrayBuffer | Uint8Array,
+  key: ArrayBuffer | Uint8Array<ArrayBuffer>,
   value: string
 ): Promise<ArrayBuffer> => {
+  const rawKey: Uint8Array<ArrayBuffer> =
+    key instanceof Uint8Array ? Uint8Array.from(key) : new Uint8Array(key)
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key instanceof Uint8Array ? key : new Uint8Array(key),
+    rawKey,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
@@ -672,7 +688,7 @@ const buildSignedHeaders = async (
   }
 }
 
-const parseJsonResponse = (raw: string): any => {
+const parseJsonResponse = (raw: string): unknown => {
   try {
     return JSON.parse(raw)
   } catch {
@@ -680,16 +696,35 @@ const parseJsonResponse = (raw: string): any => {
   }
 }
 
-const extractErrorMessage = (value: any): string => {
+const isRecordObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const extractErrorMessage = (value: unknown): string => {
   if (!value) return '素材库请求失败'
   if (typeof value === 'string') return value
-  if (typeof value?.message === 'string') return value.message
-  if (typeof value?.Message === 'string') return value.Message
-  if (typeof value?.error?.message === 'string') return value.error.message
-  if (typeof value?.Error?.Message === 'string') return value.Error.Message
-  if (typeof value?.ResponseMetadata?.Error?.Message === 'string') {
-    return value.ResponseMetadata.Error.Message
+  if (!isRecordObject(value)) return String(value)
+
+  const message = value.message
+  if (typeof message === 'string') return message
+  const upperMessage = value.Message
+  if (typeof upperMessage === 'string') return upperMessage
+
+  const error = value.error
+  if (isRecordObject(error) && typeof error.message === 'string') {
+    return error.message
   }
+
+  const upperError = value.Error
+  if (isRecordObject(upperError) && typeof upperError.Message === 'string') {
+    return upperError.Message
+  }
+
+  const responseMetadata = value.ResponseMetadata
+  if (isRecordObject(responseMetadata) && isRecordObject(responseMetadata.Error)) {
+    const nestedMessage = responseMetadata.Error.Message
+    if (typeof nestedMessage === 'string') return nestedMessage
+  }
+
   return JSON.stringify(value)
 }
 
@@ -789,26 +824,33 @@ const uploadToTosByUrl = async (
   config: VolcengineTosConfig,
   payload: TosUploadByUrlPayload
 ): Promise<{ objectKey: string; url: string }> => {
-  const response = await callTosApi<TosUploadResponse>(TOS_UPLOAD_BY_URL_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      ...payload,
-      region: config.region,
-      bucketName: config.bucketName,
-      host: config.host,
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey
-    })
-  })
+  const response = await callTosApi<TosUploadResponse>(
+    TOS_UPLOAD_BY_URL_ENDPOINT,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...payload,
+        region: config.region,
+        bucketName: config.bucketName,
+        host: config.host,
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey
+      })
+    }
+  )
   const objectKey = String(
-    response.objectKey || response.object_key || response.key || payload.objectKey
+    response.objectKey ||
+      response.object_key ||
+      response.key ||
+      payload.objectKey
   ).trim()
   if (!objectKey) {
     throw new Error('对象存储上传成功但未返回 objectKey')
   }
   const publicUrl =
-    String(response.url || '').trim() || buildTosPublicUrl(config.host, objectKey)
+    String(response.url || '').trim() ||
+    buildTosPublicUrl(config.host, objectKey)
   return { objectKey, url: publicUrl }
 }
 
@@ -824,18 +866,25 @@ const uploadToTosByFile = async (
   formData.set('host', config.host)
   formData.set('accessKeyId', config.accessKeyId)
   formData.set('secretAccessKey', config.secretAccessKey)
-  const response = await callTosApi<TosUploadResponse>(TOS_UPLOAD_FILE_ENDPOINT, {
-    method: 'POST',
-    body: formData
-  })
+  const response = await callTosApi<TosUploadResponse>(
+    TOS_UPLOAD_FILE_ENDPOINT,
+    {
+      method: 'POST',
+      body: formData
+    }
+  )
   const objectKey = String(
-    response.objectKey || response.object_key || response.key || params.objectKey
+    response.objectKey ||
+      response.object_key ||
+      response.key ||
+      params.objectKey
   ).trim()
   if (!objectKey) {
     throw new Error('对象存储上传成功但未返回 objectKey')
   }
   const publicUrl =
-    String(response.url || '').trim() || buildTosPublicUrl(config.host, objectKey)
+    String(response.url || '').trim() ||
+    buildTosPublicUrl(config.host, objectKey)
   return { objectKey, url: publicUrl }
 }
 
@@ -859,7 +908,10 @@ const uploadGeneratedAssetToTos = async (params: {
     seriesId: params.episode.seriesId,
     type: mapRelayKindToTosType(params.kind),
     resourceId: params.localId,
-    extension: inferExtensionFromUrl(params.url, params.kind === 'video' ? '.mp4' : '.png')
+    extension: inferExtensionFromUrl(
+      params.url,
+      params.kind === 'video' ? '.mp4' : '.png'
+    )
   })
   const uploaded = await uploadToTosByUrl(config, {
     sourceUrl: params.url!,
@@ -1061,7 +1113,10 @@ const deleteTosObject = async (
   })
 }
 
-const scheduleTosDelete = (assetId?: string, context?: Record<string, unknown>): void => {
+const scheduleTosDelete = (
+  assetId?: string,
+  context?: Record<string, unknown>
+): void => {
   const objectKey = parseTosObjectKeyFromAssetId(assetId)
   if (!objectKey) return
   const config = normalizeTosConfig()
@@ -1287,7 +1342,7 @@ export const syncProjectAssetsToRelay = async (params: {
     }
   }
 
-  let nextProject = await ensureProjectGroup(
+  const nextProject = await ensureProjectGroup(
     params.project,
     params.seriesList,
     params.episodes
@@ -1444,10 +1499,7 @@ export const uploadGeneratedAssetToRelay = async (params: {
   currentAssetId?: string
   skipTosUploadWhenUrlAvailable?: boolean
   onStage?: (
-    stage:
-      | 'start_tos_upload'
-      | 'tos_upload_success'
-      | 'start_relay_upload'
+    stage: 'start_tos_upload' | 'tos_upload_success' | 'start_relay_upload'
   ) => void
 }): Promise<RelayUploadResult> => {
   const logUploadFlow = (payload: {

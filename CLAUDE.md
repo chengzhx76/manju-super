@@ -24,6 +24,7 @@ pnpm run media-proxy  # 启动本地媒体代理服务器
 ### 关键帧驱动的视频生成
 
 工作流围绕 **关键帧** 概念设计：
+
 1. 生成精准的 **Start Frame**（强一致性的关键帧）
 2. 可选定义 **End Frame**（镜头结束状态）
 3. 使用视频模型（Veo、Sora）在帧间插值生成
@@ -31,11 +32,13 @@ pnpm run media-proxy  # 启动本地媒体代理服务器
 ### 状态机（EpisodeStage）
 
 每集按 `types.ts` 中定义的阶段推进：
+
 - `script` → `assets` → `shot` → `video` → `export` → `prompts`
 
 ### 核心数据模型
 
 主要类型定义在 `types.ts`：
+
 - **`SeriesProject`**：顶层容器（剧集），包含 `characterLibrary`、`sceneLibrary`、`propLibrary`
 - **`Episode`**（即 `ProjectState`）：单集，包含 `scriptData` 和 `shots`
 - **`ScriptData`**：从剧本解析出的角色、场景、道具
@@ -44,26 +47,28 @@ pnpm run media-proxy  # 启动本地媒体代理服务器
 ### 存储
 
 通过 `services/storageService.ts` 使用 **IndexedDB**。数据结构：
+
 - `seriesProjects` → 包含项目级资产
 - `series` → 季/篇章分组
 - `episodes` → 单集，含 `scriptData` 和 `shots`
 
 ## 核心服务
 
-| 服务 | 用途 |
-|------|------|
-| `services/storageService.ts` | IndexedDB 增删改查（剧集、项目、资产库） |
-| `services/ai/apiCore.ts` | API 调用、重试逻辑、JSON 解析、密钥管理 |
-| `services/ai/scriptService.ts` | 剧本解析、分镜生成 |
-| `services/ai/visualService.ts` | 图像生成、角色/场景视觉 |
-| `services/ai/videoService.ts` | 视频生成（Veo、Sora） |
-| `services/ai/shotService.ts` | 关键帧优化、九宫格、镜头拆分 |
-| `services/modelRegistry.ts` | 模型注册表和 API 密钥管理 |
-| `services/assetRelayService.ts` | 资产生成编排，支持增量重跑 |
+| 服务                            | 用途                                     |
+| ------------------------------- | ---------------------------------------- |
+| `services/storageService.ts`    | IndexedDB 增删改查（剧集、项目、资产库） |
+| `services/ai/apiCore.ts`        | API 调用、重试逻辑、JSON 解析、密钥管理  |
+| `services/ai/scriptService.ts`  | 剧本解析、分镜生成                       |
+| `services/ai/visualService.ts`  | 图像生成、角色/场景视觉                  |
+| `services/ai/videoService.ts`   | 视频生成（Veo、Sora）                    |
+| `services/ai/shotService.ts`    | 关键帧优化、九宫格、镜头拆分             |
+| `services/modelRegistry.ts`     | 模型注册表和 API 密钥管理                |
+| `services/assetRelayService.ts` | 资产生成编排，支持增量重跑               |
 
 ## Context 层级
 
 `ProjectContext.tsx`（`useProjectContext`）提供：
+
 - 项目/单集数据和增删改查操作
 - 库管理（角色、场景、道具）
 - 同步工具函数（`syncCharacterToEpisode`、`syncAllCharactersToEpisode`）
@@ -72,6 +77,7 @@ pnpm run media-proxy  # 启动本地媒体代理服务器
 ## 增量生成（assetRelayService）
 
 生成流水线通过 `scriptData` 中的 `generationMeta` 支持增量重跑：
+
 - 通过 `structureKey/visualsKey/shotsKey` 分析阶段状态
 - 仅重跑过时阶段，保留兼容的先前结果
 - 必要时将旧资产 ID 映射到新 ID
@@ -79,16 +85,19 @@ pnpm run media-proxy  # 启动本地媒体代理服务器
 ## 添加新功能
 
 **新阶段（Stage）：**
+
 1. 在 `components/StageNew/` 下创建组件
 2. 在 `App.tsx` 的 `EpisodeWorkspace` switch 中添加路由
 3. 在 `components/Sidebar.tsx` 中添加导航项
 
 **新 AI 模型：**
+
 1. 在 `services/modelRegistry.ts` 注册模型
 2. 若 API 格式特殊，在 `services/adapters/` 实现适配器
 3. 在 `imageAdapter.ts` 或 `videoAdapter.ts` 中添加模型特定处理
 
 **新资产类型：**
+
 1. 在 `types.ts` 定义接口
 2. 在 `SeriesProject` 类型中添加库数组
 3. 在 `services/characterSyncService.ts` 添加同步逻辑
