@@ -145,6 +145,7 @@ const StageDirector: React.FC<Props> = ({
     number | null
   >(null)
   const batchGenerateCancelRef = useRef(false)
+  const hasRecoveredGeneratingStateRef = useRef(false)
 
   // 关键帧生成使用的横竖屏比例（从持久化配置读取）
   const [keyframeAspectRatio, setKeyframeAspectRatioState] =
@@ -345,6 +346,9 @@ const StageDirector: React.FC<Props> = ({
    * 解决关闭系统后重新打开时，状态仍为"generating"导致无法重新生成的问题
    */
   useEffect(() => {
+    if (hasRecoveredGeneratingStateRef.current) return
+    hasRecoveredGeneratingStateRef.current = true
+
     const hasStuckGenerating = project.shots.some((shot) => {
       const stuckKeyframes = shot.keyframes?.some(
         (kf) => kf.status === 'generating'
@@ -396,7 +400,7 @@ const StageDirector: React.FC<Props> = ({
         )
       }))
     }
-  }, []) // 进入导演页时执行一次，清理离开页面后遗留的 generating 状态
+  }, [project.shots, updateProject]) // 进入导演页时执行一次，清理离开页面后遗留的 generating 状态
 
   /**
    * 上报生成状态给父组件，用于导航锁定
@@ -426,14 +430,14 @@ const StageDirector: React.FC<Props> = ({
       hasGeneratingNineGrid ||
       isSplittingShot
     onGeneratingChange?.(generating)
-  }, [batchProgress, project.shots, isSplittingShot])
+  }, [batchProgress, project.shots, isSplittingShot, onGeneratingChange])
 
   // 组件卸载时重置生成状态
   useEffect(() => {
     return () => {
       onGeneratingChange?.(false)
     }
-  }, [])
+  }, [onGeneratingChange])
 
   useEffect(() => {
     if (!toastMessage) return
@@ -496,7 +500,7 @@ const StageDirector: React.FC<Props> = ({
           : applyShotQuality(shot, prevProject.scriptData)
       )
     }))
-  }, [project.id])
+  }, [project.shots, updateProject])
 
   /**
    * 更新镜头
@@ -522,15 +526,14 @@ const StageDirector: React.FC<Props> = ({
     if (!seriesProject) return
     const tosEnabled = hasVolcengineTosConfig()
     const relayEnabled = hasAssetRelayConfig()
-    const uploadTarget =
-      tosEnabled && relayEnabled
-        ? '对象存储 + 素材库'
-        : tosEnabled
-          ? '对象存储'
-          : relayEnabled
-            ? '素材库'
-            : '未配置上传目标'
-    appendImageFlowLog(`开始同步上传（${params.kind}）：${uploadTarget}`)
+    if (!tosEnabled) {
+      appendImageFlowLog('对象存储未配置，无法继续（请先完成对象存储配置）')
+      showAlert('对象存储未配置，无法同步资源', { type: 'error' })
+      return
+    }
+    let tosUploadStartedLogged = false
+    let tosUploadSuccessLogged = false
+    let relayUploadStartedLogged = false
     try {
       const result = await uploadGeneratedAssetToRelay({
         project: seriesProject,
@@ -540,21 +543,91 @@ const StageDirector: React.FC<Props> = ({
         kind: params.kind,
         localId: params.localId,
         url: params.url,
-        currentAssetId: params.currentAssetId
+        currentAssetId: params.currentAssetId,
+        onStage: (stage) => {
+          if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
+            tosUploadStartedLogged = true
+            appendImageFlowLog('开始上传资源到对象存储')
+          } else if (
+            stage === 'tos_upload_success' &&
+            !tosUploadSuccessLogged
+          ) {
+            tosUploadSuccessLogged = true
+            appendImageFlowLog('上传资源到对象存储成功')
+          } else if (
+            stage === 'start_relay_upload' &&
+            !relayUploadStartedLogged
+          ) {
+            relayUploadStartedLogged = true
+            appendImageFlowLog('开始上传资源到素材库')
+          }
+        }
       })
       if (result.skipped) {
-        appendImageFlowLog(
-          `上传跳过（${params.kind}）：${result.reason || '未满足同步条件'}`
-        )
+        if (
+          (result.tosStatus === 'success' || result.tosStatus === 'failed') &&
+          !tosUploadStartedLogged
+        ) {
+          tosUploadStartedLogged = true
+          appendImageFlowLog('开始上传资源到对象存储')
+        }
+        if (result.tosStatus === 'success') {
+          if (!tosUploadSuccessLogged) {
+            tosUploadSuccessLogged = true
+            appendImageFlowLog(result.tosMessage || '上传资源到对象存储成功')
+          }
+        } else if (result.tosStatus === 'skipped') {
+          appendImageFlowLog(result.tosMessage || '对象存储已完成，跳过')
+        } else if (result.tosStatus === 'failed') {
+          appendImageFlowLog(
+            result.tosMessage || '上传资源到对象存储失败（请手动同步）'
+          )
+        }
+        if (
+          (result.relayStatus === 'success' ||
+            result.relayStatus === 'failed') &&
+          !relayUploadStartedLogged
+        ) {
+          relayUploadStartedLogged = true
+          appendImageFlowLog('开始上传资源到素材库')
+        }
+        if (!relayEnabled || result.relayStatus === 'skipped') {
+          appendImageFlowLog(result.relayMessage || '素材库未配置，跳过')
+        } else if (result.relayStatus === 'failed') {
+          appendImageFlowLog(
+            result.relayMessage || '上传资源到素材库失败（请手动同步）'
+          )
+        }
         return
       }
       if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
         updateSeriesProject({ assetGroupId: result.groupId })
       }
-      if (result.objectKey) {
-        appendImageFlowLog(`对象存储完成：${result.objectKey}`)
-      } else if (tosEnabled) {
-        appendImageFlowLog('对象存储完成：未返回 objectKey')
+      if (
+        (result.tosStatus === 'success' || result.tosStatus === 'failed') &&
+        !tosUploadStartedLogged
+      ) {
+        tosUploadStartedLogged = true
+        appendImageFlowLog('开始上传资源到对象存储')
+      }
+      if (result.tosStatus === 'success' || result.objectKey) {
+        if (!tosUploadSuccessLogged) {
+          tosUploadSuccessLogged = true
+          appendImageFlowLog(result.tosMessage || '上传资源到对象存储成功')
+        }
+      } else if (result.tosStatus === 'skipped') {
+        appendImageFlowLog(result.tosMessage || '对象存储已完成，跳过')
+      } else if (result.tosStatus === 'failed') {
+        appendImageFlowLog(
+          result.tosMessage || '上传资源到对象存储失败（请手动同步）'
+        )
+      }
+      if (
+        (result.relayStatus === 'success' || result.relayStatus === 'failed') &&
+        !relayUploadStartedLogged
+      ) {
+        relayUploadStartedLogged = true
+        appendImageFlowLog('开始上传资源到素材库')
       }
       if (result.assetId) {
         updateShot(params.shotId, (shot) =>
@@ -570,14 +643,15 @@ const StageDirector: React.FC<Props> = ({
                 }
               : shot
         )
-        appendImageFlowLog(`素材库完成：assetId=${result.assetId}`)
-      } else if (relayEnabled) {
-        appendImageFlowLog('素材库完成：未返回 assetId')
-      }
-      if (result.url) {
-        const previewUrl =
-          result.url.length > 96 ? `${result.url.slice(0, 96)}...` : result.url
-        appendImageFlowLog(`最终URL：${previewUrl}`)
+        appendImageFlowLog(
+          result.relayMessage || `上传资源到素材库成功：assetId=${result.assetId}`
+        )
+      } else if (result.relayStatus === 'failed') {
+        appendImageFlowLog(
+          result.relayMessage || '上传资源到素材库失败（请手动同步）'
+        )
+      } else if (!relayEnabled || result.relayStatus === 'skipped') {
+        appendImageFlowLog(result.relayMessage || '素材库未配置，跳过')
       }
     } catch (error) {
       appendImageFlowLog(
@@ -673,7 +747,7 @@ const StageDirector: React.FC<Props> = ({
 
     if (!managedFlow) {
       startImageFlow(
-        type === 'start' ? '正在生成首帧...' : '正在生成尾帧...',
+        type === 'start' ? '正在生成首帧图...' : '正在生成尾帧图...',
         true
       )
       appendImageFlowLog(
@@ -793,8 +867,8 @@ const StageDirector: React.FC<Props> = ({
         { type: 'warning' }
       )
       if (!managedFlow) {
-        appendImageFlowLog('预检失败：请先处理错误项后再生成。')
-        completeImageFlow('预检未通过', 4)
+        appendImageFlowLog('生图失败：预检未通过，请先处理错误项后重试。')
+        completeImageFlow('生成失败', 4)
       }
       return
     }
@@ -805,7 +879,7 @@ const StageDirector: React.FC<Props> = ({
     if (nonErrorIssues.length > 0) {
       setToastMessage(`关键帧预检提醒：\n${formatLintIssues(nonErrorIssues)}`)
       appendImageFlowLog(
-        `预检提醒：${nonErrorIssues.map((issue) => issue.message).join('；')}`
+        `生图提醒：${nonErrorIssues.map((issue) => issue.message).join('；')}`
       )
     }
 
@@ -848,7 +922,7 @@ const StageDirector: React.FC<Props> = ({
         }
         return updateKeyframeInShot(s, type, completedKeyframe)
       })
-      appendImageFlowLog('生图完成，已回写分镜。')
+      appendImageFlowLog('生图完成，已回写资源。')
       if (shouldReplaceShotAsset) {
         await syncRelayAsset({
           kind: 'shot',
@@ -859,7 +933,10 @@ const StageDirector: React.FC<Props> = ({
         })
       }
       if (!managedFlow) {
-        completeImageFlow(type === 'start' ? '首帧生成完成' : '尾帧生成完成', 3)
+        completeImageFlow(
+          type === 'start' ? '首帧图生成完成' : '尾帧图生成完成',
+          3
+        )
       }
     } catch (e: unknown) {
       console.error(e)
@@ -880,7 +957,7 @@ const StageDirector: React.FC<Props> = ({
       }
       if (apiKeyHandled) return
       showAlert(
-        `生成失败: ${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
+        `生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
         { type: 'error' }
       )
     }
@@ -965,7 +1042,7 @@ const StageDirector: React.FC<Props> = ({
     const selectedModelInput: string =
       modelId || shot.videoModel || DEFAULTS.videoModel
     const selectedModelRouting = resolveVideoModelRouting(selectedModelInput)
-    const selectedModel = selectedModelRouting.normalizedModelId
+    const routingModelId = selectedModelRouting.normalizedModelId
     // 规范化模型名称：旧模型名 -> 现行可用模型
 
     // 必须有起始帧
@@ -979,7 +1056,7 @@ const StageDirector: React.FC<Props> = ({
       project.visualStyle || project.scriptData?.visualStyle || 'live-action'
 
     const videoInputMode =
-      shot.videoInputMode || getRecommendedVideoInputMode(selectedModel)
+      shot.videoInputMode || getRecommendedVideoInputMode(selectedModelInput)
     // 检测是否为网格分镜模式：必须显式选择网格模式 + 首帧使用整张网格图
     const isNineGridMode =
       videoInputMode === 'storyboard-grid' &&
@@ -988,7 +1065,7 @@ const StageDirector: React.FC<Props> = ({
       sKf?.imageUrl === shot.nineGrid.imageUrl
 
     const routedFrames = routeVideoFrameInputs(
-      selectedModel,
+      selectedModelInput,
       sKf?.imageUrl,
       eKf?.imageUrl,
       videoInputMode
@@ -1006,7 +1083,7 @@ const StageDirector: React.FC<Props> = ({
             ? 'Sora'
             : selectedModelRouting.family === 'doubao-task'
               ? 'Doubao Task'
-              : selectedModel
+              : routingModelId
         setToastMessage(
           `能力路由：${modelName} 当前只使用首帧，已自动忽略尾帧输入。`
         )
@@ -1018,7 +1095,7 @@ const StageDirector: React.FC<Props> = ({
       videoPrompt = buildVideoPrompt(
         shot.actionSummary,
         shot.cameraMovement,
-        selectedModel,
+        routingModelId,
         projectLanguage,
         visualStyle,
         isNineGridMode ? shot.nineGrid : undefined,
@@ -1059,12 +1136,12 @@ const StageDirector: React.FC<Props> = ({
     }
 
     const selectedModelConfig =
-      getModelById(selectedModelInput) || getModelById(selectedModel)
+      getModelById(selectedModelInput) || getModelById(routingModelId)
     const preflightResult = runVideoPreflight({
       prompt: videoPrompt,
       hasStartFrame: !!routedFrames.startImage,
       hasEndFrame: !!routedFrames.endImage,
-      modelId: selectedModel,
+      modelId: selectedModelInput,
       supportsEndFrame: selectedModelRouting.supportsEndFrame,
       aspectRatio,
       supportedAspectRatios:
@@ -1099,13 +1176,13 @@ const StageDirector: React.FC<Props> = ({
       videoPrompt,
       shot.interval?.promptVersions,
       'ai-generated',
-      `Generate video (${selectedModel})`
+      `Generate video (${selectedModelInput})`
     )
 
     // 更新 shot 的 videoModel
     updateShot(shot.id, (s) => ({
       ...s,
-      videoModel: selectedModel as Shot['videoModel'],
+      videoModel: selectedModelInput as Shot['videoModel'],
       interval: s.interval
         ? {
             ...s.interval,
@@ -1131,7 +1208,7 @@ const StageDirector: React.FC<Props> = ({
         videoPrompt,
         routedFrames.startImage,
         routedFrames.endImage,
-        selectedModel,
+        selectedModelInput,
         aspectRatio,
         duration
       )
@@ -1378,7 +1455,7 @@ const StageDirector: React.FC<Props> = ({
     batchGenerateCancelRef.current = false
     setIsBatchCancelRequested(false)
     startImageFlow(
-      isRegenerate ? '正在重新生成所有首帧...' : '正在批量生成缺失首帧...',
+      isRegenerate ? '正在重新生成所有首帧图...' : '正在批量生成缺失首帧图...',
       true
     )
     appendImageFlowLog(`本次任务镜头数：${shotsToProcess.length}`)
@@ -1389,8 +1466,8 @@ const StageDirector: React.FC<Props> = ({
       current: 0,
       total: shotsToProcess.length,
       message: isRegenerate
-        ? '正在重新生成所有首帧...'
-        : '正在批量生成缺失的首帧...'
+        ? '正在重新生成所有首帧图...'
+        : '正在批量生成缺失的首帧图...'
     })
 
     for (let i = 0; i < shotsToProcess.length; i++) {
@@ -1417,7 +1494,7 @@ const StageDirector: React.FC<Props> = ({
         appendImageFlowLog(`失败：${shotLabel}`)
         if (onApiKeyError && onApiKeyError(e)) {
           setBatchProgress(null)
-          completeImageFlow('批量生图中断（鉴权错误）', 5)
+          completeImageFlow('生成失败', 5)
           setIsBatchCancelRequested(false)
           return
         }
@@ -1426,11 +1503,12 @@ const StageDirector: React.FC<Props> = ({
 
     setBatchProgress(null)
     if (batchGenerateCancelRef.current) {
-      completeImageFlow('批量生图已取消', 4)
+      appendImageFlowLog('批量任务已取消。')
+      completeImageFlow('生成失败', 4)
       setIsBatchCancelRequested(false)
       return
     }
-    completeImageFlow('批量生图完成', 3)
+    completeImageFlow('批量首帧图生成完成', 3)
     setIsBatchCancelRequested(false)
   }
 
@@ -1966,7 +2044,7 @@ const StageDirector: React.FC<Props> = ({
   ) => {
     const shot = getShotById(shotId)
     if (!shot) return
-    startImageFlow('正在生成九宫格分镜图...', true)
+    startImageFlow('正在生成九宫格图...', true)
     appendImageFlowLog(
       `开始生图：${shotId} / 九宫格 (${confirmedPanels.length} 格)`
     )
@@ -2022,7 +2100,7 @@ const StageDirector: React.FC<Props> = ({
       }
 
       // 3. 生成九宫格图片
-      appendImageFlowLog('执行九宫格生图请求中...')
+      appendImageFlowLog('执行生图请求中...')
       const imageUrl = await generateNineGridImage(
         confirmedPanels,
         refResult.images,
@@ -2059,9 +2137,9 @@ const StageDirector: React.FC<Props> = ({
         currentAssetId: shot.assetId
       })
 
-      appendImageFlowLog('九宫格生图与上传同步完成。')
-      completeImageFlow(`${layout.label}分镜图生成完成`, 3)
-      showAlert(`${layout.label}分镜图片生成完成！`, { type: 'success' })
+      appendImageFlowLog('生图完成，已回写资源。')
+      completeImageFlow(`${layout.label}图生成完成`, 3)
+      showAlert(`${layout.label}图生成完成`, { type: 'success' })
     } catch (e: unknown) {
       console.error('网格分镜图片生成失败:', e)
       updateShot(shotId, (s) => ({
@@ -2080,12 +2158,12 @@ const StageDirector: React.FC<Props> = ({
 
       const apiKeyHandled = !!(onApiKeyError && onApiKeyError(e))
       appendImageFlowLog(
-        `九宫格生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`
+        `生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`
       )
-      completeImageFlow('九宫格生图失败', 4)
+      completeImageFlow('生成失败', 4)
       if (apiKeyHandled) return
       showAlert(
-        `网格图片生成失败: ${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
+        `生图失败：${formatUserFriendlyError(e, '图片生成失败，请稍后重试。')}`,
         { type: 'error' }
       )
     }
@@ -2692,7 +2770,7 @@ const StageDirector: React.FC<Props> = ({
               if (!promptValue) {
                 const selectedModelInput =
                   activeShot.videoModel || DEFAULTS.videoModel
-                const selectedModel =
+                const routingModelId =
                   resolveVideoModelRouting(selectedModelInput).normalizedModelId
                 const projectLanguage =
                   project.language || project.scriptData?.language || '中文'
@@ -2702,7 +2780,7 @@ const StageDirector: React.FC<Props> = ({
                   'live-action'
                 const promptDuration =
                   Number(activeShot.interval?.duration) ||
-                  getModelDefaultDuration(selectedModel) ||
+                  getModelDefaultDuration(selectedModelInput) ||
                   Number(project.scriptData?.planningShotDuration) ||
                   8
                 const startKf = activeShot.keyframes?.find(
@@ -2713,9 +2791,9 @@ const StageDirector: React.FC<Props> = ({
                 )
                 const videoInputMode =
                   activeShot.videoInputMode ||
-                  getRecommendedVideoInputMode(selectedModel)
+                  getRecommendedVideoInputMode(selectedModelInput)
                 const routedFrames = routeVideoFrameInputs(
-                  selectedModel,
+                  selectedModelInput,
                   startKf?.imageUrl,
                   endKf?.imageUrl,
                   videoInputMode
@@ -2729,7 +2807,7 @@ const StageDirector: React.FC<Props> = ({
                 promptValue = buildVideoPrompt(
                   activeShot.actionSummary,
                   activeShot.cameraMovement,
-                  selectedModel,
+                  routingModelId,
                   projectLanguage,
                   visualStyle,
                   isNineGridMode ? activeShot.nineGrid : undefined,

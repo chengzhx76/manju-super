@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   Users,
   Sparkles,
@@ -93,6 +93,17 @@ type BatchTargetItem = {
   name?: string
 }
 
+type ImageFlowPanel = {
+  id: string
+  message: string
+  logs: string[]
+  isRunning: boolean
+  doneCountdown: number | null
+  isHovered: boolean
+  isFadingOut: boolean
+  createdAt: number
+}
+
 const StageAssets: React.FC<Props> = ({
   project,
   updateProject,
@@ -139,15 +150,11 @@ const StageAssets: React.FC<Props> = ({
   )
   const [syncingSceneIds, setSyncingSceneIds] = useState<string[]>([])
   const [syncingPropIds, setSyncingPropIds] = useState<string[]>([])
-  const [imageFlowMessage, setImageFlowMessage] = useState('')
-  const [imageFlowLogs, setImageFlowLogs] = useState<string[]>([])
-  const [isImageFlowRunning, setIsImageFlowRunning] = useState(false)
-  const [isImageFlowHovered, setIsImageFlowHovered] = useState(false)
-  const [isImageFlowFadingOut, setIsImageFlowFadingOut] = useState(false)
-  const [imageFlowDoneCountdown, setImageFlowDoneCountdown] = useState<
-    number | null
-  >(null)
+  const [imageFlowPanels, setImageFlowPanels] = useState<ImageFlowPanel[]>([])
   const batchFlowKindRef = useRef<'character' | 'scene' | 'prop' | null>(null)
+  const recoveredStuckStateProjectIdRef = useRef<string | null>(null)
+  const latestImageFlowPanelIdRef = useRef<string | null>(null)
+  const imageFlowRemoveTimerRef = useRef<Record<string, number>>({})
 
   const cloneScriptData = <T extends ProjectState['scriptData']>(
     scriptData: T
@@ -225,7 +232,7 @@ const StageAssets: React.FC<Props> = ({
       if (!prev.scriptData) return prev
       return { ...prev, scriptData: next }
     })
-  }, [project.scriptData, updateProject])
+  }, [project.id, project.scriptData, updateProject])
 
   // 横竖屏选择状态（从持久化配置读取）
   const [aspectRatio, setAspectRatioState] = useState<AspectRatio>(() =>
@@ -259,6 +266,7 @@ const StageAssets: React.FC<Props> = ({
    */
   useEffect(() => {
     if (!project.scriptData) return
+    if (recoveredStuckStateProjectIdRef.current === project.id) return
 
     const hasStuckCharacters = project.scriptData.characters.some((char) => {
       // 检查角色本身是否卡住
@@ -311,7 +319,8 @@ const StageAssets: React.FC<Props> = ({
 
       updateProject({ scriptData: newData })
     }
-  }, [project.scriptData, updateProject])
+    recoveredStuckStateProjectIdRef.current = project.id
+  }, [project.id, project.scriptData, updateProject])
 
   /**
    * 上报生成状态给父组件，用于导航锁定
@@ -351,51 +360,160 @@ const StageAssets: React.FC<Props> = ({
     }
   }, [onGeneratingChange])
 
-  useEffect(() => {
-    if (imageFlowDoneCountdown === null) return
-    if (imageFlowDoneCountdown <= 0) {
-      setImageFlowDoneCountdown(null)
-      if (!isImageFlowHovered) {
-        setIsImageFlowFadingOut(true)
-        window.setTimeout(() => {
-          setIsImageFlowFadingOut(false)
-          setImageFlowLogs([])
-          setImageFlowMessage('')
-          setIsImageFlowHovered(false)
-        }, 220)
-      }
-      return
+  const clearImageFlowRemoveTimer = useCallback((panelId: string) => {
+    const timerId = imageFlowRemoveTimerRef.current[panelId]
+    if (timerId) {
+      window.clearTimeout(timerId)
+      delete imageFlowRemoveTimerRef.current[panelId]
     }
+  }, [])
+
+  const removeImageFlowPanel = useCallback((panelId: string) => {
+    clearImageFlowRemoveTimer(panelId)
+    setImageFlowPanels((prev) => prev.filter((panel) => panel.id !== panelId))
+    if (latestImageFlowPanelIdRef.current === panelId) {
+      latestImageFlowPanelIdRef.current = null
+    }
+  }, [clearImageFlowRemoveTimer])
+
+  const scheduleImageFlowPanelRemove = useCallback((panelId: string, delayMs = 220) => {
+    if (imageFlowRemoveTimerRef.current[panelId]) return
+    imageFlowRemoveTimerRef.current[panelId] = window.setTimeout(() => {
+      removeImageFlowPanel(panelId)
+    }, delayMs)
+  }, [removeImageFlowPanel])
+
+  useEffect(() => {
+    return () => {
+      Object.values(imageFlowRemoveTimerRef.current).forEach((timerId) =>
+        window.clearTimeout(Number(timerId))
+      )
+      imageFlowRemoveTimerRef.current = {}
+    }
+  }, [])
+
+  useEffect(() => {
+    const hasActiveCountdown = imageFlowPanels.some(
+      (panel) => !panel.isRunning && (panel.doneCountdown || 0) > 0
+    )
+    if (!hasActiveCountdown) return
     const timerId = window.setTimeout(() => {
-      setImageFlowDoneCountdown((prev) => (prev === null ? null : prev - 1))
+      setImageFlowPanels((prev) =>
+        prev.map((panel) => {
+          if (panel.isRunning || panel.doneCountdown === null) return panel
+          if (panel.doneCountdown <= 1) {
+            return { ...panel, doneCountdown: 0 }
+          }
+          return { ...panel, doneCountdown: panel.doneCountdown - 1 }
+        })
+      )
     }, 1000)
     return () => window.clearTimeout(timerId)
-  }, [imageFlowDoneCountdown, isImageFlowHovered])
+  }, [imageFlowPanels, scheduleImageFlowPanelRemove])
 
-  const appendImageFlowLog = (line: string) => {
+  useEffect(() => {
+    const expiredPanelIds = imageFlowPanels
+      .filter(
+        (panel) =>
+          !panel.isRunning &&
+          panel.doneCountdown === 0 &&
+          !panel.isHovered &&
+          !panel.isFadingOut
+      )
+      .map((panel) => panel.id)
+    if (!expiredPanelIds.length) return
+
+    setImageFlowPanels((prev) =>
+      prev.map((panel) =>
+        expiredPanelIds.includes(panel.id)
+          ? { ...panel, doneCountdown: null, isFadingOut: true }
+          : panel
+      )
+    )
+    expiredPanelIds.forEach((panelId) => scheduleImageFlowPanelRemove(panelId))
+  }, [imageFlowPanels])
+
+  const appendImageFlowLog = (line: string, panelId?: string) => {
     const normalized = String(line || '').trim()
     if (!normalized) return
-    setImageFlowLogs((prev) => [...prev, normalized].slice(-12))
+    const targetPanelId = panelId || latestImageFlowPanelIdRef.current
+    if (!targetPanelId) return
+    setImageFlowPanels((prev) =>
+      prev.map((panel) =>
+        panel.id === targetPanelId
+          ? { ...panel, logs: [...panel.logs, normalized].slice(-12) }
+          : panel
+      )
+    )
   }
 
-  const startImageFlow = (message: string, resetLogs = false) => {
-    if (resetLogs) setImageFlowLogs([])
-    setImageFlowDoneCountdown(null)
-    setIsImageFlowFadingOut(false)
-    setImageFlowMessage(message)
-    setIsImageFlowRunning(true)
+  const startImageFlow = (
+    message: string,
+    resetLogs = false,
+    panelId?: string
+  ): string => {
+    const targetPanelId = panelId || generateId('image-flow')
+    clearImageFlowRemoveTimer(targetPanelId)
+    latestImageFlowPanelIdRef.current = targetPanelId
+    setImageFlowPanels((prev) => {
+      const existing = prev.find((panel) => panel.id === targetPanelId)
+      if (existing) {
+        return prev.map((panel) =>
+          panel.id === targetPanelId
+            ? {
+                ...panel,
+                message,
+                logs: resetLogs ? [] : panel.logs,
+                isRunning: true,
+                doneCountdown: null,
+                isHovered: false,
+                isFadingOut: false
+              }
+            : panel
+        )
+      }
+      return [
+        ...prev,
+        {
+          id: targetPanelId,
+          message,
+          logs: [],
+          isRunning: true,
+          doneCountdown: null,
+          isHovered: false,
+          isFadingOut: false,
+          createdAt: Date.now()
+        }
+      ]
+    })
+    return targetPanelId
   }
 
-  const completeImageFlow = (message: string, keepSeconds = 10) => {
-    setImageFlowMessage(message)
-    setIsImageFlowRunning(false)
-    setImageFlowDoneCountdown(keepSeconds)
+  const completeImageFlow = (
+    message: string,
+    keepSeconds = 10,
+    panelId?: string
+  ) => {
+    const targetPanelId = panelId || latestImageFlowPanelIdRef.current
+    if (!targetPanelId) return
+    setImageFlowPanels((prev) =>
+      prev.map((panel) =>
+        panel.id === targetPanelId
+          ? {
+              ...panel,
+              message,
+              isRunning: false,
+              doneCountdown: Math.max(0, keepSeconds)
+            }
+          : panel
+      )
+    )
   }
 
-  const ensureTosConfigured = (sceneAction: string): boolean => {
+  const ensureTosConfigured = (sceneAction: string, panelId?: string): boolean => {
     if (hasVolcengineTosConfig()) return true
     const message = `对象存储未配置，无法${sceneAction}。请先在「全局设置-对象存储配置」完成配置。`
-    appendImageFlowLog(message)
+    appendImageFlowLog(message, panelId)
     showAlert(message, { type: 'error' })
     return false
   }
@@ -463,25 +581,30 @@ const StageAssets: React.FC<Props> = ({
   const handleGenerateAsset = async (
     type: 'character' | 'scene',
     id: string,
-    options?: { managedFlow?: boolean }
+    options?: { managedFlow?: boolean; flowPanelId?: string }
   ) => {
     const managedFlow = options?.managedFlow === true
+    let flowPanelId = options?.flowPanelId
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
     if (!managedFlow) {
-      startImageFlow(
+      flowPanelId = startImageFlow(
         type === 'character' ? '正在生成角色图...' : '正在生成场景图...',
         true
       )
       appendImageFlowLog(
-        `开始生图：${id} / ${type === 'character' ? '角色' : '场景'}`
+        `开始生图：${id} / ${type === 'character' ? '角色' : '场景'}`,
+        flowPanelId
       )
     }
     if (
-      !ensureTosConfigured(type === 'character' ? '生成角色图' : '生成场景图')
+      !ensureTosConfigured(
+        type === 'character' ? '生成角色图' : '生成场景图',
+        flowPanelId
+      )
     ) {
       if (!managedFlow) {
-        completeImageFlow('生成失败', 4)
+        completeImageFlow('生成失败', 4, flowPanelId)
       }
       return
     }
@@ -627,7 +750,7 @@ const StageAssets: React.FC<Props> = ({
       const referenceImagesForGeneration = shapeReferenceImage
         ? [shapeReferenceImage]
         : []
-      appendImageFlowLog('执行生图请求中...')
+      appendImageFlowLog('执行生图请求中...', flowPanelId)
       const imageUrl = await generateImage(
         enhancedPrompt,
         referenceImagesForGeneration,
@@ -663,18 +786,21 @@ const StageAssets: React.FC<Props> = ({
         }
         return { ...prev, scriptData: newData }
       })
-      appendImageFlowLog('生图完成，已回写资源。')
-      await syncGeneratedAsset({
-        kind: type,
-        localId: id,
-        url: imageUrl,
-        currentAssetId: existingAssetId,
-        fromGeneration: true
-      })
-      if (!managedFlow) {
+      appendImageFlowLog('生图完成，已回写资源。', flowPanelId)
+      if (seriesProject) {
+        await syncGeneratedAsset({
+          kind: type,
+          localId: id,
+          url: imageUrl,
+          currentAssetId: existingAssetId,
+          fromGeneration: true,
+          flowPanelId
+        })
+      } else if (!managedFlow) {
         completeImageFlow(
           type === 'character' ? '角色图生成完成' : '场景图生成完成',
-          3
+          3,
+          flowPanelId
         )
       }
     } catch (e) {
@@ -692,9 +818,9 @@ const StageAssets: React.FC<Props> = ({
         }
         return { ...prev, scriptData: newData }
       })
-      appendImageFlowLog(`生图失败：${e?.message || '请求失败'}`)
+      appendImageFlowLog(`生图失败：${e?.message || '请求失败'}`, flowPanelId)
       if (!managedFlow) {
-        completeImageFlow('生成失败', 4)
+        completeImageFlow('生成失败', 4, flowPanelId)
       }
       if (onApiKeyError && onApiKeyError(e)) {
         return
@@ -732,7 +858,8 @@ const StageAssets: React.FC<Props> = ({
   const runBatchGenerationWithConcurrency = async <T,>(
     targetItems: T[],
     getLabel: (item: T) => string,
-    runTask: (item: T) => Promise<void>
+    runTask: (item: T) => Promise<void>,
+    flowPanelId?: string
   ) => {
     const total = targetItems.length
     if (total <= 0) return
@@ -756,7 +883,7 @@ const StageAssets: React.FC<Props> = ({
         if (currentIndex > 0) {
           await delay(DEFAULTS.batchGenerateDelay)
         }
-        appendImageFlowLog(`开始生图：${getLabel(item)}`)
+        appendImageFlowLog(`开始生图：${getLabel(item)}`, flowPanelId)
         await runTask(item)
         completed += 1
         setBatchProgress({ current: completed, total })
@@ -773,21 +900,23 @@ const StageAssets: React.FC<Props> = ({
     type: 'character' | 'scene'
   ) => {
     batchFlowKindRef.current = type
-    startImageFlow(
+    const flowPanelId = startImageFlow(
       type === 'character' ? '正在批量生成角色图...' : '正在批量生成场景图...',
       true
     )
-    appendImageFlowLog(`本次任务资源数：${targetItems.length}`)
+    appendImageFlowLog(`本次任务资源数：${targetItems.length}`, flowPanelId)
     appendImageFlowLog(
-      `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`
+      `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`,
+      flowPanelId
     )
     if (
       !ensureTosConfigured(
-        type === 'character' ? '批量生成角色图' : '批量生成场景图'
+        type === 'character' ? '批量生成角色图' : '批量生成场景图',
+        flowPanelId
       )
     ) {
       batchFlowKindRef.current = null
-      completeImageFlow('生成失败', 4)
+      completeImageFlow('生成失败', 4, flowPanelId)
       return
     }
     setBatchProgress({ current: 0, total: targetItems.length })
@@ -796,15 +925,20 @@ const StageAssets: React.FC<Props> = ({
       targetItems,
       (item) => item.name || item.id,
       async (item) => {
-        await handleGenerateAsset(type, item.id, { managedFlow: true })
-      }
+        await handleGenerateAsset(type, item.id, {
+          managedFlow: true,
+          flowPanelId
+        })
+      },
+      flowPanelId
     )
 
     setBatchProgress(null)
     batchFlowKindRef.current = null
     completeImageFlow(
       type === 'character' ? '批量角色生图完成' : '批量场景生图完成',
-      3
+      3,
+      flowPanelId
     )
   }
 
@@ -1058,6 +1192,7 @@ const StageAssets: React.FC<Props> = ({
     currentAssetId?: string
     fromGeneration?: boolean
     fromSyncButton?: boolean
+    flowPanelId?: string
   }) => {
     if (!seriesProject) return
     const kindLabel =
@@ -1076,13 +1211,18 @@ const StageAssets: React.FC<Props> = ({
     let relayUploadStartedLogged = false
     startImageFlow(
       manualSyncOnly ? '正在同步素材库...' : `正在同步${kindLabel}资源...`,
-      manualSyncOnly
+      manualSyncOnly,
+      params.flowPanelId
     )
     if (!tosEnabled) {
-      appendImageFlowLog('对象存储未配置，无法继续（请先完成对象存储配置）')
+      appendImageFlowLog(
+        '对象存储未配置，无法继续（请先完成对象存储配置）',
+        params.flowPanelId
+      )
       completeImageFlow(
         manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`,
-        6
+        6,
+        params.flowPanelId
       )
       showAlert('对象存储未配置，无法同步资源', { type: 'error' })
       return
@@ -1101,19 +1241,19 @@ const StageAssets: React.FC<Props> = ({
         onStage: (stage) => {
           if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
             tosUploadStartedLogged = true
-            appendImageFlowLog('开始上传资源到对象存储')
+            appendImageFlowLog('开始上传资源到对象存储', params.flowPanelId)
           } else if (
             stage === 'tos_upload_success' &&
             !tosUploadSuccessLogged
           ) {
             tosUploadSuccessLogged = true
-            appendImageFlowLog('上传资源到对象存储成功')
+            appendImageFlowLog('上传资源到对象存储成功', params.flowPanelId)
           } else if (
             stage === 'start_relay_upload' &&
             !relayUploadStartedLogged
           ) {
             relayUploadStartedLogged = true
-            appendImageFlowLog('开始上传资源到素材库')
+            appendImageFlowLog('开始上传资源到素材库', params.flowPanelId)
           }
         }
       })
@@ -1124,18 +1264,25 @@ const StageAssets: React.FC<Props> = ({
           !relayOnlyByUrl
         ) {
           tosUploadStartedLogged = true
-          appendImageFlowLog('开始上传资源到对象存储')
+          appendImageFlowLog('开始上传资源到对象存储', params.flowPanelId)
         }
         if (result.tosStatus === 'success') {
           if (!tosUploadSuccessLogged) {
             tosUploadSuccessLogged = true
-            appendImageFlowLog(result.tosMessage || '上传资源到对象存储成功')
+            appendImageFlowLog(
+              result.tosMessage || '上传资源到对象存储成功',
+              params.flowPanelId
+            )
           }
         } else if (result.tosStatus === 'skipped' && !relayOnlyByUrl) {
-          appendImageFlowLog(result.tosMessage || '对象存储已完成，跳过')
+          appendImageFlowLog(
+            result.tosMessage || '对象存储已完成，跳过',
+            params.flowPanelId
+          )
         } else if (result.tosStatus === 'failed') {
           appendImageFlowLog(
-            result.tosMessage || '上传资源到对象存储失败（请手动同步）'
+            result.tosMessage || '上传资源到对象存储失败（请手动同步）',
+            params.flowPanelId
           )
         }
         if (
@@ -1144,13 +1291,17 @@ const StageAssets: React.FC<Props> = ({
           !relayUploadStartedLogged
         ) {
           relayUploadStartedLogged = true
-          appendImageFlowLog('开始上传资源到素材库')
+          appendImageFlowLog('开始上传资源到素材库', params.flowPanelId)
         }
         if (!relayEnabled || result.relayStatus === 'skipped') {
-          appendImageFlowLog(result.relayMessage || '素材库未配置，跳过')
+          appendImageFlowLog(
+            result.relayMessage || '素材库未配置，跳过',
+            params.flowPanelId
+          )
         } else if (result.relayStatus === 'failed') {
           appendImageFlowLog(
-            result.relayMessage || '上传资源到素材库失败（请手动同步）'
+            result.relayMessage || '上传资源到素材库失败（请手动同步）',
+            params.flowPanelId
           )
         }
         if (result.url) {
@@ -1187,7 +1338,8 @@ const StageAssets: React.FC<Props> = ({
         }
         completeImageFlow(
           manualSyncOnly ? '素材库同步结束' : `${kindLabel}同步结束`,
-          5
+          5,
+          params.flowPanelId
         )
         return
       }
@@ -1200,18 +1352,25 @@ const StageAssets: React.FC<Props> = ({
         !relayOnlyByUrl
       ) {
         tosUploadStartedLogged = true
-        appendImageFlowLog('开始上传资源到对象存储')
+        appendImageFlowLog('开始上传资源到对象存储', params.flowPanelId)
       }
       if (result.tosStatus === 'success' || result.objectKey) {
         if (!tosUploadSuccessLogged) {
           tosUploadSuccessLogged = true
-          appendImageFlowLog(result.tosMessage || '上传资源到对象存储成功')
+          appendImageFlowLog(
+            result.tosMessage || '上传资源到对象存储成功',
+            params.flowPanelId
+          )
         }
       } else if (result.tosStatus === 'skipped' && !relayOnlyByUrl) {
-        appendImageFlowLog(result.tosMessage || '对象存储已完成，跳过')
+        appendImageFlowLog(
+          result.tosMessage || '对象存储已完成，跳过',
+          params.flowPanelId
+        )
       } else if (result.tosStatus === 'failed') {
         appendImageFlowLog(
-          result.tosMessage || '上传资源到对象存储失败（请手动同步）'
+          result.tosMessage || '上传资源到对象存储失败（请手动同步）',
+          params.flowPanelId
         )
       }
       if (
@@ -1219,19 +1378,24 @@ const StageAssets: React.FC<Props> = ({
         !relayUploadStartedLogged
       ) {
         relayUploadStartedLogged = true
-        appendImageFlowLog('开始上传资源到素材库')
+        appendImageFlowLog('开始上传资源到素材库', params.flowPanelId)
       }
       if (result.relayStatus === 'success' || result.assetId) {
         appendImageFlowLog(
           result.relayMessage ||
-            `上传资源到素材库成功：assetId=${result.assetId || '-'}`
+            `上传资源到素材库成功：assetId=${result.assetId || '-'}`,
+          params.flowPanelId
         )
       } else if (result.relayStatus === 'failed') {
         appendImageFlowLog(
-          result.relayMessage || '上传资源到素材库失败（请手动同步）'
+          result.relayMessage || '上传资源到素材库失败（请手动同步）',
+          params.flowPanelId
         )
       } else if (!relayEnabled || result.relayStatus === 'skipped') {
-        appendImageFlowLog(result.relayMessage || '素材库未配置，跳过')
+        appendImageFlowLog(
+          result.relayMessage || '素材库未配置，跳过',
+          params.flowPanelId
+        )
       }
       if (result.assetId) {
         applyEpisodeAssetId(params.kind, params.localId, result.assetId)
@@ -1267,15 +1431,18 @@ const StageAssets: React.FC<Props> = ({
       }
       completeImageFlow(
         manualSyncOnly ? '素材库同步完成' : `${kindLabel}同步完成`,
-        6
+        6,
+        params.flowPanelId
       )
     } catch (error) {
       appendImageFlowLog(
-        `上传失败（${params.kind}）：${error instanceof Error ? error.message : '未知错误'}`
+        `上传失败（${params.kind}）：${error instanceof Error ? error.message : '未知错误'}`,
+        params.flowPanelId
       )
       completeImageFlow(
         manualSyncOnly ? '素材库同步失败' : `${kindLabel}同步失败`,
-        6
+        6,
+        params.flowPanelId
       )
       showAlert(
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
@@ -2606,18 +2773,19 @@ const StageAssets: React.FC<Props> = ({
    */
   const handleGeneratePropAsset = async (
     propId: string,
-    options?: { managedFlow?: boolean }
+    options?: { managedFlow?: boolean; flowPanelId?: string }
   ) => {
     const managedFlow = options?.managedFlow === true
+    let flowPanelId = options?.flowPanelId
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
     if (!managedFlow) {
-      startImageFlow('正在生成道具图...', true)
-      appendImageFlowLog(`开始生图：${propId} / 道具`)
+      flowPanelId = startImageFlow('正在生成道具图...', true)
+      appendImageFlowLog(`开始生图：${propId} / 道具`, flowPanelId)
     }
-    if (!ensureTosConfigured('生成道具图')) {
+    if (!ensureTosConfigured('生成道具图', flowPanelId)) {
       if (!managedFlow) {
-        completeImageFlow('生成失败', 4)
+        completeImageFlow('生成失败', 4, flowPanelId)
       }
       return
     }
@@ -2697,7 +2865,7 @@ const StageAssets: React.FC<Props> = ({
         prompt += shapeReferenceStyleInstruction
       }
 
-      appendImageFlowLog('执行生图请求中...')
+      appendImageFlowLog('执行生图请求中...', flowPanelId)
       const imageUrl = await generateImage(
         prompt,
         shapeReferenceImage ? [shapeReferenceImage] : [],
@@ -2737,16 +2905,18 @@ const StageAssets: React.FC<Props> = ({
         }
         return { ...prev, scriptData: updatedData }
       })
-      appendImageFlowLog('生图完成，已回写资源。')
-      await syncGeneratedAsset({
-        kind: 'prop',
-        localId: propId,
-        url: imageUrl,
-        currentAssetId: existingAssetId,
-        fromGeneration: true
-      })
-      if (!managedFlow) {
-        completeImageFlow('道具图生成完成', 3)
+      appendImageFlowLog('生图完成，已回写资源。', flowPanelId)
+      if (seriesProject) {
+        await syncGeneratedAsset({
+          kind: 'prop',
+          localId: propId,
+          url: imageUrl,
+          currentAssetId: existingAssetId,
+          fromGeneration: true,
+          flowPanelId
+        })
+      } else if (!managedFlow) {
+        completeImageFlow('道具图生成完成', 3, flowPanelId)
       }
     } catch (e) {
       console.error(e)
@@ -2757,9 +2927,9 @@ const StageAssets: React.FC<Props> = ({
         if (errP) errP.status = 'failed'
         return { ...prev, scriptData: errData }
       })
-      appendImageFlowLog(`生图失败：${e?.message || '请求失败'}`)
+      appendImageFlowLog(`生图失败：${e?.message || '请求失败'}`, flowPanelId)
       if (!managedFlow) {
-        completeImageFlow('生成失败', 4)
+        completeImageFlow('生成失败', 4, flowPanelId)
       }
       if (onApiKeyError && onApiKeyError(e)) return
     }
@@ -3091,14 +3261,15 @@ const StageAssets: React.FC<Props> = ({
 
   const executeBatchGenerateProps = async (targetItems: Prop[]) => {
     batchFlowKindRef.current = 'prop'
-    startImageFlow('正在批量生成道具图...', true)
-    appendImageFlowLog(`本次任务资源数：${targetItems.length}`)
+    const flowPanelId = startImageFlow('正在批量生成道具图...', true)
+    appendImageFlowLog(`本次任务资源数：${targetItems.length}`, flowPanelId)
     appendImageFlowLog(
-      `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`
+      `上传配置：TOS=${hasVolcengineTosConfig() ? '已开启' : '未开启'}，素材库=${hasAssetRelayConfig() ? '已开启' : '未开启'}`,
+      flowPanelId
     )
-    if (!ensureTosConfigured('批量生成道具图')) {
+    if (!ensureTosConfigured('批量生成道具图', flowPanelId)) {
       batchFlowKindRef.current = null
-      completeImageFlow('生成失败', 4)
+      completeImageFlow('生成失败', 4, flowPanelId)
       return
     }
     setBatchProgress({ current: 0, total: targetItems.length })
@@ -3107,13 +3278,17 @@ const StageAssets: React.FC<Props> = ({
       targetItems,
       (item) => item.name || item.id,
       async (item) => {
-        await handleGeneratePropAsset(item.id, { managedFlow: true })
-      }
+        await handleGeneratePropAsset(item.id, {
+          managedFlow: true,
+          flowPanelId
+        })
+      },
+      flowPanelId
     )
 
     setBatchProgress(null)
     batchFlowKindRef.current = null
-    completeImageFlow('批量道具生图完成', 3)
+    completeImageFlow('批量道具生图完成', 3, flowPanelId)
   }
 
   /**
@@ -3705,14 +3880,8 @@ const StageAssets: React.FC<Props> = ({
     const query = libraryQuery.trim().toLowerCase()
     return item.name.toLowerCase().includes(query)
   })
-  const showImageFlowPanel =
-    isImageFlowRunning ||
-    imageFlowDoneCountdown !== null ||
-    isImageFlowHovered ||
-    isImageFlowFadingOut ||
-    imageFlowLogs.length > 0
-  const showImageFlowDoneCountdown =
-    !isImageFlowRunning && imageFlowDoneCountdown !== null
+  const isImageFlowRunning = imageFlowPanels.some((panel) => panel.isRunning)
+  const showImageFlowPanel = imageFlowPanels.length > 0
   const batchProgressPercent = batchProgress
     ? Math.round(
         (batchProgress.current / Math.max(batchProgress.total, 1)) * 100
@@ -3728,71 +3897,102 @@ const StageAssets: React.FC<Props> = ({
       />
 
       {showImageFlowPanel && (
-        <div
-          className={`fixed right-4 top-4 z-[9999] w-full max-w-md rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur transition-all duration-200 ${
-            isImageFlowFadingOut
-              ? 'translate-y-1 opacity-0'
-              : 'translate-y-0 opacity-100'
-          }`}
-          onMouseEnter={() => {
-            setIsImageFlowHovered(true)
-            setIsImageFlowFadingOut(false)
-          }}
-          onMouseLeave={() => {
-            setIsImageFlowHovered(false)
-            if (!isImageFlowRunning && imageFlowDoneCountdown === null) {
-              setIsImageFlowFadingOut(true)
-              window.setTimeout(() => {
-                setIsImageFlowFadingOut(false)
-                setImageFlowLogs([])
-                setImageFlowMessage('')
-              }, 220)
-            }
-          }}
-        >
-          {showImageFlowDoneCountdown && (
-            <div className="absolute right-3 top-2 text-[11px] font-mono text-zinc-300">
-              {imageFlowDoneCountdown}s
-            </div>
-          )}
-          <div className="flex items-center gap-3">
-            <div
-              className={`h-4 w-4 rounded-full border-2 ${
-                !isImageFlowRunning
-                  ? 'border-emerald-400 bg-emerald-400'
-                  : 'animate-spin border-zinc-500 border-t-white'
-              }`}
-            />
-            <div className="text-sm text-white">{imageFlowMessage}</div>
-          </div>
-
-          {batchProgress && (
-            <div className="mt-2">
-              <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[var(--accent)] transition-all duration-300"
-                  style={{ width: `${batchProgressPercent}%` }}
-                />
-              </div>
-              <div className="mt-1 text-[11px] text-zinc-300 font-mono">
-                进度: {batchProgress.current}/{batchProgress.total} (
-                {batchProgressPercent}%)
-              </div>
-            </div>
-          )}
-
-          {imageFlowLogs.length > 0 && (
-            <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
-              {imageFlowLogs.map((line, index) => (
-                <div
-                  key={`${line}-${index}`}
-                  className="whitespace-pre-wrap break-words"
-                >
-                  {line}
+        <div className="fixed right-4 top-4 z-[9999] flex w-full max-w-md flex-col gap-2">
+          {imageFlowPanels.map((panel) => {
+            const showImageFlowDoneCountdown =
+              !panel.isRunning && panel.doneCountdown !== null
+            return (
+              <div
+                key={panel.id}
+                className={`relative w-full rounded-xl border border-[var(--border-default)] bg-black/80 px-4 py-3 shadow-2xl backdrop-blur transition-all duration-200 ${
+                  panel.isFadingOut
+                    ? 'translate-y-1 opacity-0'
+                    : 'translate-y-0 opacity-100'
+                }`}
+                onMouseEnter={() => {
+                  clearImageFlowRemoveTimer(panel.id)
+                  setImageFlowPanels((prev) =>
+                    prev.map((item) =>
+                      item.id === panel.id
+                        ? {
+                            ...item,
+                            isHovered: true,
+                            isFadingOut: false
+                          }
+                        : item
+                    )
+                  )
+                }}
+                onMouseLeave={() => {
+                  setImageFlowPanels((prev) =>
+                    prev.map((item) => {
+                      if (item.id !== panel.id) return item
+                      if (!item.isRunning && item.doneCountdown === null) {
+                        return {
+                          ...item,
+                          isHovered: false,
+                          isFadingOut: true
+                        }
+                      }
+                      return {
+                        ...item,
+                        isHovered: false
+                      }
+                    })
+                  )
+                  if (!panel.isRunning && panel.doneCountdown === null) {
+                    scheduleImageFlowPanelRemove(panel.id)
+                  }
+                }}
+              >
+                {showImageFlowDoneCountdown && (
+                  <div className="absolute right-3 top-2 text-[11px] font-mono text-zinc-300">
+                    {panel.doneCountdown}s
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`h-4 w-4 rounded-full border-2 ${
+                      !panel.isRunning
+                        ? 'border-emerald-400 bg-emerald-400'
+                        : 'animate-spin border-zinc-500 border-t-white'
+                    }`}
+                  />
+                  <div className="text-sm text-white">{panel.message}</div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {batchProgress &&
+                  batchFlowKindRef.current &&
+                  panel.id === latestImageFlowPanelIdRef.current && (
+                    <div className="mt-2">
+                      <div className="h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[var(--accent)] transition-all duration-300"
+                          style={{ width: `${batchProgressPercent}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 text-[11px] text-zinc-300 font-mono">
+                        进度: {batchProgress.current}/{batchProgress.total} (
+                        {batchProgressPercent}%)
+                      </div>
+                    </div>
+                  )}
+
+                {panel.logs.length > 0 && (
+                  <div className="mt-2 max-h-44 space-y-1 overflow-auto text-xs text-zinc-300">
+                    {panel.logs.map((line, index) => (
+                      <div
+                        key={`${panel.id}-${line}-${index}`}
+                        className="whitespace-pre-wrap break-words"
+                      >
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -4410,4 +4610,3 @@ const StageAssets: React.FC<Props> = ({
 }
 
 export default StageAssets
-

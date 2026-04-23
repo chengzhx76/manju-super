@@ -22,7 +22,7 @@ import {
   AspectRatio,
   VideoDuration
 } from '../../types/model'
-import { getProviderById } from '../../services/modelRegistry'
+import { getProviderById, getProviders } from '../../services/modelRegistry'
 
 interface ModelCardProps {
   model: ModelDefinition
@@ -55,6 +55,8 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const [editDescription, setEditDescription] = useState<string>(
     model.description || ''
   )
+  const [editProviderId, setEditProviderId] = useState<string>(model.providerId)
+  const [allProviders] = useState(() => getProviders())
 
   const provider = getProviderById(model.providerId)
   const isVolcengineModel = model.providerId === 'volcengine'
@@ -70,6 +72,7 @@ const ModelCard: React.FC<ModelCardProps> = ({
     setEditApiModel(model.apiModel || model.id)
     setEditEndpoint(model.endpoint || '')
     setEditDescription(model.description || '')
+    setEditProviderId(model.providerId)
   }, [model])
 
   const handleParamChange = (key: string, value: unknown) => {
@@ -88,6 +91,11 @@ const ModelCard: React.FC<ModelCardProps> = ({
   const handleApiKeyChange = (value: string) => {
     setEditApiKey(value)
     onUpdate({ apiKey: value.trim() || undefined })
+  }
+
+  const handleProviderChange = (providerId: string) => {
+    setEditProviderId(providerId)
+    onUpdate({ providerId })
   }
 
   const handleCustomFieldBlur = (
@@ -437,6 +445,26 @@ const ModelCard: React.FC<ModelCardProps> = ({
                 </div>
               </div>
             )}
+
+            <div>
+              <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                API 提供商
+              </label>
+              <select
+                value={editProviderId}
+                onChange={(e) => handleProviderChange(e.target.value)}
+                className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)]"
+              >
+                {allProviders.map((providerOption) => (
+                  <option key={providerOption.id} value={providerOption.id}>
+                    {providerOption.name} ({providerOption.baseUrl})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[9px] text-[var(--text-muted)] mt-1">
+                修改后会将该模型请求路由到对应供应商。
+              </p>
+            </div>
 
             {/* 模型专属 API Key */}
             <div>

@@ -220,8 +220,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
               当前模型需要火山引擎专用 API Key
             </p>
             <p className="text-[9px] text-[var(--error-text)]/90 mt-1">
-              未检测到该模型或 Volcengine 提供商的 Key。此模型不会使用 AntSK
-              全局 Key，请先到模型配置里设置后再生成。
+              未检测到该模型或 Volcengine 提供商的 Key，请先到模型配置里设置后再生成。
             </p>
           </div>
         )}

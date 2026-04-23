@@ -3,10 +3,9 @@ import {
   Plus,
   Trash2,
   CheckCircle,
+  Star,
   X,
   Server,
-  Edit2,
-  Circle,
   ChevronDown,
   ChevronUp,
   Key,
@@ -18,8 +17,7 @@ import {
   addProvider,
   removeProvider,
   getModels,
-  updateProvider,
-  setDefaultProvider
+  updateProvider
 } from '../../services/modelRegistry'
 import { verifyApiKey } from '../../services/modelService'
 import { useAlert } from '../GlobalAlert'
@@ -133,14 +131,6 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
         }
       }
     })
-  }
-
-  const handleSetDefault = (provider: ModelProvider) => {
-    if (setDefaultProvider(provider.id)) {
-      loadProviders()
-      onRefresh()
-      showAlert(`已将 ${provider.name} 设为默认供应商`, { type: 'success' })
-    }
   }
 
   const handleVerifyProviderKey = async (
@@ -281,7 +271,7 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
           return (
             <div
               key={provider.id}
-              className={`border rounded-lg flex flex-col transition-all ${provider.isDefault ? 'border-[var(--accent-border)] bg-[var(--accent-bg)]' : 'bg-[var(--bg-surface)] border-[var(--border-primary)]'}`}
+              className="border rounded-lg flex flex-col transition-all bg-[var(--bg-surface)] border-[var(--border-primary)]"
             >
               <div className="p-4 flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -290,6 +280,12 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
                     <h4 className="text-sm font-bold text-[var(--text-primary)] truncate">
                       {provider.name}
                     </h4>
+                    {provider.isDefault && (
+                      <span className="px-1.5 py-0.5 bg-[var(--accent-bg)] text-[var(--accent-text)] text-[9px] rounded uppercase font-mono inline-flex items-center gap-1">
+                        <Star className="w-2.5 h-2.5" />
+                        默认
+                      </span>
+                    )}
                     {provider.isBuiltIn && (
                       <span className="px-1.5 py-0.5 bg-[var(--bg-hover)] text-[var(--text-muted)] text-[9px] rounded uppercase font-mono">
                         内置
@@ -346,44 +342,22 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
                     验证
                   </button>
 
-                  {/* 使用此供应商按钮 */}
-                  {!provider.isDefault && (
-                    <button
-                      onClick={() => handleSetDefault(provider)}
-                      className="px-2.5 py-1 bg-[var(--accent)] text-[var(--text-primary)] text-[10px] font-bold rounded hover:bg-[var(--accent-hover)] transition-colors flex items-center gap-1"
-                      title="设为默认供应商"
-                    >
-                      <Circle className="w-3 h-3" />
-                      使用
-                    </button>
-                  )}
-
-                  {/* 当前激活标记 */}
-                  {provider.isDefault && (
-                    <span className="px-2.5 py-1 bg-[var(--accent-bg)] text-[var(--accent-text-hover)] text-[10px] font-bold rounded flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" />
-                      当前使用
-                    </span>
-                  )}
-
                   {/* 展开/收起按钮 */}
-                  {!provider.isBuiltIn && (
-                    <button
-                      onClick={() => handleEdit(provider)}
-                      className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors ml-2"
-                      title={
-                        editingProviderId === provider.id
-                          ? '收起配置'
-                          : '编辑配置'
-                      }
-                    >
-                      {editingProviderId === provider.id ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleEdit(provider)}
+                    className="p-2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] rounded transition-colors ml-2"
+                    title={
+                      editingProviderId === provider.id
+                        ? '收起配置'
+                        : '编辑配置'
+                    }
+                  >
+                    {editingProviderId === provider.id ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
               </div>
 
@@ -436,7 +410,7 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
                     <div className="pt-3 flex justify-between items-center">
                       {provider.isBuiltIn ? (
                         <div className="text-[var(--text-muted)] text-[10px]">
-                          内置供应商不可删除和修改基础配置
+                          内置供应商仅可修改 API Key，不可删除且不可修改名称与基础 URL
                         </div>
                       ) : (
                         <button

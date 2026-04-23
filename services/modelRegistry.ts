@@ -232,7 +232,14 @@ export const loadRegistry = (): ModelRegistryState => {
           const mergedParams = { ...bm.params }
           const existingParams = existing.params
           const mutableMergedParams = mergedParams as Record<string, unknown>
-          const existingParamsRecord = existingParams as Record<string, unknown>
+          const existingParamsRecord =
+            existingParams as unknown as Record<string, unknown>
+          const providerExists = parsed.providers.some(
+            (provider) => provider.id === existing.providerId
+          )
+          const mergedProviderId = providerExists
+            ? existing.providerId
+            : bm.providerId
           if (existingParams) {
             for (const key of USER_PREF_KEYS) {
               const existingValue = existingParamsRecord[key]
@@ -253,13 +260,15 @@ export const loadRegistry = (): ModelRegistryState => {
               }
             }
           }
-          parsed.models[existingIndex] = {
+          parsed.models[existingIndex] = ({
             ...bm,
+            // Keep provider association for built-in models when user rebinds them.
+            providerId: mergedProviderId,
             isEnabled: existing.isEnabled,
             // Keep user-configured model-level API key for built-in models.
             apiKey: existing.apiKey?.trim() || undefined,
             params: mergedParams
-          }
+          } as ModelDefinition)
         }
       })
 
@@ -583,10 +592,13 @@ export const updateProvider = (
   const index = state.providers.findIndex((p) => p.id === id)
   if (index === -1) return false
 
-  // 内置提供商不能修改某些属性
+  // 所有提供商都不允许修改标识字段
+  delete updates.id
+  delete updates.isBuiltIn
+
+  // 内置供应商不允许修改名称与基础 URL，仅允许维护 API Key 等可运营字段
   if (state.providers[index].isBuiltIn) {
-    delete updates.id
-    delete updates.isBuiltIn
+    delete updates.name
     delete updates.baseUrl
   }
 
@@ -840,9 +852,16 @@ export const updateModel = (
   // - apiKey: 模型专属密钥（覆盖全局/Provider）
   if (state.models[index].isBuiltIn) {
     const allowedUpdates: Partial<ModelDefinition> = {}
+    const providerIds = new Set(state.providers.map((provider) => provider.id))
     if (updates.isEnabled !== undefined)
       allowedUpdates.isEnabled = updates.isEnabled
     if (updates.params) allowedUpdates.params = updates.params
+    if (
+      updates.providerId !== undefined &&
+      providerIds.has(updates.providerId.trim())
+    ) {
+      allowedUpdates.providerId = updates.providerId.trim()
+    }
     if (updates.apiKey !== undefined) {
       allowedUpdates.apiKey = updates.apiKey?.trim() || undefined
     }

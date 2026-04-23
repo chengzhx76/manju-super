@@ -1015,11 +1015,11 @@ const ShotWorkbench: React.FC<ShotWorkbenchProps> = ({
                           className="w-full h-auto block transition-transform duration-300 group-hover:scale-105"
                           alt={`${selectedGridLayout.label}分镜预览`}
                         />
-                        <div className="absolute inset-0 bg-[var(--bg-base)]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        {/* <div className="absolute inset-0 bg-[var(--bg-base)]/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                           <span className="text-[var(--text-primary)] text-xs font-mono">
                             点击查看并选择镜头
                           </span>
-                        </div>
+                        </div> */}
                       </div>
                     )}
                 </div>

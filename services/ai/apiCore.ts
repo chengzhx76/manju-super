@@ -138,8 +138,20 @@ export const checkApiKey = (
       !!provider?.baseUrl?.toLowerCase().includes('volces.com')
 
     if (isVolcengineProvider) {
-      const dedicatedKey = resolvedModel.apiKey || provider?.apiKey
+      const modelLevelKey = resolvedModel.apiKey?.trim()
+      const providerLevelKey = provider?.apiKey?.trim()
+      const dedicatedKey = modelLevelKey || providerLevelKey
       if (dedicatedKey) return dedicatedKey
+      console.error('[checkApiKey] Volcengine dedicated key missing', {
+        type,
+        requestedModelId: modelId || null,
+        resolvedModelId: resolvedModel.id,
+        resolvedProviderId: resolvedModel.providerId,
+        providerExists: !!provider,
+        providerBaseUrl: provider?.baseUrl || null,
+        hasModelLevelKey: !!modelLevelKey,
+        hasProviderLevelKey: !!providerLevelKey
+      })
       throw new ApiKeyError(
         'Volcengine models require a dedicated API key at model/provider level.'
       )

@@ -68,7 +68,9 @@ const normalizeVideoModelIdForRouting = (videoModel: string): string => {
   const raw = (videoModel || '').trim()
   if (!raw) return 'sora-2'
 
-  const normalized = raw.toLowerCase()
+  const modelIdWithoutProvider =
+    raw.includes(':') && raw.indexOf(':') > 0 ? raw.slice(raw.indexOf(':') + 1) : raw
+  const normalized = modelIdWithoutProvider.toLowerCase()
 
   if (normalized === 'veo_3_1-fast-4k') {
     return 'veo_3_1-fast'
@@ -83,7 +85,7 @@ const normalizeVideoModelIdForRouting = (videoModel: string): string => {
     return 'veo_3_1-fast'
   }
 
-  return raw
+  return modelIdWithoutProvider
 }
 
 const SORA_COMPATIBLE_MODELS = new Set(['sora-2', 'doubao-seedance-1-5-pro'])
@@ -103,7 +105,6 @@ export const resolveVideoModelRouting = (
       prefersNineGridStoryboard: true
     }
   }
-
   if (id.startsWith('doubao-seedance')) {
     return {
       family: 'doubao-task',

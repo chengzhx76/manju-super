@@ -32,10 +32,18 @@ export const sceneIdsMatch = (left: string, right: string): boolean => {
   )
 }
 
-export const findSceneByIdCompat = <T extends Pick<Scene, 'id'>>(
+export function findSceneByIdCompat(
+  scenes: Scene[] | undefined | null,
+  sceneId?: string
+): Scene | undefined
+export function findSceneByIdCompat<T extends Pick<Scene, 'id'>>(
   scenes: T[] | undefined | null,
   sceneId?: string
-): T | undefined => {
+): T | undefined
+export function findSceneByIdCompat<T extends Pick<Scene, 'id'>>(
+  scenes: T[] | undefined | null,
+  sceneId?: string
+): T | undefined {
   const targetId = trimId(sceneId || '')
   if (!targetId || !Array.isArray(scenes)) return undefined
   return (
