@@ -56,9 +56,9 @@ const ApiKeyPage: React.FC<ApiKeyPageProps> = ({
         setVerifyStatus('error')
         setVerifyMessage(result.message)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setVerifyStatus('error')
-      setVerifyMessage(error.message || '验证出错')
+      setVerifyMessage(error instanceof Error ? error.message : '验证出错')
     } finally {
       setIsVerifying(false)
     }

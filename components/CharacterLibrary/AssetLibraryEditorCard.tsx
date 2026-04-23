@@ -81,6 +81,10 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
 }) => {
   const [draft, setDraft] = useState<LibraryAsset>(asset)
   const AssetIcon = getAssetIcon(type)
+  const readField = (target: LibraryAsset, field: string): string => {
+    const value = (target as unknown as Record<string, unknown>)[field]
+    return value == null ? '' : String(value)
+  }
 
   useEffect(() => {
     setDraft(asset)
@@ -89,25 +93,32 @@ const AssetLibraryEditorCard: React.FC<AssetLibraryEditorCardProps> = ({
   const hasChanges = useMemo(() => {
     const fields = EDITABLE_FIELDS[type]
     return fields.some((field) => {
-      const oldValue = ((asset as any)[field] ?? '').toString()
-      const newValue = ((draft as any)[field] ?? '').toString()
+      const oldValue = readField(asset, field)
+      const newValue = readField(draft, field)
       return oldValue !== newValue
     })
   }, [type, asset, draft])
 
   const updateField = (field: string, value: string) => {
-    setDraft((prev) => ({ ...(prev as any), [field]: value }) as LibraryAsset)
+    setDraft((prev) => ({
+      ...(prev as unknown as Record<string, unknown>),
+      [field]: value
+    }) as unknown as LibraryAsset)
   }
 
-  const getValue = (field: string): string =>
-    ((draft as any)[field] ?? '').toString()
-  const previewImage = (draft as any).referenceImage as string | undefined
-  const version = (draft as any).version || 1
+  const getValue = (field: string): string => readField(draft, field)
+  const previewImage = String(
+    (draft as unknown as Record<string, unknown>).referenceImage || ''
+  ).trim()
+  const versionValue = Number(
+    (draft as unknown as Record<string, unknown>).version
+  )
+  const version = Number.isFinite(versionValue) && versionValue > 0 ? versionValue : 1
 
   return (
     <div className="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-xl overflow-hidden hover:border-[var(--border-secondary)] transition-colors">
       <div className="aspect-video bg-[var(--bg-elevated)] relative">
-        {previewImage ? (
+        {previewImage.length > 0 ? (
           <img
             src={previewImage}
             alt={getAssetTitle(type, draft)}

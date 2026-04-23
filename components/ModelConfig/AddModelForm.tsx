@@ -22,7 +22,7 @@ import {
   DEFAULT_VIDEO_PARAMS_DOUBAO_SEEDANCE,
   DEFAULT_AUDIO_PARAMS
 } from '../../types/model'
-import { getProviders, addProvider } from '../../services/modelRegistry'
+import { getProviders } from '../../services/modelRegistry'
 import { useAlert } from '../GlobalAlert'
 
 interface AddModelFormProps {
@@ -36,7 +36,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({
   onSave,
   onCancel
 }) => {
-  const existingProviders = getProviders()
+  const [existingProviders] = useState(() => getProviders())
   const { showAlert } = useAlert()
 
   const [name, setName] = useState('')
@@ -67,7 +67,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({
     if (volcengineProvider) {
       setSelectedProviderId(volcengineProvider.id)
     }
-  }, [type, videoMode])
+  }, [type, videoMode, existingProviders])
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -144,7 +144,7 @@ const AddModelForm: React.FC<AddModelFormProps> = ({
       apiKey: apiKey.trim() || undefined,
       isEnabled: true,
       params
-    } as any
+    }
 
     onSave(model)
   }

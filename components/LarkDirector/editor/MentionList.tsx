@@ -11,16 +11,37 @@ import {
   Video,
   Image as ImageIcon
 } from 'lucide-react'
+import type { MentionItem } from './suggestion'
 
-export default forwardRef((props: any, ref) => {
+type MentionVariant = NonNullable<MentionItem['variants']>[number]
+type MentionDisplayItem = MentionItem & { variantName?: string }
+
+interface MentionCommandPayload {
+  id: string
+  label: string
+  itemData: MentionItem | { type: 'duration'; name: string; value: number }
+}
+
+interface MentionListProps {
+  items?: MentionItem[]
+  command: (payload: MentionCommandPayload) => void
+  allowDurationAction?: boolean
+  onAddFromLibrary?: () => void
+}
+
+export interface MentionListRef {
+  onKeyDown: (payload: { event: KeyboardEvent }) => boolean
+}
+
+const MentionList = forwardRef<MentionListRef, MentionListProps>((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [variationParent, setVariationParent] = useState<any | null>(null)
+  const [variationParent, setVariationParent] = useState<MentionItem | null>(null)
   const [variationParentIndex, setVariationParentIndex] = useState(0)
   const defaultItems = props.items || []
   const variationItems =
     variationParent?.type === 'character' &&
     Array.isArray(variationParent?.variants)
-      ? variationParent.variants.map((variant: any, index: number) => ({
+      ? variationParent.variants.map((variant: MentionVariant, index: number) => ({
           ...variationParent,
           id: `${variationParent.id}::${variant.id || index}`,
           variantName: variant.name,
@@ -47,7 +68,7 @@ export default forwardRef((props: any, ref) => {
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([])
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null)
 
-  const renderFallbackIcon = (item: any) => {
+  const renderFallbackIcon = (item: MentionDisplayItem) => {
     if (item?.type === 'audio')
       return <Music2 className="w-3.5 h-3.5 text-gray-500" />
     if (item?.type === 'video')
@@ -185,7 +206,7 @@ export default forwardRef((props: any, ref) => {
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {visibleItems.length ? (
-          visibleItems.map((item: any, index: number) => (
+          visibleItems.map((item, index: number) => (
             <button
               type="button"
               ref={(el) => {
@@ -271,3 +292,5 @@ export default forwardRef((props: any, ref) => {
     </div>
   )
 })
+
+export default MentionList

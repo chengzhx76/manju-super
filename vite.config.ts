@@ -5,6 +5,8 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import { createNewApiProxyHandler } from './server/newApiProxyCore.mjs'
 import { createTosProxyHandler } from './server/tosProxyCore.mjs'
 
+type RequestInitWithDuplex = RequestInit & { duplex?: 'half' }
+
 const createDevMediaProxyPlugin = (): Plugin => ({
   name: 'dev-media-proxy',
   configureServer(server) {
@@ -138,14 +140,18 @@ const createDevMediaProxyPlugin = (): Plugin => ({
         })
 
         // Keep the original signed URL bytes to avoid signature invalidation.
-        const upstream = await fetch(rawTarget, {
+        const requestInit: RequestInitWithDuplex = {
           method,
           headers: passHeaders,
-          body: ['GET', 'HEAD'].includes(method) ? undefined : (req as any),
+          body:
+            ['GET', 'HEAD'].includes(method)
+              ? undefined
+              : (req as unknown as BodyInit),
           // Required when using Node stream as request body.
           duplex: ['GET', 'HEAD'].includes(method) ? undefined : 'half',
           redirect: 'follow'
-        } as any)
+        }
+        const upstream = await fetch(rawTarget, requestInit)
 
         res.statusCode = upstream.status
         const passthroughHeaders = [
@@ -186,7 +192,13 @@ const createDevNewApiProxyPlugin = (): Plugin => ({
   name: 'dev-new-api-proxy',
   configureServer(server) {
     const handler = createNewApiProxyHandler()
-    server.middlewares.use(handler as any)
+    server.middlewares.use(
+      handler as (
+        req: IncomingMessage,
+        res: ServerResponse,
+        next: (err?: unknown) => void
+      ) => void
+    )
   }
 })
 
@@ -194,7 +206,13 @@ const createDevTosProxyPlugin = (): Plugin => ({
   name: 'dev-tos-proxy',
   configureServer(server) {
     const handler = createTosProxyHandler()
-    server.middlewares.use(handler as any)
+    server.middlewares.use(
+      handler as (
+        req: IncomingMessage,
+        res: ServerResponse,
+        next: (err?: unknown) => void
+      ) => void
+    )
   }
 })
 

@@ -21,9 +21,9 @@ export const getRegionalPrefix = (
 export const handleImageUpload = async (file: File): Promise<string> => {
   try {
     return await convertImageToBase64(file)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('图片上传失败:', e)
-    throw new Error(e.message || '图片上传失败')
+    throw new Error(e instanceof Error ? e.message : '图片上传失败')
   }
 }
 

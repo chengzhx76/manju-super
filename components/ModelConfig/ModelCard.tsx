@@ -43,7 +43,9 @@ const ModelCard: React.FC<ModelCardProps> = ({
   onDelete,
   onSetActive
 }) => {
-  const [editParams, setEditParams] = useState<any>(model.params)
+  const [editParams, setEditParams] = useState<ModelDefinition['params']>(
+    model.params
+  )
   const [editApiKey, setEditApiKey] = useState<string>(model.apiKey || '')
   const [editName, setEditName] = useState<string>(model.name)
   const [editApiModel, setEditApiModel] = useState<string>(
@@ -70,10 +72,13 @@ const ModelCard: React.FC<ModelCardProps> = ({
     setEditDescription(model.description || '')
   }, [model])
 
-  const handleParamChange = (key: string, value: any) => {
-    const newParams = { ...editParams, [key]: value }
+  const handleParamChange = (key: string, value: unknown) => {
+    const newParams = {
+      ...(editParams as Record<string, unknown>),
+      [key]: value
+    } as unknown as ModelDefinition['params']
     setEditParams(newParams)
-    onUpdate({ params: newParams } as any)
+    onUpdate({ params: newParams } as Partial<ModelDefinition>)
   }
 
   const handleToggleEnabled = () => {

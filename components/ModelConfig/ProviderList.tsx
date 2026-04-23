@@ -12,7 +12,7 @@ import {
   Key,
   Loader2
 } from 'lucide-react'
-import { ModelProvider } from '../../types/model'
+import { ModelDefinition, ModelProvider } from '../../types/model'
 import {
   getProviders,
   addProvider,
@@ -42,7 +42,7 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
   )
   const { showAlert } = useAlert()
 
-  const [models, setModels] = useState<any[]>([])
+  const [models, setModels] = useState<ModelDefinition[]>([])
 
   useEffect(() => {
     loadProviders()
@@ -165,8 +165,9 @@ const ProviderList: React.FC<ProviderListProps> = ({ onRefresh }) => {
       } else {
         showAlert(`验证失败: ${result.message}`, { type: 'error' })
       }
-    } catch (error: any) {
-      showAlert(`验证异常: ${error.message}`, { type: 'error' })
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error)
+      showAlert(`验证异常: ${message}`, { type: 'error' })
     } finally {
       setVerifyingProviderId(null)
     }
