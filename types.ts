@@ -259,6 +259,7 @@ export interface VideoInterval {
   duration: number
   motionStrength: number
   videoUrl?: string // 视频数据，存储为base64格式（data:video/mp4;base64,...），避免URL过期问题
+  sourceVideoUrl?: string // 原始远程视频地址（用于追踪与调试）
   videoPrompt?: string // 视频生成时使用的提示词
   promptVersions?: PromptVersion[] // Prompt edit history with rollback support
   status: 'pending' | 'generating' | 'completed' | 'failed'
@@ -549,7 +550,12 @@ export type AspectRatio = '16:9' | '9:16' | '1:1'
 /**
  * 视频时长类型（仅异步视频模型支持）
  */
-export type VideoDuration = 4 | 5 | 8 | 10 | 12 | 15
+export type VideoDuration = -1 | 4 | 5 | 8 | 10 | 12 | 15
+
+/**
+ * 视频分辨率枚举
+ */
+export type VideoResolution = '480p' | '720p' | '1080p'
 
 /**
  * 模型提供商配置

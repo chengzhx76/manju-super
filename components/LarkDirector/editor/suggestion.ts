@@ -16,6 +16,7 @@ export interface MentionItem {
   type: 'character' | 'scene' | 'prop' | 'image' | 'video' | 'audio'
   name: string
   desc: string
+  assetId?: string
   image?: string
   url?: string
   variantName?: string
@@ -23,6 +24,7 @@ export interface MentionItem {
     id: string
     name: string
     desc: string
+    assetId?: string
     image?: string
   }>
 }
@@ -85,12 +87,17 @@ const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
   })
 }
 
+const filterMentionItemsWithImage = (items: MentionItem[]): MentionItem[] => {
+  return items.filter((item) => String(item?.image || '').trim().length > 0)
+}
+
 const toCharacterVariants = (character: Character): MentionItem['variants'] => {
   const baseDesc = String(character?.visualPrompt || '').trim() || '基础形象'
   const baseVariant = {
     id: `${character?.id || character?.name || 'character'}::base`,
     name: '基础形象',
     desc: baseDesc,
+    assetId: character?.assetId || '',
     image: character?.referenceImage
   }
   const derivedVariants = (character?.variations || [])
@@ -105,6 +112,7 @@ const toCharacterVariants = (character: Character): MentionItem['variants'] => {
           `${character?.id || character?.name || 'character'}::variation-${index + 1}`,
         name: variantName,
         desc: variantDesc,
+        assetId: variation?.assetId || character?.assetId || '',
         image: variation?.referenceImage || character?.referenceImage
       }
     })
@@ -125,6 +133,7 @@ export function buildProjectLibraryMentionItems(
       type: 'character' as const,
       name: c.name,
       desc: '基础形象-基础形象',
+      assetId: c.assetId || '',
       image: c.referenceImage,
       variants: toCharacterVariants(c)
     })),
@@ -133,6 +142,7 @@ export function buildProjectLibraryMentionItems(
       type: 'scene' as const,
       name: s.location,
       desc: `${s.location}_0`,
+      assetId: s.assetId || '',
       image: s.referenceImage
     })),
     ...allProps.map((p) => ({
@@ -140,16 +150,18 @@ export function buildProjectLibraryMentionItems(
       type: 'prop' as const,
       name: p.name,
       desc: p.category || '道具',
+      assetId: p.assetId || '',
       image: p.referenceImage
     }))
   ]
+  const resourcesWithImage = filterMentionItemsWithImage(resources)
 
   const normalizedQuery = (query || '').trim().toLowerCase()
   if (!normalizedQuery) {
-    return dedupeMentionItems(resources).slice(0, 80)
+    return dedupeMentionItems(resourcesWithImage).slice(0, 80)
   }
 
-  return dedupeMentionItems(resources)
+  return dedupeMentionItems(resourcesWithImage)
     .filter((item) => (item.name || '').toLowerCase().includes(normalizedQuery))
     .slice(0, 80)
 }
@@ -173,6 +185,7 @@ export function buildMentionItems(
       type: 'character' as const,
       name: c.name,
       desc: '基础形象-基础形象',
+      assetId: c.assetId || '',
       image: c.referenceImage,
       variants: toCharacterVariants(c)
     })),
@@ -181,6 +194,7 @@ export function buildMentionItems(
       type: 'scene' as const,
       name: s.location,
       desc: `${s.location}_0`,
+      assetId: s.assetId || '',
       image: s.referenceImage
     })),
     ...allProps.map((p) => ({
@@ -188,6 +202,7 @@ export function buildMentionItems(
       type: 'prop' as const,
       name: p.name,
       desc: p.category || '道具',
+      assetId: p.assetId || '',
       image: p.referenceImage
     })),
     ...allMediaAssets.map((m) => {
@@ -196,19 +211,21 @@ export function buildMentionItems(
         id: m.id || m.name,
         type: mediaType,
         name: m.name,
+        assetId: m.relayAssetId || '',
         url: resolveMediaResourceUrl(m),
         image: mediaType === 'image' ? resolveMediaPreviewUrl(m) : undefined,
         desc: mediaTypeLabelMap[mediaType] || '媒体素材'
       }
     })
   ]
+  const resourcesWithImage = filterMentionItemsWithImage(resources)
 
   const normalizedQuery = (query || '').trim().toLowerCase()
   if (!normalizedQuery) {
-    return dedupeMentionItems(resources).slice(0, 80)
+    return dedupeMentionItems(resourcesWithImage).slice(0, 80)
   }
 
-  return dedupeMentionItems(resources)
+  return dedupeMentionItems(resourcesWithImage)
     .filter((item) => (item.name || '').toLowerCase().includes(normalizedQuery))
     .slice(0, 80)
 }

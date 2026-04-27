@@ -15,8 +15,7 @@ import {
   runEpisodeTitleFixMigration
 } from './migrationService'
 import {
-  materializeProjectVideosForExport,
-  migrateProjectVideosToOPFS
+  materializeProjectVideosForExport
 } from './videoStorageService'
 import { reconcileShotSceneIds } from './storyboardIdUtils'
 import { sanitizePromptTemplateOverrides } from './promptTemplateService'
@@ -180,17 +179,7 @@ const normalizeEpisode = (ep: Episode): Episode => {
 const normalizeAndPersistEpisodeVideos = async (
   ep: Episode
 ): Promise<Episode> => {
-  const normalized = normalizeEpisode(ep)
-  try {
-    const { project } = await migrateProjectVideosToOPFS(normalized)
-    return project as Episode
-  } catch (error) {
-    console.warn(
-      'Normalize episode video storage failed, use original episode data.',
-      error
-    )
-    return normalized
-  }
+  return normalizeEpisode(ep)
 }
 
 // =============================================
@@ -360,28 +349,7 @@ export const loadEpisode = async (id: string): Promise<Episode> => {
     req.onsuccess = () => {
       if (req.result) {
         const normalized = normalizeEpisode(req.result as Episode)
-        void (async () => {
-          try {
-            const { project: migrated, changed } =
-              await migrateProjectVideosToOPFS(normalized)
-            const migratedEpisode = migrated as Episode
-            if (changed) {
-              void saveEpisode(migratedEpisode).catch((error) => {
-                console.warn(
-                  'Persist OPFS migration for episode failed.',
-                  error
-                )
-              })
-            }
-            resolve(migratedEpisode)
-          } catch (error) {
-            console.warn(
-              'Episode OPFS migration failed, fallback to original episode data.',
-              error
-            )
-            resolve(normalized)
-          }
-        })()
+        resolve(normalized)
       } else reject(new Error('Episode not found'))
     }
     req.onerror = () => reject(req.error)
@@ -734,7 +702,8 @@ export const importIndexedDBData = async (
       payload.stores.projects.forEach((p: ProjectState) => {
         if (p.shots) {
           p.shots.forEach((s: Shot) => {
-            if (s.videoModel === 'veo-r2v' || s.videoModel === 'veo') {
+            const legacyVideoModel = String(s.videoModel || '').trim()
+            if (legacyVideoModel === 'veo-r2v' || legacyVideoModel === 'veo') {
               s.videoModel = 'veo_3_1-fast'
             }
           })

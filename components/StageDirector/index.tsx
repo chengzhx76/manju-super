@@ -73,7 +73,6 @@ import {
   getActiveImageModel,
   getActiveAudioModel
 } from '../../services/modelRegistry'
-import { persistVideoReference } from '../../services/videoStorageService'
 import {
   runKeyframePreflight,
   runVideoPreflight,
@@ -139,12 +138,20 @@ const StageDirector: React.FC<Props> = ({
   const [imageFlowLogs, setImageFlowLogs] = useState<string[]>([])
   const [isImageFlowRunning, setIsImageFlowRunning] = useState(false)
   const [isBatchCancelRequested, setIsBatchCancelRequested] = useState(false)
+  const [batchTaskType, setBatchTaskType] = useState<'image' | 'video' | null>(
+    null
+  )
+  const [videoBatchConcurrency, setVideoBatchConcurrency] = useState<number>(2)
+  const [lastFailedVideoShotIds, setLastFailedVideoShotIds] = useState<string[]>(
+    []
+  )
   const [isImageFlowHovered, setIsImageFlowHovered] = useState(false)
   const [isImageFlowFadingOut, setIsImageFlowFadingOut] = useState(false)
   const [imageFlowDoneCountdown, setImageFlowDoneCountdown] = useState<
     number | null
   >(null)
   const batchGenerateCancelRef = useRef(false)
+  const videoGenerateInFlightRef = useRef<Set<string>>(new Set())
   const hasRecoveredGeneratingStateRef = useRef(false)
 
   // 关键帧生成使用的横竖屏比例（从持久化配置读取）
@@ -340,6 +347,9 @@ const StageDirector: React.FC<Props> = ({
     project.shots.every(
       (s) => s.keyframes?.find((k) => k.type === 'start')?.imageUrl
     )
+  const allVideosGenerated =
+    project.shots.length > 0 &&
+    project.shots.every((s) => Boolean(s.interval?.videoUrl))
 
   /**
    * 组件加载时，检测并重置卡住的生成状态
@@ -522,14 +532,29 @@ const StageDirector: React.FC<Props> = ({
     shotId: string
     url?: string
     currentAssetId?: string
-  }) => {
-    if (!seriesProject) return
+    strict?: boolean
+  }): Promise<{
+    url?: string
+    assetId?: string
+    objectKey?: string
+    tosStatus?: 'success' | 'failed' | 'skipped'
+    relayStatus?: 'success' | 'failed' | 'skipped'
+  } | null> => {
+    if (!seriesProject) {
+      if (params.strict) {
+        throw new Error('当前项目上下文不可用，无法同步到对象存储')
+      }
+      return null
+    }
     const tosEnabled = hasVolcengineTosConfig()
-    const relayEnabled = hasAssetRelayConfig()
+    const relayEnabled = params.kind !== 'video' && hasAssetRelayConfig()
     if (!tosEnabled) {
       appendImageFlowLog('对象存储未配置，无法继续（请先完成对象存储配置）')
       showAlert('对象存储未配置，无法同步资源', { type: 'error' })
-      return
+      if (params.strict) {
+        throw new Error('对象存储未配置，无法同步资源')
+      }
+      return null
     }
     let tosUploadStartedLogged = false
     let tosUploadSuccessLogged = false
@@ -544,6 +569,7 @@ const StageDirector: React.FC<Props> = ({
         localId: params.localId,
         url: params.url,
         currentAssetId: params.currentAssetId,
+        skipRelayUpload: params.kind === 'video',
         onStage: (stage) => {
           if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
             tosUploadStartedLogged = true
@@ -563,6 +589,21 @@ const StageDirector: React.FC<Props> = ({
           }
         }
       })
+      if (params.kind === 'video' && result.url && !params.strict) {
+        updateShot(params.shotId, (shot) =>
+          shot.interval
+            ? {
+                ...shot,
+                interval: {
+                  ...shot.interval,
+                  videoUrl: result.url,
+                  sourceVideoUrl:
+                    shot.interval.sourceVideoUrl || params.url || result.url
+                }
+              }
+            : shot
+        )
+      }
       if (result.skipped) {
         if (
           (result.tosStatus === 'success' || result.tosStatus === 'failed') &&
@@ -598,7 +639,20 @@ const StageDirector: React.FC<Props> = ({
             result.relayMessage || '上传资源到素材库失败（请手动同步）'
           )
         }
-        return
+        if (params.strict) {
+          throw new Error(
+            result.tosMessage ||
+              result.reason ||
+              '上传资源到对象存储失败，视频回填中止'
+          )
+        }
+        return {
+          url: result.url,
+          assetId: result.assetId,
+          objectKey: result.objectKey,
+          tosStatus: result.tosStatus,
+          relayStatus: result.relayStatus
+        }
       }
       if (result.groupId && seriesProject.assetGroupId !== result.groupId) {
         updateSeriesProject({ assetGroupId: result.groupId })
@@ -653,6 +707,13 @@ const StageDirector: React.FC<Props> = ({
       } else if (!relayEnabled || result.relayStatus === 'skipped') {
         appendImageFlowLog(result.relayMessage || '素材库未配置，跳过')
       }
+      return {
+        url: result.url,
+        assetId: result.assetId,
+        objectKey: result.objectKey,
+        tosStatus: result.tosStatus,
+        relayStatus: result.relayStatus
+      }
     } catch (error) {
       appendImageFlowLog(
         `上传失败（${params.kind}）：${error instanceof Error ? error.message : '未知错误'}`
@@ -661,6 +722,10 @@ const StageDirector: React.FC<Props> = ({
         `素材库同步失败：${error instanceof Error ? error.message : '未知错误'}`,
         { type: 'warning' }
       )
+      if (params.strict) {
+        throw error
+      }
+      return null
     }
   }
 
@@ -1023,8 +1088,16 @@ const StageDirector: React.FC<Props> = ({
     shot: Shot,
     aspectRatio: AspectRatio = '16:9',
     duration: VideoDuration = 8,
-    modelId?: string
-  ) => {
+    modelId?: string,
+    options?: { silent?: boolean }
+  ): Promise<boolean> => {
+    const silent = !!options?.silent
+    if (!shot?.id) return false
+    if (videoGenerateInFlightRef.current.has(shot.id)) return false
+    if (shot.interval?.status === 'generating') return false
+
+    videoGenerateInFlightRef.current.add(shot.id)
+    try {
     const sKf = shot.keyframes?.find((k) => k.type === 'start')
     const eKf = shot.keyframes?.find((k) => k.type === 'end')
     if (shot.interval?.assetId) {
@@ -1047,7 +1120,10 @@ const StageDirector: React.FC<Props> = ({
 
     // 必须有起始帧
     if (!sKf?.imageUrl) {
-      return showAlert('请先生成起始帧！', { type: 'warning' })
+      if (!silent) {
+        showAlert('请先生成起始帧！', { type: 'warning' })
+      }
+      return false
     }
 
     const projectLanguage =
@@ -1156,11 +1232,13 @@ const StageDirector: React.FC<Props> = ({
     })
 
     if (!preflightResult.canProceed) {
-      showAlert(
-        `视频预检未通过：\n${formatLintIssues(preflightResult.issues)}`,
-        { type: 'warning' }
-      )
-      return
+      if (!silent) {
+        showAlert(
+          `视频预检未通过：\n${formatLintIssues(preflightResult.issues)}`,
+          { type: 'warning' }
+        )
+      }
+      return false
     }
 
     const nonErrorIssues = preflightResult.issues.filter(
@@ -1204,26 +1282,47 @@ const StageDirector: React.FC<Props> = ({
     }))
 
     try {
-      const videoUrl = await generateVideo(
-        videoPrompt,
+      const generatedVideo = await generateVideo(
+        [
+          {
+            type: 'text',
+            text: videoPrompt
+          }
+        ],
         routedFrames.startImage,
         routedFrames.endImage,
         selectedModelInput,
         aspectRatio,
         duration
       )
-      const persistedVideoUrl = await persistVideoReference(videoUrl, {
-        projectId: project.projectId || project.id,
-        episodeId: project.id,
-        shotId: shot.id
+      const videoUrl = generatedVideo.videoUrl
+      const generatedDuration =
+        typeof generatedVideo.durationSec === 'number' &&
+        Number.isFinite(generatedVideo.durationSec) &&
+        generatedVideo.durationSec > 0
+          ? generatedVideo.durationSec
+          : duration
+      const relayResult = await syncRelayAsset({
+        kind: 'video',
+        localId: intervalId,
+        shotId: shot.id,
+        url: videoUrl,
+        currentAssetId: shot.interval?.assetId,
+        strict: true
       })
-
+      const finalVideoUrl = String(relayResult?.url || '').trim()
+      if (!finalVideoUrl) {
+        throw new Error('对象存储上传完成但未返回视频URL，无法回填')
+      }
       updateShot(shot.id, (s) => ({
         ...s,
         interval: s.interval
           ? {
               ...s.interval,
-              videoUrl: persistedVideoUrl,
+              videoUrl: finalVideoUrl,
+              sourceVideoUrl: videoUrl,
+              duration: generatedDuration,
+              assetId: relayResult?.assetId || s.interval.assetId,
               status: 'completed',
               promptVersions: intervalPromptVersions
             }
@@ -1231,21 +1330,17 @@ const StageDirector: React.FC<Props> = ({
               id: intervalId,
               startKeyframeId: sKf?.id || '',
               endKeyframeId: routedEndKeyframeId,
-              duration: duration,
+              duration: generatedDuration,
               motionStrength: 5,
               videoPrompt,
               promptVersions: intervalPromptVersions,
-              videoUrl: persistedVideoUrl,
+              videoUrl: finalVideoUrl,
+              sourceVideoUrl: videoUrl,
+              assetId: relayResult?.assetId,
               status: 'completed'
             }
       }))
-      await syncRelayAsset({
-        kind: 'video',
-        localId: intervalId,
-        shotId: shot.id,
-        url: videoUrl,
-        currentAssetId: shot.interval?.assetId
-      })
+      return true
     } catch (e: unknown) {
       console.error(e)
       updateShot(shot.id, (s) => ({
@@ -1268,10 +1363,16 @@ const StageDirector: React.FC<Props> = ({
             }
       }))
 
-      if (onApiKeyError && onApiKeyError(e)) return
-      showAlert(`视频生成失败: ${formatUserFriendlyError(e, '请稍后重试。')}`, {
-        type: 'error'
-      })
+      if (onApiKeyError && onApiKeyError(e)) return false
+      if (!silent) {
+        showAlert(`视频生成失败: ${formatUserFriendlyError(e, '请稍后重试。')}`, {
+          type: 'error'
+        })
+      }
+      return false
+    }
+    } finally {
+      videoGenerateInFlightRef.current.delete(shot.id)
     }
   }
 
@@ -1454,6 +1555,7 @@ const StageDirector: React.FC<Props> = ({
   ) => {
     batchGenerateCancelRef.current = false
     setIsBatchCancelRequested(false)
+    setBatchTaskType('image')
     startImageFlow(
       isRegenerate ? '正在重新生成所有首帧图...' : '正在批量生成缺失首帧图...',
       true
@@ -1494,6 +1596,7 @@ const StageDirector: React.FC<Props> = ({
         appendImageFlowLog(`失败：${shotLabel}`)
         if (onApiKeyError && onApiKeyError(e)) {
           setBatchProgress(null)
+          setBatchTaskType(null)
           completeImageFlow('生成失败', 5)
           setIsBatchCancelRequested(false)
           return
@@ -1504,12 +1607,170 @@ const StageDirector: React.FC<Props> = ({
     setBatchProgress(null)
     if (batchGenerateCancelRef.current) {
       appendImageFlowLog('批量任务已取消。')
+      setBatchTaskType(null)
       completeImageFlow('生成失败', 4)
       setIsBatchCancelRequested(false)
       return
     }
+    setBatchTaskType(null)
     completeImageFlow('批量首帧图生成完成', 3)
     setIsBatchCancelRequested(false)
+  }
+
+  const handleBatchGenerateVideos = async () => {
+    const isRegenerate = allVideosGenerated
+    const collectTargets = (): Shot[] => {
+      if (isRegenerate) return [...project.shots]
+      return project.shots.filter(
+        (shot) => !shot.interval?.videoUrl && shot.interval?.status !== 'generating'
+      )
+    }
+
+    const execute = async () => {
+      const targets = collectTargets()
+      if (targets.length === 0) {
+        showAlert('没有可批量生成的视频镜头', { type: 'warning' })
+        return
+      }
+      await executeBatchGenerateVideos(targets, isRegenerate)
+    }
+
+    if (isRegenerate) {
+      showAlert('确定要重新生成所有镜头视频吗？这将覆盖现有视频。', {
+        type: 'warning',
+        showCancel: true,
+        onConfirm: () => {
+          void execute()
+        }
+      })
+      return
+    }
+
+    await execute()
+  }
+
+  const handleRetryFailedBatchVideos = async () => {
+    if (lastFailedVideoShotIds.length === 0) {
+      showAlert('没有可重试的失败视频镜头', { type: 'warning' })
+      return
+    }
+    const failedTargets = project.shots.filter((shot) =>
+      lastFailedVideoShotIds.includes(shot.id)
+    )
+    if (failedTargets.length === 0) {
+      showAlert('失败镜头不存在或已被删除', { type: 'warning' })
+      setLastFailedVideoShotIds([])
+      return
+    }
+    await executeBatchGenerateVideos(failedTargets, false)
+  }
+
+  const executeBatchGenerateVideos = async (
+    shotsToProcess: Shot[],
+    isRegenerate: boolean
+  ) => {
+    const workerConcurrency = Math.max(1, Math.min(videoBatchConcurrency, 4))
+    batchGenerateCancelRef.current = false
+    setIsBatchCancelRequested(false)
+    setBatchTaskType('video')
+    setLastFailedVideoShotIds([])
+    startImageFlow(
+      isRegenerate ? '正在重新生成所有视频...' : '正在批量生成缺失视频...',
+      true
+    )
+    appendImageFlowLog(`本次视频任务镜头数：${shotsToProcess.length}`)
+    appendImageFlowLog(`并发数：${workerConcurrency}`)
+    setBatchProgress({
+      current: 0,
+      total: shotsToProcess.length,
+      message: isRegenerate
+        ? '正在重新生成所有视频...'
+        : '正在批量生成缺失视频...'
+    })
+
+    let cursor = 0
+    let completed = 0
+    let succeeded = 0
+    let failed = 0
+    let skipped = 0
+    const failedIds: string[] = []
+
+    const updateProgress = (message: string) => {
+      setBatchProgress({
+        current: completed,
+        total: shotsToProcess.length,
+        message
+      })
+    }
+
+    const worker = async () => {
+      while (!batchGenerateCancelRef.current) {
+        const current = cursor++
+        if (current >= shotsToProcess.length) break
+        const shot = shotsToProcess[current]
+        const shotLabel = `SHOT ${String(current + 1).padStart(3, '0')}`
+        appendImageFlowLog(`开始生视频：${shotLabel}`)
+
+        const hasStartFrame = Boolean(
+          shot.keyframes?.find((k) => k.type === 'start')?.imageUrl
+        )
+        if (!hasStartFrame) {
+          skipped++
+          completed++
+          appendImageFlowLog(`跳过：${shotLabel}（缺少首帧）`)
+          updateProgress(`正在生成镜头 ${completed}/${shotsToProcess.length}...`)
+          continue
+        }
+
+        const selectedModelId = shot.videoModel || DEFAULTS.videoModel
+        const selectedDuration = (Number(shot.interval?.duration) ||
+          getModelDefaultDuration(selectedModelId)) as VideoDuration
+
+        const ok = await handleGenerateVideo(
+          shot,
+          keyframeAspectRatio,
+          selectedDuration,
+          selectedModelId,
+          { silent: true }
+        )
+        if (ok) {
+          succeeded++
+          appendImageFlowLog(`完成：${shotLabel}`)
+        } else {
+          failed++
+          failedIds.push(shot.id)
+          appendImageFlowLog(`失败：${shotLabel}`)
+        }
+
+        completed++
+        updateProgress(`正在生成镜头 ${completed}/${shotsToProcess.length}...`)
+      }
+    }
+
+    try {
+      const workerCount = Math.max(
+        1,
+        Math.min(workerConcurrency, shotsToProcess.length)
+      )
+      await Promise.all(Array.from({ length: workerCount }, () => worker()))
+    } finally {
+      setBatchProgress(null)
+      setBatchTaskType(null)
+      setIsBatchCancelRequested(false)
+    }
+
+    setLastFailedVideoShotIds(failedIds)
+
+    if (batchGenerateCancelRef.current) {
+      appendImageFlowLog('批量视频任务已取消。')
+      completeImageFlow('批量视频已取消', 4)
+      return
+    }
+
+    appendImageFlowLog(
+      `视频批量完成：成功 ${succeeded}，失败 ${failed}，跳过 ${skipped}`
+    )
+    completeImageFlow('批量视频生成完成', 5)
   }
 
   /**
@@ -2525,7 +2786,11 @@ const StageDirector: React.FC<Props> = ({
                 disabled={isBatchCancelRequested}
                 className="rounded border border-zinc-400/60 px-2 py-1 text-[11px] text-white/90 transition-colors hover:border-white hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isBatchCancelRequested ? '取消中...' : '取消批量生图'}
+                {isBatchCancelRequested
+                  ? '取消中...'
+                  : batchTaskType === 'video'
+                    ? '取消批量生成视频'
+                    : '取消批量生图'}
               </button>
             </div>
           )}
@@ -2545,9 +2810,9 @@ const StageDirector: React.FC<Props> = ({
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-3">
             <LayoutGrid className="w-5 h-5 text-[var(--accent)]" />
-            导演工作台
+            分镜设计
             <span className="text-xs text-[var(--text-muted)] font-mono font-normal uppercase tracking-wider bg-[var(--bg-base)]/30 px-2 py-1 rounded">
-              Director Workbench
+              Shot Design
             </span>
           </h2>
         </div>
@@ -2599,6 +2864,26 @@ const StageDirector: React.FC<Props> = ({
             {project.shots.filter((s) => s.interval?.videoUrl).length} /{' '}
             {project.shots.length} 完成
           </span>
+          <label className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
+            <span>视频并发</span>
+            <select
+              value={videoBatchConcurrency}
+              onChange={(e) =>
+                setVideoBatchConcurrency(
+                  Number(e.target.value) >= 1 && Number(e.target.value) <= 4
+                    ? Number(e.target.value)
+                    : 2
+                )
+              }
+              disabled={!!batchProgress}
+              className="rounded border border-[var(--border-secondary)] bg-[var(--bg-surface)] px-2 py-1 text-xs text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+              <option value={4}>4</option>
+            </select>
+          </label>
           <button
             onClick={handleBatchGenerateImages}
             disabled={!!batchProgress}
@@ -2610,6 +2895,25 @@ const StageDirector: React.FC<Props> = ({
           >
             <Sparkles className="w-3 h-3" />
             {allStartFramesGenerated ? '重新生成所有首帧' : '批量生成首帧'}
+          </button>
+          <button
+            onClick={handleBatchGenerateVideos}
+            disabled={!!batchProgress}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 ${
+              allVideosGenerated
+                ? 'bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)]'
+                : 'bg-[var(--btn-primary-bg)] text-[var(--btn-primary-text)] hover:bg-[var(--btn-primary-hover)] shadow-lg shadow-[var(--btn-primary-shadow)]'
+            }`}
+          >
+            <VideoIcon className="w-3 h-3" />
+            {allVideosGenerated ? '重新生成所有视频' : '批量生成视频'}
+          </button>
+          <button
+            onClick={handleRetryFailedBatchVideos}
+            disabled={!!batchProgress || lastFailedVideoShotIds.length === 0}
+            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            失败重试({lastFailedVideoShotIds.length})
           </button>
         </div>
       </div>

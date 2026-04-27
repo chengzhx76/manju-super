@@ -131,7 +131,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     if (!selectedModel.params.supportedDurations.includes(duration)) {
       setDuration(selectedModel.params.defaultDuration)
     }
-  }, [selectedModelId])
+  }, [selectedModel, aspectRatio, duration])
 
   useEffect(() => {
     if (!shot.videoModel) return
@@ -334,7 +334,11 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
 
       {hasVideo ? (
         <div className="w-full aspect-video bg-[var(--bg-base)] rounded-lg overflow-hidden border border-[var(--border-secondary)] relative shadow-lg">
-          <video src={resolvedVideoSrc} controls className="w-full h-full" />
+          <video
+            src={resolvedVideoSrc}
+            controls
+            className="w-full h-full object-contain bg-black"
+          />
         </div>
       ) : (
         <div className="w-full aspect-video bg-[var(--nav-hover-bg)] rounded-lg border border-dashed border-[var(--border-primary)] flex items-center justify-center">

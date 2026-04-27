@@ -3,7 +3,7 @@
  * 包含同步（chat/completions）和异步（/v1/videos、任务接口）模式
  */
 
-import { AspectRatio, VideoDuration } from '../../types'
+import { AspectRatio, VideoDuration, VideoResolution } from '../../types'
 import {
   retryOperation,
   checkApiKey,
@@ -11,11 +11,15 @@ import {
   resolveModel,
   resolveRequestModel,
   parseHttpError,
-  convertVideoUrlToBase64,
   resizeImageToSize,
-  getSoraVideoSize
+  convertVideoUrlToBase64
 } from './apiCore'
 import { toFriendlyModerationMessage } from '../errorMessageService'
+
+export interface GeneratedVideoResult {
+  videoUrl: string
+  durationSec?: number
+}
 
 const VOLCENGINE_TASK_DEFAULT_ENDPOINT = '/api/v3/contents/generations/tasks'
 const VOLCENGINE_DEFAULT_MODEL = 'doubao-seedance-1-5-pro-251215'
@@ -38,20 +42,52 @@ const mapVolcengineRatio = (
   return aspectRatio === '9:16' ? '9:16' : '16:9'
 }
 
-const tryConvertVideoUrlToBase64 = async (
-  videoUrl: string,
-  label: string
-): Promise<string> => {
-  try {
-    const videoBase64 = await convertVideoUrlToBase64(videoUrl)
-    console.log(`✅ ${label} 视频已转换为base64格式`)
-    return videoBase64
-  } catch (error: unknown) {
-    // 浏览器直接请求 TOS 常出现 CORS，保留 URL 继续流程，避免整次生成失败
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn(`⚠️ ${label} 视频转base64失败，回退为原始URL: ${message}`)
-    return videoUrl
+const resolveVideoSizeByResolution = (
+  aspectRatio: AspectRatio,
+  resolution: VideoResolution
+): string => {
+  const normalizedResolution: VideoResolution =
+    resolution === '480p' || resolution === '1080p' ? resolution : '720p'
+  const sizeMap: Record<AspectRatio, Record<VideoResolution, string>> = {
+    '16:9': {
+      '480p': '854x480',
+      '720p': '1280x720',
+      '1080p': '1920x1080'
+    },
+    '9:16': {
+      '480p': '480x854',
+      '720p': '720x1280',
+      '1080p': '1080x1920'
+    },
+    '1:1': {
+      '480p': '480x480',
+      '720p': '720x720',
+      '1080p': '1080x1080'
+    }
   }
+  return sizeMap[aspectRatio][normalizedResolution]
+}
+
+const normalizeDurationSec = (value: unknown): number | undefined => {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num <= 0) return undefined
+  return num
+}
+
+const extractDurationFromTaskPayload = (payload: unknown): number | undefined => {
+  const candidatePaths = [
+    'duration',
+    'data.duration',
+    'content.duration',
+    'result.duration',
+    'output.duration'
+  ]
+  for (const path of candidatePaths) {
+    const value = getNestedValue(payload, path)
+    const duration = normalizeDurationSec(value)
+    if (duration) return duration
+  }
+  return undefined
 }
 
 // ============================================
@@ -69,6 +105,7 @@ const generateVideoAsync = async (
   apiKey: string,
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8,
+  resolution: VideoResolution = '720p',
   modelName: string = 'sora-2'
 ): Promise<string> => {
   let references = [startImageBase64, endImageBase64].filter(
@@ -91,10 +128,10 @@ const generateVideoAsync = async (
   }
 
   console.log(
-    `🎬 使用异步模式生成视频 (${resolvedModelName}, ${aspectRatio}, ${duration}秒)...`
+    `🎬 使用异步模式生成视频 (${resolvedModelName}, ${aspectRatio}, ${resolution}, ${duration}秒)...`
   )
 
-  const videoSize = getSoraVideoSize(aspectRatio)
+  const videoSize = resolveVideoSizeByResolution(aspectRatio, resolution)
   const [VIDEO_WIDTH, VIDEO_HEIGHT] = videoSize.split('x').map(Number)
 
   console.log(`📐 视频尺寸: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}`)
@@ -220,7 +257,7 @@ const generateVideoAsync = async (
     )
 
     if (status === 'completed' || status === 'succeeded') {
-      videoUrlFromStatus = statusData.video_url || statusData.videoUrl || null
+      videoUrlFromStatus = extractVideoUrlFromTaskPayload(statusData)
       if (statusData.id && statusData.id.startsWith('video_')) {
         videoId = statusData.id
       } else {
@@ -252,7 +289,7 @@ const generateVideoAsync = async (
   console.log(`✅ ${resolvedModelName} 视频生成完成，视频ID:`, videoId)
 
   if (videoUrlFromStatus) {
-    return tryConvertVideoUrlToBase64(videoUrlFromStatus, resolvedModelName)
+    return videoUrlFromStatus
   }
 
   // Step 3: 下载视频内容
@@ -319,7 +356,7 @@ const generateVideoAsync = async (
           throw new Error('未获取到视频下载地址')
         }
 
-        return tryConvertVideoUrlToBase64(videoUrl, resolvedModelName)
+        return videoUrl
       }
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -365,6 +402,21 @@ const safeJsonParse = async (
   }
 }
 
+export type VideoPromptContentItem =
+  | { type: 'text'; text: string; role?: string }
+  | { type: 'image_url'; image_url: { url: string }; role?: string }
+  | { type: 'video_url'; video_url: { url: string }; role?: string }
+  | { type: 'audio_url'; audio_url: { url: string }; role?: string }
+
+const toPromptText = (prompt: string | VideoPromptContentItem[]): string => {
+  if (typeof prompt === 'string') return prompt
+  return prompt
+    .filter((item) => item.type === 'text')
+    .map((item) => item.text)
+    .join('\n')
+    .trim()
+}
+
 const getNestedValue = (obj: unknown, path: string): unknown => {
   return path.split('.').reduce<unknown>((acc, key) => {
     if (typeof acc === 'object' && acc !== null && key in acc) {
@@ -404,16 +456,17 @@ const extractVideoUrlFromTaskPayload = (payload: unknown): string | null => {
  * 流程：1) POST 创建任务 2) GET 轮询任务 3) 下载 video_url
  */
 const generateVideoVolcengineTask = async (
-  prompt: string,
+  prompt: string | VideoPromptContentItem[],
   startImageBase64: string | undefined,
   endImageBase64: string | undefined,
   apiKey: string,
   apiBase: string,
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 5,
+  resolution: VideoResolution = '720p',
   modelName: string = VOLCENGINE_DEFAULT_MODEL,
   endpoint: string = VOLCENGINE_TASK_DEFAULT_ENDPOINT
-): Promise<string> => {
+): Promise<GeneratedVideoResult> => {
   const taskEndpoint = normalizeEndpoint(
     endpoint,
     VOLCENGINE_TASK_DEFAULT_ENDPOINT
@@ -437,15 +490,14 @@ const generateVideoVolcengineTask = async (
     return `data:image/png;base64,${clean}`
   }
 
-  const content: Array<
-    | { type: 'text'; text: string }
-    | { type: 'image_url'; image_url: { url: string } }
-  > = [
-    {
-      type: 'text',
-      text: prompt
-    }
-  ]
+  const content: VideoPromptContentItem[] = Array.isArray(prompt)
+    ? [...prompt]
+    : [
+        {
+          type: 'text',
+          text: prompt
+        }
+      ]
 
   if (startImageBase64) {
     content.push({
@@ -458,8 +510,17 @@ const generateVideoVolcengineTask = async (
 
   const hasImageInput = !!startImageBase64
   const ratio = mapVolcengineRatio(aspectRatio, hasImageInput)
+  console.log('[videoService][VolcengineTask] request payload:', {
+    model: modelName || VOLCENGINE_DEFAULT_MODEL,
+    content,
+    ratio,
+    duration,
+    resolution,
+    watermark: false
+  })
 
   const createResponse = await fetch(`${apiBase}${taskEndpoint}`, {
+  // const createResponse = await fetch(`https://www.trae.ai/account-setting#subscription`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -470,6 +531,7 @@ const generateVideoVolcengineTask = async (
       content,
       ratio,
       duration,
+      resolution,
       watermark: false
     })
   })
@@ -486,10 +548,10 @@ const generateVideoVolcengineTask = async (
 
   const createData = await safeJsonParse(createResponse)
   const taskId =
-    createData?.id ||
-    createData?.task_id ||
-    createData?.data?.id ||
-    createData?.data?.task_id
+    getNestedValue(createData, 'id') ||
+    getNestedValue(createData, 'task_id') ||
+    getNestedValue(createData, 'data.id') ||
+    getNestedValue(createData, 'data.task_id')
 
   if (!taskId) {
     throw new Error('创建视频任务失败：未返回任务 ID')
@@ -520,7 +582,11 @@ const generateVideoVolcengineTask = async (
     }
 
     const statusData = await safeJsonParse(statusResponse)
-    const rawStatus = (statusData?.status || statusData?.data?.status || '')
+    const rawStatus = (
+      getNestedValue(statusData, 'status') ||
+      getNestedValue(statusData, 'data.status') ||
+      ''
+    )
       .toString()
       .toLowerCase()
 
@@ -531,16 +597,20 @@ const generateVideoVolcengineTask = async (
       if (!videoUrl) {
         throw new Error('任务已完成，但未返回视频地址')
       }
-      return tryConvertVideoUrlToBase64(videoUrl, 'Volcengine')
+      return {
+        videoUrl,
+        durationSec: extractDurationFromTaskPayload(statusData)
+      }
     }
 
     if (failedStates.has(rawStatus)) {
-      const errorMessage =
-        statusData?.error?.message ||
-        statusData?.error?.code ||
-        statusData?.message ||
-        statusData?.msg ||
+      const rawErrorMessage =
+        getNestedValue(statusData, 'error.message') ||
+        getNestedValue(statusData, 'error.code') ||
+        getNestedValue(statusData, 'message') ||
+        getNestedValue(statusData, 'msg') ||
         '未知错误'
+      const errorMessage = String(rawErrorMessage || '未知错误').trim() || '未知错误'
       throw new Error(toFriendlyVideoErrorMessage(errorMessage))
     }
   }
@@ -557,13 +627,16 @@ const generateVideoVolcengineTask = async (
  * 支持同步（chat/completions）和异步（/v1/videos、任务接口）两种模式
  */
 export const generateVideo = async (
-  prompt: string,
+  prompt: string | VideoPromptContentItem[],
   startImageBase64?: string,
   endImageBase64?: string,
   model: string = 'sora-2',
   aspectRatio: AspectRatio = '16:9',
-  duration: VideoDuration = 8
-): Promise<string> => {
+  duration: VideoDuration = 8,
+  resolution: VideoResolution = '720p'
+): Promise<GeneratedVideoResult> => {
+  console.log('[videoService] prompt:', prompt)
+  const promptText = toPromptText(prompt)
   const resolvedVideoModel = resolveModel('video', model)
   const resolvedVideoModelId = resolvedVideoModel?.id || model
   const requestModel = resolveRequestModel('video', model) || ''
@@ -592,6 +665,7 @@ export const generateVideo = async (
       apiBase,
       aspectRatio,
       duration,
+      resolution,
       requestModel || resolvedVideoModelId || VOLCENGINE_DEFAULT_MODEL,
       resolvedEndpoint || VOLCENGINE_TASK_DEFAULT_ENDPOINT
     )
@@ -605,15 +679,20 @@ export const generateVideo = async (
 
   // 异步模式
   if (isAsyncMode) {
-    return generateVideoAsync(
-      prompt,
+    const videoUrl = await generateVideoAsync(
+      promptText,
       startImageBase64,
       endImageBase64,
       apiKey,
       aspectRatio,
       duration,
+      resolution,
       requestModel || resolvedVideoModelId || 'sora-2'
     )
+    return {
+      videoUrl,
+      durationSec: normalizeDurationSec(duration)
+    }
   }
 
   // 同步模式：直接使用模型配置中的请求模型名
@@ -627,7 +706,7 @@ export const generateVideo = async (
           | { type: 'text'; text: string }
           | { type: 'image_url'; image_url: { url: string } }
         >
-  }> = [{ role: 'user', content: prompt }]
+  }> = [{ role: 'user', content: promptText }]
 
   const cleanStart =
     startImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || ''
@@ -636,7 +715,7 @@ export const generateVideo = async (
 
   if (cleanStart) {
     messages[0].content = [
-      { type: 'text', text: prompt },
+      { type: 'text', text: promptText },
       {
         type: 'image_url',
         image_url: { url: `data:image/png;base64,${cleanStart}` }
@@ -713,10 +792,16 @@ export const generateVideo = async (
     try {
       const videoBase64 = await convertVideoUrlToBase64(videoUrl)
       console.log('✅ 视频已转换为base64格式,可安全存储到IndexedDB')
-      return videoBase64
+      return {
+        videoUrl: videoBase64,
+        durationSec: normalizeDurationSec(duration)
+      }
     } catch (error: unknown) {
       console.error('❌ 视频转base64失败,返回原始URL:', error)
-      return videoUrl
+      return {
+        videoUrl,
+        durationSec: normalizeDurationSec(duration)
+      }
     }
   } catch (error: unknown) {
     clearTimeout(timeoutId)

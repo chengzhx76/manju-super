@@ -1,5 +1,2 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 echo "[pre-push] 运行敏感信息检查..."
 npm run check:secrets

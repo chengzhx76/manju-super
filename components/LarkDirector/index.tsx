@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
+  AspectRatio,
   Character,
   MediaAsset,
   MediaAssetType,
@@ -15,12 +16,23 @@ import {
   hasAssetRelayConfig,
   hasVolcengineTosConfig,
   resolveTosPublicUrlFromAssetId,
+  uploadGeneratedAssetToRelay,
   uploadMediaAssetFile
 } from '../../services/assetRelayService'
+import {
+  getActiveVideoModel,
+  getVideoModels
+} from '../../services/modelRegistry'
+import { generateVideo } from '../../services/ai/videoService'
 import {
   getNextMainShotId,
   parseShotId
 } from '../../services/storyboardIdUtils'
+import {
+  buildMultimodalPayload,
+  formatEditorConsoleOutput,
+  parseRichDocFromHtml
+} from './editor/multimodalFormatter'
 import {
   Plus,
   Users,
@@ -30,7 +42,9 @@ import {
   Package,
   Maximize2,
   Play,
+  Pause,
   Volume2,
+  VolumeX,
   Download,
   Trash2,
   Edit2,
@@ -44,6 +58,9 @@ import {
   Loader2
 } from 'lucide-react'
 import ScriptEditorRich from './editor/ScriptEditorRich'
+
+const generateId = (prefix: string): string =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
 interface Props {
   project: ProjectState
@@ -70,6 +87,11 @@ interface NewMediaAssetDraft {
   mimeType: string
   dataUrl: string
   file?: File
+}
+
+type ClipMultimodalPayload = {
+  storyboardText: string
+  multimodalPayload: ReturnType<typeof buildMultimodalPayload>
 }
 
 const LarkDirector: React.FC<Props> = ({
@@ -103,10 +125,34 @@ const LarkDirector: React.FC<Props> = ({
   const [isSavingMediaAsset, setIsSavingMediaAsset] = useState(false)
   const [mediaUploadMessage, setMediaUploadMessage] = useState('')
   const [mediaUploadLogs, setMediaUploadLogs] = useState<string[]>([])
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>(
+    '720p'
+  )
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16')
+  const [clipMultimodalMap, setClipMultimodalMap] = useState<
+    Record<string, ClipMultimodalPayload>
+  >({})
+  const playerVideoRef = useRef<HTMLVideoElement | null>(null)
+  const [playerCurrentTimeSec, setPlayerCurrentTimeSec] = useState(0)
+  const [playerDurationSec, setPlayerDurationSec] = useState(0)
+  const [isPlayerPlaying, setIsPlayerPlaying] = useState(false)
+  const [isPlayerMuted, setIsPlayerMuted] = useState(false)
 
   // 临时使用 scenes 模拟 clip (因为我们目前没有 clip 结构，可以用 shot 或者 scene 来展示)
   const clips = project.shots || []
   const activeClip = clips[activeClipIndex] || null
+  const availableVideoModels = getVideoModels().filter((model) => model.isEnabled)
+  const activeRegistryVideoModelId = String(getActiveVideoModel()?.id || '').trim()
+  const defaultVideoModelId =
+    activeRegistryVideoModelId ||
+    availableVideoModels[0]?.id ||
+    'doubao-seedance-1-5-pro-251215'
+  const selectedVideoModelId =
+    activeClip && activeClip.videoModel
+      ? availableVideoModels.some((model) => model.id === activeClip.videoModel)
+        ? activeClip.videoModel
+        : defaultVideoModelId
+      : defaultVideoModelId
 
   const getClipDisplayNumber = (clip: Shot, fallbackIndex: number): string => {
     const parsed = parseShotId(clip.id)
@@ -342,10 +388,340 @@ const LarkDirector: React.FC<Props> = ({
 
   const getClipRenderState = (
     clip?: Shot | null
-  ): 'generated' | 'ready_to_generate' | 'empty' => {
+  ): 'generated' | 'generating' | 'ready_to_generate' | 'empty' => {
     if (!clip) return 'empty'
-    if (String(clip.interval?.videoUrl || '').trim()) return 'generated'
+    if (clip.interval?.status === 'generating') {
+      return 'generating'
+    }
+    const legacyVideoUrl = String((clip as Shot & { videoUrl?: string }).videoUrl || '').trim()
+    if (legacyVideoUrl || String(clip.interval?.videoUrl || '').trim()) {
+      return 'generated'
+    }
     return hasClipScriptContent(clip) ? 'ready_to_generate' : 'empty'
+  }
+  const generatedClipCount = clips.filter(
+    (clip) => getClipRenderState(clip) === 'generated'
+  ).length
+  const resolveClipDurationSec = (clip?: Shot | null): number => {
+    if (!clip) return 0
+    const intervalDuration = Number(clip.interval?.duration || 0)
+    if (Number.isFinite(intervalDuration) && intervalDuration > 0) {
+      return intervalDuration
+    }
+    return 0
+  }
+  const formatDurationLabel = (seconds: number): string => {
+    const safeSeconds = Math.max(0, Math.round(Number(seconds) || 0))
+    const minute = Math.floor(safeSeconds / 60)
+    const second = safeSeconds % 60
+    return `${minute.toString().padStart(2, '0')}:${second
+      .toString()
+      .padStart(2, '0')}`
+  }
+  const getGeneratedClipDurationSec = (clip?: Shot | null): number => {
+    if (!clip) return 0
+    return getClipRenderState(clip) === 'generated' ? resolveClipDurationSec(clip) : 0
+  }
+  const activeClipDurationSec = getGeneratedClipDurationSec(activeClip)
+  const totalClipDurationSec = clips.reduce(
+    (sum, clip) => sum + getGeneratedClipDurationSec(clip),
+    0
+  )
+  const activeClipVideoUrl = String(
+    (activeClip as (Shot & { videoUrl?: string }) | null)?.videoUrl ||
+      activeClip?.interval?.videoUrl ||
+      ''
+  ).trim()
+  const activeClipRenderState = getClipRenderState(activeClip)
+
+  useEffect(() => {
+    const el = playerVideoRef.current
+    if (!el) {
+      setPlayerCurrentTimeSec(0)
+      setPlayerDurationSec(0)
+      setIsPlayerPlaying(false)
+      setIsPlayerMuted(false)
+      return
+    }
+    const syncState = () => {
+      setPlayerCurrentTimeSec(Number.isFinite(el.currentTime) ? el.currentTime : 0)
+      setPlayerDurationSec(Number.isFinite(el.duration) ? el.duration : 0)
+      setIsPlayerPlaying(!el.paused && !el.ended)
+      setIsPlayerMuted(!!el.muted)
+    }
+    syncState()
+    el.addEventListener('loadedmetadata', syncState)
+    el.addEventListener('timeupdate', syncState)
+    el.addEventListener('play', syncState)
+    el.addEventListener('pause', syncState)
+    el.addEventListener('ended', syncState)
+    el.addEventListener('volumechange', syncState)
+    return () => {
+      el.removeEventListener('loadedmetadata', syncState)
+      el.removeEventListener('timeupdate', syncState)
+      el.removeEventListener('play', syncState)
+      el.removeEventListener('pause', syncState)
+      el.removeEventListener('ended', syncState)
+      el.removeEventListener('volumechange', syncState)
+    }
+  }, [activeClipVideoUrl])
+
+  const handleTogglePlayerPlay = () => {
+    const el = playerVideoRef.current
+    if (!el) return
+    if (el.paused || el.ended) {
+      void el.play().catch(() => {
+        showAlert('播放失败，请稍后重试', { type: 'warning' })
+      })
+      return
+    }
+    el.pause()
+  }
+
+  const handleSeekPlayer = (nextTimeSec: number) => {
+    const el = playerVideoRef.current
+    if (!el) return
+    const maxDuration = Number.isFinite(el.duration) ? el.duration : 0
+    const safeTarget = Math.max(0, Math.min(nextTimeSec, maxDuration || nextTimeSec))
+    el.currentTime = safeTarget
+    setPlayerCurrentTimeSec(safeTarget)
+  }
+
+  const handleTogglePlayerMute = () => {
+    const el = playerVideoRef.current
+    if (!el) return
+    el.muted = !el.muted
+    setIsPlayerMuted(el.muted)
+  }
+
+  const handleTogglePlayerFullscreen = () => {
+    const el = playerVideoRef.current
+    if (!el) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+      return
+    }
+    if (typeof el.requestFullscreen === 'function') {
+      void el.requestFullscreen()
+    }
+  }
+
+  const handleDownloadActiveVideo = () => {
+    if (!activeClipVideoUrl) {
+      showAlert('当前没有可下载的视频', { type: 'warning' })
+      return
+    }
+    const anchor = document.createElement('a')
+    anchor.href = activeClipVideoUrl
+    anchor.download = `clip-${activeClip?.id || Date.now()}.mp4`
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+  }
+
+  const updateClipById = (
+    clipId: string,
+    updater: (clip: Shot) => Shot
+  ): void => {
+    updateProject((prev) => ({
+      ...prev,
+      shots: (prev.shots || []).map((shot) =>
+        shot.id === clipId ? updater(shot) : shot
+      )
+    }))
+  }
+  const handleChangeActiveClipVideoModel = (modelId: string): void => {
+    if (!activeClip) return
+    updateClipById(activeClip.id, (target) => ({
+      ...target,
+      videoModel: modelId as Shot['videoModel']
+    }))
+  }
+
+  const buildClipMultimodalPayloadFromText = (
+    rawText: string,
+    rawHtml?: string
+  ): ClipMultimodalPayload => {
+    const html = String(rawHtml || '')
+    const fallbackText = String(rawText || '').trim()
+    const formatterOutput = buildMultimodalPayload(
+      formatEditorConsoleOutput(
+        project,
+        html ? parseRichDocFromHtml(html) : undefined,
+        fallbackText
+      )
+    )
+    const storyboardText = String(formatterOutput[0]?.type === 'text' ? formatterOutput[0].text : '')
+    if (!storyboardText) {
+      return {
+        storyboardText: '',
+        multimodalPayload: [{ type: 'text', text: '' }]
+      }
+    }
+
+    return {
+      storyboardText,
+      multimodalPayload: formatterOutput
+    }
+  }
+
+  const getClipMultimodalPayload = (clip: Shot): ClipMultimodalPayload => {
+    const cached = clipMultimodalMap[clip.id]
+    if (cached?.multimodalPayload?.length) return cached
+    return buildClipMultimodalPayloadFromText(
+      String(clip.larkActionSummary || ''),
+      String(clip.larkActionSummaryHtml || '')
+    )
+  }
+
+  const handleGenerateClipVideo = async (
+    clip?: Shot | null,
+    payloadOverride?: ClipMultimodalPayload
+  ): Promise<void> => {
+    if (!clip) return
+    if (clip.interval?.status === 'generating') return
+    const payload =
+      payloadOverride && payloadOverride.multimodalPayload.length > 0
+        ? payloadOverride
+        : getClipMultimodalPayload(clip)
+    const storyboardText = String(payload.storyboardText || '').trim()
+    if (!storyboardText) {
+      showAlert('请先填写并保存脚本后再生成视频', { type: 'warning' })
+      return
+    }
+
+    const intervalId = clip.interval?.id || generateId(`int-${clip.id}`)
+    updateClipById(clip.id, (target) => ({
+      ...target,
+      interval: target.interval
+        ? {
+            ...target.interval,
+            status: 'generating',
+            videoPrompt: storyboardText
+          }
+        : {
+            id: intervalId,
+            startKeyframeId: '',
+            endKeyframeId: '',
+            duration: 8,
+            motionStrength: 5,
+            videoPrompt: storyboardText,
+            status: 'generating'
+          }
+    }))
+    onGeneratingChange?.(true)
+
+    try {
+      const generatedVideo = await generateVideo(
+        payload.multimodalPayload,
+        undefined,
+        undefined,
+        clip.videoModel || defaultVideoModelId,
+        aspectRatio,
+        -1,
+        resolution
+      )
+      const sourceVideoUrl = normalizeRemoteUrl(generatedVideo.videoUrl)
+      const generatedDurationSec = Number(generatedVideo.durationSec || 0)
+      const finalDurationSec =
+        Number.isFinite(generatedDurationSec) && generatedDurationSec > 0
+          ? generatedDurationSec
+          : Number(clip.interval?.duration || 8)
+      let finalVideoUrl = sourceVideoUrl
+      let finalAssetId: string | undefined = clip.interval?.assetId
+
+      if (seriesProject && currentEpisode && sourceVideoUrl) {
+        const relayResult = await uploadGeneratedAssetToRelay({
+          project: seriesProject,
+          seriesList: allSeries || [],
+          episodes: allEpisodes || [],
+          episode: currentEpisode,
+          kind: 'video',
+          localId: intervalId,
+          url: sourceVideoUrl,
+          currentAssetId: clip.interval?.assetId,
+          skipRelayUpload: true
+        })
+        if (relayResult.tosStatus !== 'success') {
+          throw new Error(
+            relayResult.tosMessage || relayResult.reason || 'TOS上传失败'
+          )
+        }
+        const tosAssetId = relayResult.objectKey
+          ? `tos:${relayResult.objectKey}`
+          : undefined
+        const relayUrl = normalizeRemoteUrl(relayResult.url)
+        const fallbackTosUrl = normalizeRemoteUrl(
+          resolveTosPublicUrlFromAssetId(tosAssetId)
+        )
+        finalVideoUrl = relayUrl || fallbackTosUrl || sourceVideoUrl
+        if (!finalVideoUrl || !/^https?:\/\//i.test(finalVideoUrl)) {
+          throw new Error('TOS上传成功但未返回可用公网URL')
+        }
+        finalAssetId = relayResult.assetId || finalAssetId
+        console.info('[LarkDirector] 视频生成回填完成', {
+          actor: 'user',
+          action: 'sync-generated-video-to-tos',
+          clipId: clip.id,
+          intervalId,
+          sourceVideoUrl,
+          finalVideoUrl,
+          assetId: finalAssetId
+        })
+      } else {
+        throw new Error('项目上下文不完整或视频URL无效，无法上传到TOS')
+      }
+
+      updateClipById(clip.id, (target) => ({
+        ...target,
+        interval: target.interval
+          ? {
+              ...target.interval,
+              status: 'completed',
+              videoUrl: finalVideoUrl,
+              sourceVideoUrl,
+              videoPrompt: storyboardText,
+              duration: finalDurationSec,
+              assetId: finalAssetId
+            }
+          : {
+              id: intervalId,
+              startKeyframeId: '',
+              endKeyframeId: '',
+              duration: finalDurationSec,
+              motionStrength: 5,
+              status: 'completed',
+              videoUrl: finalVideoUrl,
+              sourceVideoUrl,
+              videoPrompt: storyboardText,
+              assetId: finalAssetId
+            }
+      }))
+      showAlert('视频生成完成', { type: 'success' })
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : '视频生成失败，请稍后重试。'
+      updateClipById(clip.id, (target) => ({
+        ...target,
+        interval: target.interval
+          ? {
+              ...target.interval,
+              status: 'failed'
+            }
+          : {
+              id: intervalId,
+              startKeyframeId: '',
+              endKeyframeId: '',
+              duration: 8,
+              motionStrength: 5,
+              status: 'failed'
+            }
+      }))
+      showAlert(`视频生成失败: ${message}`, { type: 'error' })
+    } finally {
+      onGeneratingChange?.(false)
+    }
   }
 
   const convertFileToDataUrl = (file: File): Promise<string> =>
@@ -600,8 +976,8 @@ const LarkDirector: React.FC<Props> = ({
           throw new Error('视频总像素需在 409600-927408 之间（宽×高）')
         }
         const shortEdge = Math.min(width, height)
-        if (![480, 720].includes(shortEdge)) {
-          throw new Error('视频分辨率需为 480p 或 720p（按短边判定）')
+        if (![480, 720, 1080].includes(shortEdge)) {
+          throw new Error('视频分辨率需为 480p、720p 或 1080p（按短边判定）')
         }
         const fps = await estimateVideoFps(video)
         if (fps < 24 || fps > 60) {
@@ -1237,7 +1613,7 @@ const LarkDirector: React.FC<Props> = ({
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-3">
             <LayoutGrid className="w-5 h-5 text-[var(--accent)]" />
-            导演工作台(小云雀版)
+            导演工作台
             <span className="text-xs text-[var(--text-muted)] font-mono font-normal uppercase tracking-wider bg-[var(--bg-base)]/30 px-2 py-1 rounded">
               Director Workbench
             </span>
@@ -1250,39 +1626,69 @@ const LarkDirector: React.FC<Props> = ({
             </span>
             <div className="flex gap-1">
               <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all bg-[var(--accent)] text-[var(--text-primary)] cursor-pointer"
-                title="横屏 (1280x720)"
-              >
-                <Monitor className="w-4 h-4" />
-                <span>横屏</span>
-              </button>
-              <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)] cursor-pointer"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer ${
+                  aspectRatio === '9:16'
+                    ? 'bg-[var(--accent)] text-[var(--text-primary)]'
+                    : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
+                }`}
                 title="竖屏 (720x1280)"
+                onClick={() => setAspectRatio('9:16')}
               >
                 <Smartphone className="w-4 h-4" />
                 <span>竖屏</span>
               </button>
+              <button
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer ${
+                  aspectRatio === '16:9'
+                    ? 'bg-[var(--accent)] text-[var(--text-primary)]'
+                    : 'bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:bg-[var(--border-secondary)] hover:text-[var(--text-secondary)]'
+                }`}
+                title="横屏 (1280x720)"
+                onClick={() => setAspectRatio('16:9')}
+              >
+                <Monitor className="w-4 h-4" />
+                <span>横屏</span>
+              </button>
             </div>
           </div>
           <div className="w-px h-6 bg-[var(--bg-hover)]"></div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--bg-base)]/30 border border-[var(--border-primary)]">
-            <Sparkles className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-            <label className="flex items-center gap-2 cursor-pointer">
-              <span className="text-xs text-[var(--text-tertiary)]">
-                AI增强提示词
-              </span>
-              <input
-                className="w-3.5 h-3.5 rounded border-[var(--border-secondary)] bg-[var(--bg-hover)] text-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)] focus:ring-offset-0 cursor-pointer"
-                type="checkbox"
-              />
-            </label>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--bg-base)]/30">
+            <span className="text-xs text-[var(--text-tertiary)]">分辨率</span>
+            <select
+              title="分辨率"
+              value={resolution}
+              onChange={(e) =>
+                setResolution(e.target.value as '480p' | '720p' | '1080p')
+              }
+              className="h-7 rounded-md border border-[var(--border-secondary)] bg-[var(--bg-hover)] px-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            >
+              <option value="480p">480p</option>
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
+            </select>
           </div>
-          <span className="text-xs font-mono px-2 py-1 rounded border text-amber-300 border-amber-500/40 bg-amber-500/10">
-            质检分 70
-          </span>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[var(--bg-base)]/30">
+            <span className="text-xs text-[var(--text-tertiary)]">视频模型</span>
+            <select
+              title="视频模型"
+              value={availableVideoModels.length === 0 ? '' : selectedVideoModelId}
+              onChange={(e) => handleChangeActiveClipVideoModel(e.target.value)}
+              disabled={!activeClip || availableVideoModels.length === 0}
+              className="h-7 min-w-44 rounded-md border border-[var(--border-secondary)] bg-[var(--bg-hover)] px-2 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {availableVideoModels.length === 0 ? (
+                <option value="">暂无可用模型</option>
+              ) : (
+                availableVideoModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
           <span className="text-xs text-[var(--text-tertiary)] mr-4 font-mono">
-            1 / 12 完成
+            {generatedClipCount} / {clips.length}
           </span>
           <button className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)]">
             <Sparkles className="w-3 h-3" />
@@ -1623,58 +2029,141 @@ const LarkDirector: React.FC<Props> = ({
                   placeholder="输入描述，@ 引用角色/道具/场景/媒体..."
                   autoFocusWhenEmpty={true}
                   onSaveContent={handleSaveActiveClipText}
+                  onSaveMultimodalPayload={(payload) => {
+                    const currentClipId = activeClip?.id
+                    if (!currentClipId) return
+                    updateProject((prev) => ({
+                      ...prev,
+                      shots: (prev.shots || []).map((shot) =>
+                        shot.id === currentClipId
+                          ? { ...shot, larkActionSummary: payload.storyboardText }
+                          : shot
+                      )
+                    }))
+                    setClipMultimodalMap((prev) => ({
+                      ...prev,
+                      [currentClipId]: payload
+                    }))
+                  }}
+                  onRegenerateVideo={(payload) => {
+                    const currentClip = activeClip
+                    if (!currentClip) return
+                    if (payload?.multimodalPayload?.length) {
+                      setClipMultimodalMap((prev) => ({
+                        ...prev,
+                        [currentClip.id]: payload
+                      }))
+                      void handleGenerateClipVideo(currentClip, payload)
+                      return
+                    }
+                    void handleGenerateClipVideo(currentClip)
+                  }}
+                  isGeneratingVideo={activeClip?.interval?.status === 'generating'}
                 />
               </div>
             </div>
 
             {/* Video Player Area */}
-            <div className="w-[360px] bg-[var(--bg-sunken)] shrink-0 relative flex flex-col">
-              <div className="flex-1 relative flex items-center justify-center">
-                {activeClip?.videoUrl ? (
+            <div className="w-[360px] bg-[var(--bg-sunken)] shrink-0 relative flex flex-col min-h-0 overflow-hidden">
+              <div className="flex-1 flex items-center justify-center min-h-0 overflow-hidden p-2">
+                <div
+                  className={`relative w-full max-h-full overflow-hidden rounded-lg border border-[var(--border-primary)] ${
+                    activeClipRenderState === 'generated' && activeClipVideoUrl
+                      ? 'bg-black'
+                      : 'bg-[var(--bg-base)]'
+                  }`}
+                  style={{ aspectRatio: '9 / 16' }}
+                >
+                {activeClipRenderState === 'generated' && activeClipVideoUrl ? (
                   <video
-                    src={activeClip.videoUrl}
-                    className="w-full h-full object-cover"
+                    ref={playerVideoRef}
+                    src={activeClipVideoUrl}
+                    className="w-full h-full max-w-full max-h-full object-contain bg-black"
                     controls={false}
                   />
+                ) : activeClipRenderState === 'generating' ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
+                    <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+                    <span className="text-xs">视频正在生成</span>
+                  </div>
                 ) : (
-                  <div className="w-full h-full p-4">
-                    <div className="w-full h-full rounded-xl bg-[var(--bg-base)] border border-[var(--border-primary)] flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
-                      <Film className="w-8 h-8 text-[var(--text-muted)]" />
-                      <span className="text-xs">未生成内容</span>
-                    </div>
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
+                    <Film className="w-8 h-8 text-[var(--text-muted)]" />
+                    <span className="text-xs">未生成内容</span>
                   </div>
                 )}
 
                 {/* Fake Video Controls Overlay */}
-                {activeClip?.videoUrl && (
+                {activeClipRenderState === 'generated' && activeClipVideoUrl && (
                   <div className="absolute top-4 right-4">
-                    <button className="p-1.5 bg-black/40 text-white rounded-full backdrop-blur hover:bg-black/60 transition-colors">
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayerFullscreen}
+                      className="p-1.5 bg-black/40 text-white rounded-full backdrop-blur hover:bg-black/60 transition-colors"
+                    >
                       <Maximize2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
-                {activeClip?.videoUrl && (
+                {activeClipRenderState === 'generated' && activeClipVideoUrl && (
                   <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-3">
-                    <button className="text-white hover:text-[var(--accent)] transition-colors">
-                      <Play className="w-4 h-4 fill-current" />
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayerPlay}
+                      className="text-white hover:text-[var(--accent)] transition-colors"
+                    >
+                      {isPlayerPlaying ? (
+                        <Pause className="w-4 h-4 fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 fill-current" />
+                      )}
                     </button>
                     <div className="text-white text-[10px] font-mono">
-                      00:01 / 00:10
+                      {formatDurationLabel(playerCurrentTimeSec)} /{' '}
+                      {formatDurationLabel(playerDurationSec || activeClipDurationSec)}
                     </div>
-                    <div className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden relative">
-                      <div className="absolute left-0 top-0 bottom-0 w-[10%] bg-white rounded-full"></div>
-                    </div>
-                    <button className="text-white hover:text-gray-300 transition-colors">
-                      <Volume2 className="w-4 h-4" />
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(playerDurationSec || activeClipDurationSec, 0)}
+                      step={0.1}
+                      value={Math.min(
+                        playerCurrentTimeSec,
+                        Math.max(playerDurationSec || activeClipDurationSec, 0)
+                      )}
+                      onChange={(event) =>
+                        handleSeekPlayer(Number(event.target.value || 0))
+                      }
+                      className="flex-1 accent-white cursor-pointer"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayerMute}
+                      className="text-white hover:text-gray-300 transition-colors"
+                    >
+                      {isPlayerMuted ? (
+                        <VolumeX className="w-4 h-4" />
+                      ) : (
+                        <Volume2 className="w-4 h-4" />
+                      )}
                     </button>
-                    <button className="text-white hover:text-gray-300 transition-colors">
+                    <button
+                      type="button"
+                      onClick={handleTogglePlayerFullscreen}
+                      className="text-white hover:text-gray-300 transition-colors"
+                    >
                       <Maximize2 className="w-3.5 h-3.5" />
                     </button>
-                    <button className="text-white hover:text-gray-300 transition-colors">
+                    <button
+                      type="button"
+                      onClick={handleDownloadActiveVideo}
+                      className="text-white hover:text-gray-300 transition-colors"
+                    >
                       <Download className="w-4 h-4" />
                     </button>
                   </div>
                 )}
+                </div>
               </div>
             </div>
           </div>
@@ -1684,7 +2173,9 @@ const LarkDirector: React.FC<Props> = ({
             <div className="h-10 border-b border-[var(--border-subtle)] flex items-center justify-between px-4 shrink-0">
               <div className="flex items-center gap-2">
                 <Play className="w-3.5 h-3.5 fill-[var(--text-primary)]" />
-                <span className="text-xs font-mono">00:01 / 00:22</span>
+                <span className="text-xs font-mono">
+                  {Math.round(activeClipDurationSec)}/{Math.round(totalClipDurationSec)}
+                </span>
               </div>
               <button
                 onClick={() => showAlert('功能暂未实现', { type: 'warning' })}
@@ -1722,22 +2213,41 @@ const LarkDirector: React.FC<Props> = ({
                         {renderState === 'generated' ? (
                           <>
                             <video
-                              src={clip.videoUrl}
-                              className="w-full h-full object-cover"
+                              src={
+                                String(
+                                  (clip as Shot & { videoUrl?: string }).videoUrl ||
+                                    clip.interval?.videoUrl ||
+                                    ''
+                                ).trim()
+                              }
+                              className="w-full h-full object-contain bg-black"
                             />
                             <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/45 rounded text-[8px] text-white font-mono z-10 backdrop-blur-sm">
-                              00:
-                              {Math.floor(clip.duration || 5)
-                                .toString()
-                                .padStart(2, '0')}
+                              {formatDurationLabel(resolveClipDurationSec(clip))}
                             </div>
                           </>
                         ) : renderState === 'ready_to_generate' ? (
                           <div className="w-full h-full flex items-center justify-center">
-                            <span className="inline-flex items-center gap-1 rounded-md bg-[#b89b6a] text-[#1f1f1f] text-[10px] font-medium px-2 py-1">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setActiveClipIndex(idx)
+                                void handleGenerateClipVideo(clip)
+                              }}
+                              disabled={clip.interval?.status === 'generating'}
+                              className="inline-flex items-center gap-1 rounded-md bg-[#b89b6a] text-[#1f1f1f] text-[10px] font-medium px-2 py-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
                               <Film className="w-3 h-3" />
-                              生成
-                            </span>
+                              {clip.interval?.status === 'generating'
+                                ? '生成中...'
+                                : '生成'}
+                            </button>
+                          </div>
+                        ) : renderState === 'generating' ? (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[var(--text-muted)]">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
+                            <span className="text-[10px]">生成中...</span>
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px]">

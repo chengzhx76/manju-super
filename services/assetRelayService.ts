@@ -1498,6 +1498,7 @@ export const uploadGeneratedAssetToRelay = async (params: {
   url?: string
   currentAssetId?: string
   skipTosUploadWhenUrlAvailable?: boolean
+  skipRelayUpload?: boolean
   onStage?: (
     stage: 'start_tos_upload' | 'tos_upload_success' | 'start_relay_upload'
   ) => void
@@ -1524,7 +1525,7 @@ export const uploadGeneratedAssetToRelay = async (params: {
   }
 
   const tosConfig = normalizeTosConfig()
-  const config = normalizeConfig()
+  const config = params.skipRelayUpload ? null : normalizeConfig()
   if (!tosConfig) {
     logUploadFlow({
       result: 'skipped',

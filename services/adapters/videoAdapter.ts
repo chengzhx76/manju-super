@@ -134,6 +134,48 @@ const SORA_COMPATIBLE_VIDEO_MODELS = new Set([
 const isSoraCompatibleVideoModel = (modelName: string): boolean =>
   SORA_COMPATIBLE_VIDEO_MODELS.has((modelName || '').trim().toLowerCase())
 
+const getNestedValue = (obj: unknown, path: string): unknown => {
+  return path.split('.').reduce<unknown>((acc, key) => {
+    if (typeof acc === 'object' && acc !== null && key in acc) {
+      return (acc as Record<string, unknown>)[key]
+    }
+    return undefined
+  }, obj)
+}
+
+const normalizeVideoUrl = (value: string): string => {
+  // Some providers may wrap URLs with quotes/backticks or add surrounding spaces.
+  return value.trim().replace(/^['"`\s]+|['"`\s]+$/g, '')
+}
+
+const extractVideoUrlFromTaskPayload = (payload: unknown): string | null => {
+  const candidatePaths = [
+    'content.video_url',
+    'content.videoUrl',
+    'data.content.video_url',
+    'data.content.videoUrl',
+    'result.video_url',
+    'result.videoUrl',
+    'output.video_url',
+    'output.videoUrl',
+    'video_url',
+    'videoUrl',
+    'url'
+  ]
+
+  for (const path of candidatePaths) {
+    const value = getNestedValue(payload, path)
+    if (typeof value === 'string' && value.trim()) {
+      const normalized = normalizeVideoUrl(value)
+      if (/^https?:\/\//i.test(normalized)) {
+        return normalized
+      }
+    }
+  }
+
+  return null
+}
+
 /**
  * 调用同步 chat/completions 视频 API
  */
@@ -417,7 +459,7 @@ const callSoraApi = async (
     console.log('🔄 Sora-2 任务状态:', status, '进度:', statusData.progress)
 
     if (status === 'completed' || status === 'succeeded') {
-      videoUrlFromStatus = statusData.video_url || statusData.videoUrl || null
+      videoUrlFromStatus = extractVideoUrlFromTaskPayload(statusData)
       if (statusData.id && statusData.id.startsWith('video_')) {
         videoId = statusData.id
       } else {

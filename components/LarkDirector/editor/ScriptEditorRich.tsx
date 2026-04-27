@@ -15,49 +15,19 @@ import getSuggestion, {
   buildProjectLibraryMentionItems
 } from './suggestion'
 import MentionList from './MentionList'
-import {
-  Character,
-  MediaAsset,
-  ProjectState,
-  Prop,
-  Scene,
-  SeriesProject
-} from '../../../types'
+import { ProjectState, SeriesProject } from '../../../types'
 import { Clock, Edit2, Film } from 'lucide-react'
+import {
+  buildMultimodalPayload,
+  formatEditorConsoleOutput,
+  MentionItemData,
+  RichDocRoot
+} from './multimodalFormatter'
 
 interface DurationTagNodeViewProps {
   node: { attrs: { value?: number } }
   updateAttributes: (attrs: { value: number }) => void
   editor?: { commands: { focus: () => void } }
-}
-
-interface MentionItemData {
-  id?: string
-  name?: string
-  type?: string
-  variantName?: string
-  image?: string
-  url?: string
-  remoteUrl?: string
-  dataUrl?: string
-}
-
-interface MentionNodeAttrs {
-  id?: string
-  label?: string
-  value?: number
-  itemData?: MentionItemData | null
-}
-
-interface RichDocNode {
-  type?: string
-  text?: string
-  attrs?: MentionNodeAttrs
-  content?: RichDocNode[]
-}
-
-interface RichDocRoot {
-  content?: RichDocNode[]
 }
 
 interface MentionCommandPayload {
@@ -67,6 +37,11 @@ interface MentionCommandPayload {
   type?: string
   value?: number
   itemData?: MentionItemData | null
+}
+
+type EditorMultimodalPayload = {
+  storyboardText: string
+  multimodalPayload: ReturnType<typeof buildMultimodalPayload>
 }
 
 const extractDurationValue = (
@@ -110,21 +85,13 @@ const DurationTagComponent = ({
   })
 
   useEffect(() => {
-    if (typeof node.attrs.value === 'number') {
-      const valStr = formatDurationValue(node.attrs.value)
-      // Only sync from node if our localValue is radically different, and not while the user is typing an empty string or partial decimal.
-      if (valStr !== localValue) {
-        const parsedLocal = parseFloat(localValue)
-        const parsedNode = parseFloat(valStr)
-        if (!isNaN(parsedLocal) && parsedLocal !== parsedNode) {
-          setLocalValue(valStr)
-        } else if (localValue !== '' && !localValue.endsWith('.')) {
-          // If localValue is empty string or ends with dot, user is typing, don't overwrite.
-          // Otherwise, if they are different string representations of the same number (e.g., "0" vs "0.0"), we might want to sync, but let's just leave it to handleBlur.
-        }
-      }
-    }
-  }, [localValue, node.attrs.value])
+    if (typeof node.attrs.value !== 'number') return
+    const valStr = formatDurationValue(node.attrs.value)
+    setLocalValue((prev) => {
+      if (prev === '' || prev.endsWith('.')) return prev
+      return prev === valStr ? prev : valStr
+    })
+  }, [node.attrs.value])
 
   const handleBlur = () => {
     let val = parseFloat(localValue)
@@ -264,8 +231,11 @@ const CustomMention = Mention.extend({
               ]
             : colorSpan
 
-    // 显示图片或颜色圆点
-    const mentionImageUrl = String(item?.image || item?.url || '').trim()
+    // 音频/视频固定显示图标；其余类型优先显示缩略图
+    const shouldUseMediaIcon = item?.type === 'audio' || item?.type === 'video'
+    const mentionImageUrl = shouldUseMediaIcon
+      ? ''
+      : String(item?.image || item?.url || '').trim()
     const imgOrColor = mentionImageUrl
       ? [
           'img',
@@ -313,6 +283,9 @@ interface Props {
   autoFocusWhenEmpty?: boolean
   onSaveText?: (text: string) => void
   onSaveContent?: (payload: { text: string; html: string }) => void
+  onSaveMultimodalPayload?: (payload: EditorMultimodalPayload) => void
+  onRegenerateVideo?: (payload?: EditorMultimodalPayload) => void
+  isGeneratingVideo?: boolean
 }
 
 const DEFAULT_SCRIPT = `<p></p>`
@@ -326,7 +299,10 @@ const ScriptEditorRich: React.FC<Props> = ({
   placeholder = '输入描述，@ 引用角色/道具/场景/媒体...',
   autoFocusWhenEmpty = false,
   onSaveText,
-  onSaveContent
+  onSaveContent,
+  onSaveMultimodalPayload,
+  onRegenerateVideo,
+  isGeneratingVideo = false
 }) => {
   const extractTextFromHtml = (html: string): string => {
     return html
@@ -357,253 +333,13 @@ const ScriptEditorRich: React.FC<Props> = ({
     return DEFAULT_SCRIPT
   }, [initialContent, initialText])
 
-  const formatEditorConsoleOutput = (
-    docJson: RichDocRoot | null | undefined,
-    fallbackText: string
-  ): {
-    storyboardText: string
-    resourceReferences: {
-      images: Array<{ id: string; name: string; url: string }>
-      videos: Array<{ id: string; name: string; url: string }>
-      audios: Array<{ id: string; name: string; url: string }>
-    }
-  } => {
-    let startSec = 0
-    const formatSec = (value: number): string =>
-      Number.isInteger(value)
-        ? String(value)
-        : value.toFixed(1).replace(/\.0$/, '')
-    const normalizeLine = (value: string): string =>
-      value
-        .replace(/[^\S\r\n]+/g, ' ')
-        .replace(/\s*([，。！？：；,.!?;:])/g, '$1')
-        .trim()
-    const scriptData = project?.scriptData
-    const allCharacters: Character[] = Array.isArray(scriptData?.characters)
-      ? scriptData.characters
-      : []
-    const allScenes: Scene[] = Array.isArray(scriptData?.scenes)
-      ? scriptData.scenes
-      : []
-    const allProps: Prop[] = Array.isArray(scriptData?.props)
-      ? scriptData.props
-      : []
-    const allMediaAssets: MediaAsset[] = Array.isArray(scriptData?.mediaAssets)
-      ? scriptData.mediaAssets
-      : []
-
-    const resourceReferences = {
-      images: [] as Array<{ id: string; name: string; url: string }>,
-      videos: [] as Array<{ id: string; name: string; url: string }>,
-      audios: [] as Array<{ id: string; name: string; url: string }>
-    }
-
-    const mediaTagLabelMap = {
-      image: '图',
-      video: '视频',
-      audio: '音频'
-    } as const
-
-    const resolveMentionMediaType = (
-      mentionType: string
-    ): 'image' | 'video' | 'audio' => {
-      if (mentionType === 'video') return 'video'
-      if (mentionType === 'audio') return 'audio'
-      return 'image'
-    }
-
-    const pushResourceReference = (
-      attrs?: MentionNodeAttrs
-    ): null | { mediaType: 'image' | 'video' | 'audio'; index: number } => {
-      const itemData = attrs?.itemData
-      const mentionType = String(itemData?.type || '').trim()
-      const mediaType = resolveMentionMediaType(mentionType)
-      if (
-        !['character', 'scene', 'prop', 'image', 'video', 'audio'].includes(
-          mentionType
-        )
-      ) {
-        return null
-      }
-      const resourceId = String(itemData?.id || attrs?.id || '').trim()
-      const resourceName = getMentionDisplayName(attrs).replace(/^@/, '')
-      if (!resourceName) return null
-      const resourceUrl = resolveMentionResourceUrl(attrs)
-      const payload = { id: resourceId, name: resourceName, url: resourceUrl }
-      if (mediaType === 'image') {
-        resourceReferences.images.push(payload)
-        return { mediaType, index: resourceReferences.images.length }
-      }
-      if (mediaType === 'video') {
-        resourceReferences.videos.push(payload)
-        return { mediaType, index: resourceReferences.videos.length }
-      }
-      resourceReferences.audios.push(payload)
-      return { mediaType, index: resourceReferences.audios.length }
-    }
-
-    const getMentionDisplayName = (attrs?: MentionNodeAttrs): string => {
-      const itemData = attrs?.itemData
-      const mentionType = String(itemData?.type || '').trim()
-      const baseName = String(
-        itemData?.name || attrs?.label || attrs?.id || ''
-      ).trim()
-      if (!baseName) return ''
-      if (mentionType === 'character') {
-        const variantName = String(itemData?.variantName || '').trim()
-        return variantName ? `@${baseName}-${variantName}` : `@${baseName}`
-      }
-      return `@${baseName}`
-    }
-
-    const resolveMentionResourceUrl = (attrs?: MentionNodeAttrs): string => {
-      const itemData = attrs?.itemData
-      const mentionType = String(itemData?.type || '').trim()
-      const itemId = String(itemData?.id || '').trim()
-      const itemName = String(
-        itemData?.name || attrs?.label || attrs?.id || ''
-      ).trim()
-      const directUrl = String(
-        itemData?.url ||
-          itemData?.image ||
-          itemData?.remoteUrl ||
-          itemData?.dataUrl ||
-          ''
-      ).trim()
-      if (directUrl) return directUrl
-
-      if (
-        mentionType === 'video' ||
-        mentionType === 'audio' ||
-        mentionType === 'image'
-      ) {
-        const media = allMediaAssets.find((asset) => {
-          const assetId = String(asset?.id || '').trim()
-          const assetName = String(asset?.name || '').trim()
-          return (
-            (itemId && assetId === itemId) ||
-            (itemName && assetName === itemName)
-          )
-        })
-        if (!media) return ''
-        return String(media.remoteUrl || media.dataUrl || '').trim()
-      }
-
-      if (mentionType === 'character') {
-        const baseCharacterId = itemId.split('::')[0]
-        const baseName = String(itemData?.name || '').trim()
-        const variantName = String(itemData?.variantName || '').trim()
-        const variationId = itemId.includes('::') ? itemId.split('::')[1] : ''
-        const character = allCharacters.find((char) => {
-          const charId = String(char?.id || '').trim()
-          const charName = String(char?.name || '').trim()
-          return (
-            (baseCharacterId && charId === baseCharacterId) ||
-            (itemId && charId === itemId) ||
-            (baseName && charName === baseName) ||
-            (itemName && charName === itemName)
-          )
-        })
-        if (!character) return ''
-        if (variantName || variationId) {
-          const variation = (character?.variations || []).find(
-            (variationItem) => {
-              const id = String(variationItem?.id || '').trim()
-              const name = String(variationItem?.name || '').trim()
-              return (
-                (variationId && id === variationId) ||
-                (variantName && name === variantName)
-              )
-            }
-          )
-          const variationUrl = String(variation?.referenceImage || '').trim()
-          if (variationUrl) return variationUrl
-        }
-        return String(character?.referenceImage || '').trim()
-      }
-
-      if (mentionType === 'scene') {
-        const scene = allScenes.find((item) => {
-          const id = String(item?.id || '').trim()
-          const name = String(item?.location || '').trim()
-          return (itemId && id === itemId) || (itemName && name === itemName)
-        })
-        return String(scene?.referenceImage || '').trim()
-      }
-
-      if (mentionType === 'prop') {
-        const prop = allProps.find((item) => {
-          const id = String(item?.id || '').trim()
-          const name = String(item?.name || '').trim()
-          return (itemId && id === itemId) || (itemName && name === itemName)
-        })
-        return String(prop?.referenceImage || '').trim()
-      }
-
-      return ''
-    }
-
-    const toMentionText = (attrs?: MentionNodeAttrs): string => {
-      return getMentionDisplayName(attrs)
-    }
-
-    const walkNodes = (nodes: RichDocNode[]): string => {
-      if (!Array.isArray(nodes)) return ''
-      return nodes
-        .map((node) => {
-          if (!node || typeof node !== 'object') return ''
-          const nodeType = String(node.type || '')
-          if (nodeType === 'text') return String(node.text || '')
-          if (nodeType === 'hardBreak') return '\n'
-          if (nodeType === 'mention') {
-            const inserted = pushResourceReference(node.attrs)
-            if (!inserted) return toMentionText(node.attrs)
-            return `@${mediaTagLabelMap[inserted.mediaType]}${inserted.index}`
-          }
-          if (nodeType === 'durationTag') {
-            const rawDuration = Number.parseFloat(
-              String(node.attrs?.value ?? '5')
-            )
-            const durationSec =
-              Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 5
-            const endSec = startSec + durationSec
-            const rangeText = `(${formatSec(startSec)}-${formatSec(endSec)}s)`
-            startSec = endSec + 1
-            return rangeText
-          }
-          if (Array.isArray(node.content)) {
-            return walkNodes(node.content)
-          }
-          return ''
-        })
-        .join('')
-    }
-
-    const lines: string[] = []
-    const rootNodes = Array.isArray(docJson?.content) ? docJson.content : []
-    rootNodes.forEach((node) => {
-      const rendered = walkNodes(
-        Array.isArray(node?.content) ? node.content : [node]
-      )
-      if (!rendered) return
-      rendered
-        .split('\n')
-        .map((line) => normalizeLine(line))
-        .filter((line) => line.length > 0)
-        .forEach((line) => lines.push(line))
-    })
-
-    if (lines.length === 0) {
-      return {
-        storyboardText: normalizeLine(fallbackText || ''),
-        resourceReferences
-      }
-    }
-    return {
-      storyboardText: lines.join('\n'),
-      resourceReferences
-    }
-  }
+  const activeClip = Array.isArray(project?.shots)
+    ? project.shots.find((shot) => shot.id === clipId)
+    : undefined
+  const hasGeneratedVideo = Boolean(
+    String(activeClip?.videoUrl || '').trim() ||
+      String(activeClip?.interval?.videoUrl || '').trim()
+  )
 
   const [savedContent, setSavedContent] = useState(resolveInitialContent)
   const [isEditing, setIsEditing] = useState(() => {
@@ -837,6 +573,57 @@ const ScriptEditorRich: React.FC<Props> = ({
     }
   }, [clipId, editor, autoFocusWhenEmpty, resolveInitialContent])
 
+  const buildEditorMultimodalPayload = (): (EditorMultimodalPayload & {
+    html: string
+    text: string
+  }) | null => {
+    if (!editor) return null
+    const html = editor.getHTML()
+    const text = editor.getText().trim()
+    const json = editor.getJSON() as RichDocRoot
+    const output = formatEditorConsoleOutput(project, json, text)
+    const multimodalPayload = buildMultimodalPayload(output)
+
+    console.group('[ScriptEditorRich] 保存输出')
+    console.log(output.storyboardText)
+    console.log('multimodal_payload:', multimodalPayload)
+    console.log(
+      'images:',
+      output.resourceReferences.images.map((img) => ({
+        id: img.id,
+        name: img.name,
+        url: img.url,
+        assetId: img.assetId
+      }))
+    )
+    console.log(
+      'videos:',
+      output.resourceReferences.videos.map((vid) => ({
+        id: vid.id,
+        name: vid.name,
+        url: vid.url,
+        assetId: vid.assetId
+      }))
+    )
+    console.log(
+      'audios:',
+      output.resourceReferences.audios.map((aud) => ({
+        id: aud.id,
+        name: aud.name,
+        url: aud.url,
+        assetId: aud.assetId
+      }))
+    )
+    console.groupEnd()
+
+    return {
+      html,
+      text,
+      storyboardText: output.storyboardText,
+      multimodalPayload
+    }
+  }
+
   return (
     <div className="bg-[var(--bg-surface)] border border-[var(--border-primary)] rounded-xl p-4 h-full min-h-0 flex flex-col shadow-sm transition-all duration-200">
       <style>{`
@@ -912,21 +699,15 @@ const ScriptEditorRich: React.FC<Props> = ({
               onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation()
                 setIsEditing(false)
-                if (editor) {
-                  const html = editor.getHTML()
-                  const text = editor.getText().trim()
-                  const json = editor.getJSON()
-                  const output = formatEditorConsoleOutput(json, text)
-                  console.group('[ScriptEditorRich] 保存输出')
-                  console.log(output.storyboardText)
-                  console.log('images:', output.resourceReferences.images)
-                  console.log('videos:', output.resourceReferences.videos)
-                  console.log('audios:', output.resourceReferences.audios)
-                  console.groupEnd()
-                  setSavedContent(html)
-                  onSaveText?.(text)
-                  onSaveContent?.({ text, html })
-                }
+                const nextPayload = buildEditorMultimodalPayload()
+                if (!nextPayload) return
+                setSavedContent(nextPayload.html)
+                onSaveText?.(nextPayload.text)
+                onSaveContent?.({ text: nextPayload.text, html: nextPayload.html })
+                onSaveMultimodalPayload?.({
+                  storyboardText: nextPayload.storyboardText,
+                  multimodalPayload: nextPayload.multimodalPayload
+                })
               }}
               className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm"
             >
@@ -946,15 +727,31 @@ const ScriptEditorRich: React.FC<Props> = ({
               <Edit2 className="w-3.5 h-3.5" />
               编辑脚本
             </button>
-            <button
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                e.stopPropagation()
-              }}
-              className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm flex items-center gap-2"
-            >
-              <Film className="w-3.5 h-3.5" />
-              再次生成
-            </button>
+            {hasGeneratedVideo && (
+              <button
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation()
+                  const nextPayload = buildEditorMultimodalPayload()
+                  if (!nextPayload) {
+                    onRegenerateVideo?.()
+                    return
+                  }
+                  onSaveMultimodalPayload?.({
+                    storyboardText: nextPayload.storyboardText,
+                    multimodalPayload: nextPayload.multimodalPayload
+                  })
+                  onRegenerateVideo?.({
+                    storyboardText: nextPayload.storyboardText,
+                    multimodalPayload: nextPayload.multimodalPayload
+                  })
+                }}
+                disabled={isGeneratingVideo}
+                className="px-6 py-2 rounded-full text-[13px] font-medium bg-black text-white hover:bg-gray-800 transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Film className="w-3.5 h-3.5" />
+                {isGeneratingVideo ? '生成中...' : '再次生成'}
+              </button>
+            )}
           </>
         )}
       </div>

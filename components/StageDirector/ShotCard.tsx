@@ -78,7 +78,7 @@ const ShotCard: React.FC<ShotCardProps> = ({
         {hasImage ? (
           <img
             src={sKf!.imageUrl}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-full object-contain bg-black transition-transform duration-700 group-hover:scale-105"
             alt={`Shot ${index + 1}`}
           />
         ) : (

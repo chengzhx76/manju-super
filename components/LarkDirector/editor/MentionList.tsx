@@ -46,6 +46,7 @@ const MentionList = forwardRef<MentionListRef, MentionListProps>((props, ref) =>
           id: `${variationParent.id}::${variant.id || index}`,
           variantName: variant.name,
           desc: variant.desc,
+          assetId: variant.assetId || variationParent.assetId,
           image: variant.image || variationParent.image
         }))
       : []
