@@ -52,10 +52,11 @@ import {
   LayoutGrid,
   Monitor,
   Smartphone,
-  Sparkles,
   X,
   Upload,
-  Loader2
+  Loader2,
+  Square,
+  CheckSquare
 } from 'lucide-react'
 import ScriptEditorRich from './editor/ScriptEditorRich'
 
@@ -137,6 +138,8 @@ const LarkDirector: React.FC<Props> = ({
   const [playerDurationSec, setPlayerDurationSec] = useState(0)
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false)
   const [isPlayerMuted, setIsPlayerMuted] = useState(false)
+  const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
+  const [selectedClipIds, setSelectedClipIds] = useState<string[]>([])
 
   // 临时使用 scenes 模拟 clip (因为我们目前没有 clip 结构，可以用 shot 或者 scene 来展示)
   const clips = project.shots || []
@@ -263,6 +266,16 @@ const LarkDirector: React.FC<Props> = ({
     }
   }, [clips.length, activeClipIndex])
 
+  useEffect(() => {
+    setSelectedClipIds((prev) =>
+      prev.filter(
+        (clipId) =>
+          clips.some((clip) => clip.id === clipId) &&
+          clips.some((clip) => clip.id === clipId && isClipSelectableForBatch(clip))
+      )
+    )
+  }, [clips])
+
   const createNewClip = (): Shot => {
     const newId = getNextMainShotId(clips.map((shot) => shot.id))
     const defaultSceneId =
@@ -309,6 +322,33 @@ const LarkDirector: React.FC<Props> = ({
       }
     })
     setActiveClipIndex(safeIndex)
+  }
+
+  const handleToggleBatchSelectMode = () => {
+    setIsBatchSelectMode(true)
+    setSelectedClipIds([])
+  }
+
+  const handleCancelBatchSelectMode = () => {
+    setIsBatchSelectMode(false)
+    setSelectedClipIds([])
+  }
+
+  const handleToggleClipSelection = (clip: Shot) => {
+    if (!isClipSelectableForBatch(clip)) return
+    setSelectedClipIds((prev) =>
+      prev.includes(clip.id)
+        ? prev.filter((id) => id !== clip.id)
+        : [...prev, clip.id]
+    )
+  }
+
+  const handleToggleSelectAllClips = () => {
+    if (allSelectableChecked) {
+      setSelectedClipIds([])
+      return
+    }
+    setSelectedClipIds(selectableClipIds)
   }
 
   const handleDeleteActiveClip = () => {
@@ -377,6 +417,9 @@ const LarkDirector: React.FC<Props> = ({
 
   const hasClipScriptContent = (clip?: Shot | null): boolean => {
     if (!clip) return false
+    const cachedPayload = clipMultimodalMap[clip.id]
+    const cachedText = String(cachedPayload?.storyboardText || '').trim()
+    if (cachedText.length > 0) return true
     const plainText = String(getLarkEditorText(clip) || '').trim()
     if (plainText.length > 0) return true
     const html = String(getLarkEditorHtml(clip) || '')
@@ -402,6 +445,18 @@ const LarkDirector: React.FC<Props> = ({
   const generatedClipCount = clips.filter(
     (clip) => getClipRenderState(clip) === 'generated'
   ).length
+  const isClipSelectableForBatch = (clip?: Shot | null): boolean => {
+    if (!clip) return false
+    const renderState = getClipRenderState(clip)
+    return renderState === 'ready_to_generate' || renderState === 'generated'
+  }
+  const selectableClipIds = clips
+    .filter((clip) => isClipSelectableForBatch(clip))
+    .map((clip) => clip.id)
+  const allSelectableChecked =
+    selectableClipIds.length > 0 &&
+    selectableClipIds.every((id) => selectedClipIds.includes(id))
+  const selectedBatchCount = selectedClipIds.length
   const resolveClipDurationSec = (clip?: Shot | null): number => {
     if (!clip) return 0
     const intervalDuration = Number(clip.interval?.duration || 0)
@@ -577,18 +632,21 @@ const LarkDirector: React.FC<Props> = ({
 
   const handleGenerateClipVideo = async (
     clip?: Shot | null,
-    payloadOverride?: ClipMultimodalPayload
-  ): Promise<void> => {
-    if (!clip) return
-    if (clip.interval?.status === 'generating') return
+    payloadOverride?: ClipMultimodalPayload,
+    options?: { silent?: boolean }
+  ): Promise<boolean> => {
+    if (!clip) return false
+    if (clip.interval?.status === 'generating') return false
     const payload =
       payloadOverride && payloadOverride.multimodalPayload.length > 0
         ? payloadOverride
         : getClipMultimodalPayload(clip)
     const storyboardText = String(payload.storyboardText || '').trim()
     if (!storyboardText) {
-      showAlert('请先填写并保存脚本后再生成视频', { type: 'warning' })
-      return
+      if (!options?.silent) {
+        showAlert('请先填写并保存脚本后再生成视频', { type: 'warning' })
+      }
+      return false
     }
 
     const intervalId = clip.interval?.id || generateId(`int-${clip.id}`)
@@ -698,7 +756,10 @@ const LarkDirector: React.FC<Props> = ({
               assetId: finalAssetId
             }
       }))
-      showAlert('视频生成完成', { type: 'success' })
+      if (!options?.silent) {
+        showAlert('视频生成完成', { type: 'success' })
+      }
+      return true
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : '视频生成失败，请稍后重试。'
@@ -718,10 +779,40 @@ const LarkDirector: React.FC<Props> = ({
               status: 'failed'
             }
       }))
-      showAlert(`视频生成失败: ${message}`, { type: 'error' })
+      if (!options?.silent) {
+        showAlert(`视频生成失败: ${message}`, { type: 'error' })
+      }
+      return false
     } finally {
       onGeneratingChange?.(false)
     }
+  }
+
+  const handleBatchGenerateSelectedClips = async () => {
+    if (selectedClipIds.length === 0) {
+      showAlert('请先勾选要批量生成的视频片段', { type: 'warning' })
+      return
+    }
+    const selectedClips = clips.filter((clip) => selectedClipIds.includes(clip.id))
+    const runnableClips = selectedClips.filter((clip) =>
+      isClipSelectableForBatch(clip)
+    )
+    if (runnableClips.length === 0) {
+      showAlert('当前勾选片段暂无可生成内容', { type: 'warning' })
+      return
+    }
+
+    let successCount = 0
+    let failedCount = 0
+    for (const clip of runnableClips) {
+      const ok = await handleGenerateClipVideo(clip, undefined, { silent: true })
+      if (ok) successCount += 1
+      else failedCount += 1
+    }
+
+    showAlert(`批量生成完成：成功 ${successCount}，失败 ${failedCount}`, {
+      type: failedCount > 0 ? 'warning' : 'success'
+    })
   }
 
   const convertFileToDataUrl = (file: File): Promise<string> =>
@@ -1690,10 +1781,6 @@ const LarkDirector: React.FC<Props> = ({
           <span className="text-xs text-[var(--text-tertiary)] mr-4 font-mono">
             {generatedClipCount} / {clips.length}
           </span>
-          <button className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)]">
-            <Sparkles className="w-3 h-3" />
-            重新生成所有首帧
-          </button>
         </div>
       </div>
 
@@ -2177,38 +2264,104 @@ const LarkDirector: React.FC<Props> = ({
                   {Math.round(activeClipDurationSec)}/{Math.round(totalClipDurationSec)}
                 </span>
               </div>
-              <button
-                onClick={() => showAlert('功能暂未实现', { type: 'warning' })}
-                className="text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
-              >
-                多选
-              </button>
+              {isBatchSelectMode ? (
+                <div className="flex items-center gap-3 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAllClips}
+                    className="inline-flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                  >
+                    {allSelectableChecked ? (
+                      <CheckSquare className="w-3.5 h-3.5" />
+                    ) : (
+                      <Square className="w-3.5 h-3.5" />
+                    )}
+                    全选
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleBatchGenerateSelectedClips()}
+                    disabled={selectedBatchCount === 0}
+                    className="text-[var(--text-primary)] hover:text-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    批量生成
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelBatchSelectMode}
+                    className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                  >
+                    取消选择
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleToggleBatchSelectMode}
+                  className="text-[10px] text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                >
+                  多选
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-x-auto px-4 py-3 flex items-center gap-2 custom-scrollbar">
-              <button
-                onClick={() => handleInsertClip(0)}
-                className="w-5 h-20 shrink-0 rounded-full border border-[var(--border-primary)] bg-[var(--bg-base)] text-[var(--text-tertiary)] flex items-center justify-center hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
-                title="在首位前新增片段"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              {!isBatchSelectMode && (
+                <button
+                  onClick={() => handleInsertClip(0)}
+                  className="w-5 h-20 shrink-0 rounded-full border border-[var(--border-primary)] bg-[var(--bg-base)] text-[var(--text-tertiary)] flex items-center justify-center hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+                  title="在首位前新增片段"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              )}
               {clips.map((clip, idx) => {
                 const renderState = getClipRenderState(clip)
+                const isSelectedInBatch = selectedClipIds.includes(clip.id)
+                const canSelectInBatch = isClipSelectableForBatch(clip)
                 return (
                   <React.Fragment key={clip.id}>
                     <div
                       className={`w-36 aspect-[16/12] rounded-xl shrink-0 border cursor-pointer relative p-1.5 ${
-                        activeClipIndex === idx
+                        isBatchSelectMode && isSelectedInBatch
+                          ? 'border-[var(--accent)] bg-[var(--bg-base)]'
+                          : activeClipIndex === idx
                           ? 'border-[var(--accent)] bg-[var(--bg-base)]'
                           : 'border-[var(--border-primary)] bg-[var(--bg-base)] hover:border-[var(--border-secondary)]'
                       } transition-colors`}
-                      onClick={() => setActiveClipIndex(idx)}
+                      onClick={() => {
+                        if (isBatchSelectMode) {
+                          handleToggleClipSelection(clip)
+                          return
+                        }
+                        setActiveClipIndex(idx)
+                      }}
                     >
                       <div className="relative w-full h-full rounded-lg overflow-hidden bg-[var(--bg-elevated)]">
                         <div className="absolute top-1 left-1 w-4 h-4 bg-black/45 rounded flex items-center justify-center text-[8px] text-white z-10 backdrop-blur-sm">
                           {idx + 1}
                         </div>
+                        {isBatchSelectMode && canSelectInBatch && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              handleToggleClipSelection(clip)
+                            }}
+                            className={`absolute top-1 right-1 z-10 rounded-md border p-0.5 transition-colors ${
+                              isSelectedInBatch
+                                ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--btn-primary-text)] shadow-[0_0_0_2px_rgba(255,255,255,0.35)]'
+                                : 'border-white/80 bg-black/55 text-white'
+                            }`}
+                            title="勾选片段"
+                          >
+                            {isSelectedInBatch ? (
+                              <CheckSquare className="w-3.5 h-3.5" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
 
                         {renderState === 'generated' ? (
                           <>
@@ -2226,7 +2379,8 @@ const LarkDirector: React.FC<Props> = ({
                               {formatDurationLabel(resolveClipDurationSec(clip))}
                             </div>
                           </>
-                        ) : renderState === 'ready_to_generate' ? (
+                        ) : renderState === 'ready_to_generate' &&
+                          !isBatchSelectMode ? (
                           <div className="w-full h-full flex items-center justify-center">
                             <button
                               type="button"
@@ -2244,6 +2398,11 @@ const LarkDirector: React.FC<Props> = ({
                                 : '生成'}
                             </button>
                           </div>
+                        ) : renderState === 'ready_to_generate' &&
+                          isBatchSelectMode ? (
+                          <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-[10px] font-medium">
+                            待生成
+                          </div>
                         ) : renderState === 'generating' ? (
                           <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[var(--text-muted)]">
                             <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--accent)]" />
@@ -2256,13 +2415,15 @@ const LarkDirector: React.FC<Props> = ({
                         )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleInsertClip(idx + 1)}
-                      className="w-5 h-20 shrink-0 rounded-full border border-[var(--border-primary)] bg-[var(--bg-base)] text-[var(--text-tertiary)] flex items-center justify-center hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
-                      title={`在片段${idx + 1}后新增片段`}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    {!isBatchSelectMode && (
+                      <button
+                        onClick={() => handleInsertClip(idx + 1)}
+                        className="w-5 h-20 shrink-0 rounded-full border border-[var(--border-primary)] bg-[var(--bg-base)] text-[var(--text-tertiary)] flex items-center justify-center hover:border-[var(--accent)] hover:text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+                        title={`在片段${idx + 1}后新增片段`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </React.Fragment>
                 )
               })}
