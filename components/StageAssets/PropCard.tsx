@@ -11,9 +11,11 @@ import {
   X,
   Sparkles,
   Link2,
-  Camera
+  Camera,
+  Check,
+  History
 } from 'lucide-react'
-import { Prop } from '../../types'
+import { Prop, PropGenerationHistoryItem } from '../../types'
 import { PROP_CATEGORIES } from './constants'
 import ImageUploadButton from './ImageUploadButton'
 import InlineEditableText from './InlineEditableText'
@@ -25,11 +27,13 @@ interface PropCardProps {
   isInProjectLibrary?: boolean
   isGenerating: boolean
   shapeReferenceImage?: string
-  onGenerate: () => void
+  onGenerate: (promptOverride?: string) => void
   onUpload: (file: File) => void
   onUploadShapeReference: (file: File) => void
   onClearShapeReference: () => void
   onPromptSave: (newPrompt: string) => void
+  onSelectHistoryItem: (historyId: string) => void
+  onDeleteHistoryItem: (historyId: string) => void
   onImageClick: (imageUrl: string) => void
   onDelete: () => void
   onUpdateInfo: (updates: {
@@ -55,6 +59,8 @@ const PropCard: React.FC<PropCardProps> = ({
   onUploadShapeReference,
   onClearShapeReference,
   onPromptSave,
+  onSelectHistoryItem,
+  onDeleteHistoryItem,
   onImageClick,
   onDelete,
   onUpdateInfo,
@@ -84,7 +90,7 @@ const PropCard: React.FC<PropCardProps> = ({
       onPromptSave(normalizedPrompt)
     }
     setShowGenerateModal(false)
-    onGenerate()
+    onGenerate(normalizedPrompt)
   }
 
   const handleShapeReferenceChange = (
@@ -97,6 +103,8 @@ const PropCard: React.FC<PropCardProps> = ({
   }
 
   const isLinked = !!prop.libraryId
+  const generationHistory: PropGenerationHistoryItem[] =
+    prop.generationHistory || []
 
   return (
     <div
@@ -284,7 +292,65 @@ const PropCard: React.FC<PropCardProps> = ({
           </div>
         )}
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-3 flex flex-col gap-2">
+          <div className="border border-[var(--border-primary)] rounded-lg p-2.5 bg-[var(--bg-elevated)]/40">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider flex items-center gap-1.5">
+                <History className="w-3 h-3" />
+                历史记录
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)]">
+                {generationHistory.length} 个版本
+              </span>
+            </div>
+            {generationHistory.length === 0 ? (
+              <div className="h-[74px] border border-dashed border-[var(--border-primary)] rounded-md flex items-center justify-center text-[10px] text-[var(--text-muted)]">
+                暂无历史版本
+              </div>
+            ) : (
+              <div className="flex gap-2 h-[74px] overflow-x-auto overflow-y-hidden pb-1">
+                {generationHistory.map((item, index) => {
+                  const isActiveHistoryItem = item.imageUrl === prop.referenceImage
+                  return (
+                    <div
+                      key={item.id}
+                      className="group/history relative h-16 w-16 min-w-16 rounded-md overflow-hidden border border-[var(--border-primary)] bg-[var(--bg-base)] flex-shrink-0"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onSelectHistoryItem(item.id)}
+                        className="w-full h-full"
+                        title={`设为当前主图（历史版本 ${generationHistory.length - index}）`}
+                      >
+                        <img
+                          src={item.imageUrl}
+                          alt={`历史版本 ${generationHistory.length - index}`}
+                          className="w-full h-full object-contain"
+                        />
+                      </button>
+                      {isActiveHistoryItem ? (
+                        <span
+                          className="absolute top-1 right-1 p-0.5 rounded bg-[var(--accent-bg)] text-[var(--accent-text)] border border-[var(--accent-border)]"
+                          title="当前激活版本"
+                        >
+                          <Check className="w-2.5 h-2.5" />
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteHistoryItem(item.id)}
+                          className="absolute top-1 right-1 p-0.5 rounded bg-[var(--bg-base)]/90 text-[var(--text-tertiary)] hover:text-[var(--error-text)] opacity-0 group-hover/history:opacity-100 transition-opacity"
+                          title="删除该历史版本"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           {prop.referenceImage && (
             <button
               onClick={openGenerateModal}

@@ -7,12 +7,14 @@ import {
   ProjectState,
   Prop,
   Scene,
-  Shot
+  Shot,
+  VideoGenerationHistoryItem
 } from '../../types'
 import { useAlert } from '../GlobalAlert'
 import { useProjectContext } from '../../contexts/ProjectContext'
 import { convertImageToBase64 } from '../../services/storageService'
 import {
+  deleteRemoteAsset,
   hasAssetRelayConfig,
   hasVolcengineTosConfig,
   resolveTosPublicUrlFromAssetId,
@@ -56,12 +58,42 @@ import {
   Upload,
   Loader2,
   Square,
-  CheckSquare
+  CheckSquare,
+  Check,
+  History
 } from 'lucide-react'
 import ScriptEditorRich from './editor/ScriptEditorRich'
 
 const generateId = (prefix: string): string =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const sanitizeUrlString = (value: unknown): string =>
+  String(value || '')
+    .trim()
+    .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
+    .trim()
+
+const MAX_VIDEO_GENERATION_HISTORY = 20
+const appendVideoGenerationHistory = (
+  history: VideoGenerationHistoryItem[] | undefined,
+  next: Omit<VideoGenerationHistoryItem, 'id' | 'createdAt'>
+): VideoGenerationHistoryItem[] => {
+  const nextVideoUrl = sanitizeUrlString(next.videoUrl)
+  if (!nextVideoUrl) return history || []
+  const nextItem: VideoGenerationHistoryItem = {
+    id: generateId('clip_video_history'),
+    videoUrl: nextVideoUrl,
+    sourceVideoUrl: sanitizeUrlString(next.sourceVideoUrl) || undefined,
+    assetId: String(next.assetId || '').trim() || undefined,
+    durationSec:
+      Number.isFinite(Number(next.durationSec)) && Number(next.durationSec) > 0
+        ? Number(next.durationSec)
+        : undefined,
+    createdAt: Date.now()
+  }
+  const filtered = (history || []).filter((item) => item.videoUrl !== nextVideoUrl)
+  return [nextItem, ...filtered].slice(0, MAX_VIDEO_GENERATION_HISTORY)
+}
 
 interface Props {
   project: ProjectState
@@ -173,11 +205,7 @@ const LarkDirector: React.FC<Props> = ({
   }
 
   const activeClipTitle = activeClip ? `片段 ${activeClipIndex + 1}` : '片段'
-  const normalizeRemoteUrl = (value: unknown): string =>
-    String(value || '')
-      .trim()
-      .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
-      .trim()
+  const normalizeRemoteUrl = (value: unknown): string => sanitizeUrlString(value)
   const resolveMediaRenderUrl = (asset: MediaAsset): string => {
     const directRemoteUrl = normalizeRemoteUrl(asset.remoteUrl)
     if (directRemoteUrl) return directRemoteUrl
@@ -482,11 +510,34 @@ const LarkDirector: React.FC<Props> = ({
     (sum, clip) => sum + getGeneratedClipDurationSec(clip),
     0
   )
-  const activeClipVideoUrl = String(
+  const activeClipVideoUrl = normalizeRemoteUrl(
     (activeClip as (Shot & { videoUrl?: string }) | null)?.videoUrl ||
       activeClip?.interval?.videoUrl ||
       ''
-  ).trim()
+  )
+  const activeClipVideoHistory: VideoGenerationHistoryItem[] = (() => {
+    const history = activeClip?.interval?.generationHistory || []
+    if (history.length > 0) {
+      return history
+        .map((item) => ({
+          ...item,
+          videoUrl: normalizeRemoteUrl(item.videoUrl),
+          sourceVideoUrl: normalizeRemoteUrl(item.sourceVideoUrl)
+        }))
+        .filter((item) => !!item.videoUrl)
+    }
+    if (!activeClipVideoUrl) return []
+    return [
+      {
+        id: `legacy-video-${activeClip?.id || 'clip'}`,
+        videoUrl: activeClipVideoUrl,
+        sourceVideoUrl: activeClip?.interval?.sourceVideoUrl,
+        assetId: activeClip?.interval?.assetId,
+        durationSec: activeClipDurationSec > 0 ? activeClipDurationSec : undefined,
+        createdAt: 0
+      }
+    ]
+  })()
   const activeClipRenderState = getClipRenderState(activeClip)
 
   useEffect(() => {
@@ -586,6 +637,95 @@ const LarkDirector: React.FC<Props> = ({
       )
     }))
   }
+  const handleSelectClipVideoHistoryItem = (
+    clipId: string,
+    historyId: string
+  ): void => {
+    updateClipById(clipId, (target) => {
+      const interval = target.interval
+      if (!interval?.generationHistory?.length) return target
+      const selected = interval.generationHistory.find((item) => item.id === historyId)
+      if (!selected) return target
+      const selectedVideoUrl = normalizeRemoteUrl(selected.videoUrl)
+      const selectedSourceVideoUrl = normalizeRemoteUrl(selected.sourceVideoUrl)
+      if (!selectedVideoUrl) return target
+      if (selectedVideoUrl === normalizeRemoteUrl(interval.videoUrl)) return target
+      return {
+        ...target,
+        interval: {
+          ...interval,
+          status: 'completed',
+          videoUrl: selectedVideoUrl,
+          sourceVideoUrl:
+            selectedSourceVideoUrl || normalizeRemoteUrl(interval.sourceVideoUrl),
+          duration:
+            Number.isFinite(Number(selected.durationSec)) &&
+            Number(selected.durationSec) > 0
+              ? Number(selected.durationSec)
+              : interval.duration
+        }
+      }
+    })
+  }
+  const handleDeleteClipVideoHistoryItem = (
+    clipId: string,
+    historyId: string
+  ): void => {
+    const targetClip = clips.find((item) => item.id === clipId)
+    const history = targetClip?.interval?.generationHistory || []
+    const selected = history.find((item) => item.id === historyId)
+    if (!selected) {
+      showAlert('未找到可删除的历史视频', { type: 'warning' })
+      return
+    }
+    const selectedVideoUrl = normalizeRemoteUrl(selected.videoUrl)
+    const isActiveHistoryItem =
+      selectedVideoUrl &&
+      selectedVideoUrl === normalizeRemoteUrl(targetClip?.interval?.videoUrl)
+    if (isActiveHistoryItem) {
+      showAlert('当前激活视频不支持删除，请先切换到其他历史版本', {
+        type: 'warning'
+      })
+      return
+    }
+
+    showAlert('确定删除该历史视频吗？此操作不可撤销。', {
+      type: 'warning',
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
+      onConfirm: () => {
+        void deleteRemoteAsset(selected.assetId).catch((error) => {
+          console.warn('[LarkDirector] 删除历史视频远端对象失败', {
+            actor: 'user',
+            action: 'delete-history-video-remote-object',
+            clipId,
+            historyId,
+            assetId: selected.assetId,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        })
+        updateClipById(clipId, (target) => {
+          const interval = target.interval
+          if (!interval?.generationHistory?.length) return target
+          const nextHistory = interval.generationHistory.filter(
+            (item) => item.id !== historyId
+          )
+          if (nextHistory.length === interval.generationHistory.length) {
+            return target
+          }
+          return {
+            ...target,
+            interval: {
+              ...interval,
+              generationHistory: nextHistory
+            }
+          }
+        })
+        showAlert('历史视频已删除', { type: 'success' })
+      }
+    })
+  }
   const handleChangeActiveClipVideoModel = (modelId: string): void => {
     if (!activeClip) return
     updateClipById(activeClip.id, (target) => ({
@@ -637,10 +777,14 @@ const LarkDirector: React.FC<Props> = ({
   ): Promise<boolean> => {
     if (!clip) return false
     if (clip.interval?.status === 'generating') return false
+    const latestPayload = buildClipMultimodalPayloadFromText(
+      String(clip.larkActionSummary || ''),
+      String(clip.larkActionSummaryHtml || '')
+    )
     const payload =
       payloadOverride && payloadOverride.multimodalPayload.length > 0
         ? payloadOverride
-        : getClipMultimodalPayload(clip)
+        : latestPayload
     const storyboardText = String(payload.storyboardText || '').trim()
     if (!storyboardText) {
       if (!options?.silent) {
@@ -741,6 +885,15 @@ const LarkDirector: React.FC<Props> = ({
               sourceVideoUrl,
               videoPrompt: storyboardText,
               duration: finalDurationSec,
+              generationHistory: appendVideoGenerationHistory(
+                target.interval.generationHistory,
+                {
+                  videoUrl: finalVideoUrl,
+                  sourceVideoUrl,
+                  assetId: finalAssetId,
+                  durationSec: finalDurationSec
+                }
+              ),
               assetId: finalAssetId
             }
           : {
@@ -753,6 +906,12 @@ const LarkDirector: React.FC<Props> = ({
               videoUrl: finalVideoUrl,
               sourceVideoUrl,
               videoPrompt: storyboardText,
+              generationHistory: appendVideoGenerationHistory(undefined, {
+                videoUrl: finalVideoUrl,
+                sourceVideoUrl,
+                assetId: finalAssetId,
+                durationSec: finalDurationSec
+              }),
               assetId: finalAssetId
             }
       }))
@@ -2251,6 +2410,84 @@ const LarkDirector: React.FC<Props> = ({
                   </div>
                 )}
                 </div>
+              </div>
+
+              <div className="border-t border-[var(--border-subtle)] p-1.5 bg-[var(--bg-base)]/40 shrink-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-mono text-[var(--text-tertiary)] uppercase tracking-wider flex items-center gap-1">
+                    <History className="w-2.5 h-2.5" />
+                    历史视频
+                  </span>
+                  <span className="text-[9px] text-[var(--text-muted)]">
+                    {activeClipVideoHistory.length} 条
+                  </span>
+                </div>
+                {activeClipVideoHistory.length === 0 ? (
+                  <div className="h-12 border border-dashed border-[var(--border-primary)] rounded-md flex items-center justify-center text-[9px] text-[var(--text-muted)]">
+                    暂无历史视频
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5">
+                    {activeClipVideoHistory.map((item, index) => {
+                      const isActiveHistoryItem = item.videoUrl === activeClipVideoUrl
+                      const historyDuration = Number(item.durationSec || 0)
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            activeClip &&
+                            handleSelectClipVideoHistoryItem(activeClip.id, item.id)
+                          }
+                          className={`group/history relative w-[52px] h-14 min-w-[52px] rounded-md overflow-hidden border bg-black flex-shrink-0 ${
+                            isActiveHistoryItem
+                              ? 'border-[var(--accent-border)]'
+                              : 'border-[var(--border-primary)]'
+                          }`}
+                          title={`设为当前视频（历史版本 ${
+                            activeClipVideoHistory.length - index
+                          }）`}
+                        >
+                          <video
+                            src={item.videoUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                          />
+                          {historyDuration > 0 && (
+                            <span className="absolute left-0.5 bottom-0.5 px-0.5 py-0.5 rounded bg-black/70 text-[8px] text-white font-mono leading-none">
+                              {formatDurationLabel(historyDuration)}
+                            </span>
+                          )}
+                          {isActiveHistoryItem && (
+                            <span
+                              className="absolute top-0.5 right-0.5 p-0.5 rounded bg-[var(--accent-bg)] text-[var(--accent-text)] border border-[var(--accent-border)]"
+                              title="当前激活版本"
+                            >
+                              <Check className="w-2 h-2" />
+                            </span>
+                          )}
+                          {!isActiveHistoryItem && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                if (!activeClip) return
+                                handleDeleteClipVideoHistoryItem(activeClip.id, item.id)
+                              }}
+                              className="absolute top-0.5 right-0.5 p-0.5 rounded bg-black/70 text-white border border-white/30 opacity-90 hover:opacity-100 hover:bg-black/90 transition-colors"
+                              title="删除历史视频"
+                            >
+                              <Trash2 className="w-2 h-2" />
+                            </button>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

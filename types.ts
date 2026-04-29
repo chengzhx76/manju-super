@@ -149,6 +149,36 @@ export interface CharacterTurnaroundData {
   // generating_image: 用户已确认，正在生成九宫格图片
 }
 
+export interface CharacterGenerationHistoryItem {
+  id: string
+  imageUrl: string
+  assetId?: string
+  createdAt: number
+}
+
+export interface SceneGenerationHistoryItem {
+  id: string
+  imageUrl: string
+  assetId?: string
+  createdAt: number
+}
+
+export interface PropGenerationHistoryItem {
+  id: string
+  imageUrl: string
+  assetId?: string
+  createdAt: number
+}
+
+export interface VideoGenerationHistoryItem {
+  id: string
+  videoUrl: string
+  sourceVideoUrl?: string
+  assetId?: string
+  durationSec?: number
+  createdAt: number
+}
+
 export interface Character {
   id: string
   name: string
@@ -161,6 +191,7 @@ export interface Character {
   coreFeatures?: string
   shapeReferenceImage?: string // Optional reference image used only for shape/silhouette guidance during generation
   referenceImage?: string
+  generationHistory?: CharacterGenerationHistoryItem[]
   turnaround?: CharacterTurnaroundData
   variations: CharacterVariation[]
   status?: 'pending' | 'generating' | 'completed' | 'failed'
@@ -180,6 +211,7 @@ export interface Scene {
   negativePrompt?: string // 负面提示词，用于排除不想要的元素
   shapeReferenceImage?: string // Optional reference image used only for shape/silhouette guidance during generation
   referenceImage?: string // 场景参考图，存储为base64格式（data:image/png;base64,...）
+  generationHistory?: SceneGenerationHistoryItem[]
   status?: 'pending' | 'generating' | 'completed' | 'failed' // 生成状态，用于loading状态持久化
   assetId?: string
   libraryId?: string
@@ -201,6 +233,7 @@ export interface Prop {
   negativePrompt?: string // 负面提示词，用于排除不想要的元素
   shapeReferenceImage?: string // Optional reference image used only for shape/silhouette guidance during generation
   referenceImage?: string // 道具参考图，存储为base64格式（data:image/png;base64,...）
+  generationHistory?: PropGenerationHistoryItem[]
   status?: 'pending' | 'generating' | 'completed' | 'failed' // 生成状态，用于loading状态持久化
   assetId?: string
   libraryId?: string
@@ -262,6 +295,7 @@ export interface VideoInterval {
   sourceVideoUrl?: string // 原始远程视频地址（用于追踪与调试）
   videoPrompt?: string // 视频生成时使用的提示词
   promptVersions?: PromptVersion[] // Prompt edit history with rollback support
+  generationHistory?: VideoGenerationHistoryItem[]
   status: 'pending' | 'generating' | 'completed' | 'failed'
   assetId?: string
 }

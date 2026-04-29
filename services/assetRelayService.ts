@@ -1025,7 +1025,6 @@ export const uploadMediaAssetFile = async (params: {
       params.seriesList,
       params.episodes
     )
-    const remoteAssets = await listAssetsByGroup(nextProject.assetGroupId!)
     const candidate: RelayLocalAssetCandidate = {
       kind: toRelayKind(params.mediaType),
       localId: params.resourceId,
@@ -1034,25 +1033,6 @@ export const uploadMediaAssetFile = async (params: {
       label: mediaName,
       url: tosUploaded.url,
       currentAssetId: params.currentAssetId
-    }
-    const duplicate = findRemoteByName(remoteAssets, candidate.name)
-    const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
-
-    if (remoteCurrent && getAssetItemId(remoteCurrent)) {
-      scheduleTosDelete(getAssetItemId(remoteCurrent), {
-        source: 'uploadMediaAssetFile-replace-current',
-        mediaType: params.mediaType,
-        resourceId: params.resourceId
-      })
-      await deleteRemoteAsset(getAssetItemId(remoteCurrent))
-    }
-    if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
-      scheduleTosDelete(getAssetItemId(duplicate), {
-        source: 'uploadMediaAssetFile-replace-duplicate',
-        mediaType: params.mediaType,
-        resourceId: params.resourceId
-      })
-      await deleteRemoteAsset(getAssetItemId(duplicate))
     }
 
     currentStage = 'relay'
@@ -1562,11 +1542,6 @@ export const uploadGeneratedAssetToRelay = async (params: {
       })
       params.onStage?.('tos_upload_success')
       finalUrl = tosUploaded.url
-      scheduleTosDelete(params.currentAssetId, {
-        source: 'uploadGeneratedAssetToRelay',
-        kind: params.kind,
-        localId: params.localId
-      })
     } catch (error) {
       logUploadFlow({
         result: 'failed',
@@ -1647,7 +1622,6 @@ export const uploadGeneratedAssetToRelay = async (params: {
       params.seriesList,
       params.episodes
     )
-    const remoteAssets = await listAssetsByGroup(nextProject.assetGroupId!)
     const candidate: RelayLocalAssetCandidate = {
       kind: params.kind,
       localId: params.localId,
@@ -1656,25 +1630,6 @@ export const uploadGeneratedAssetToRelay = async (params: {
       label: params.localId,
       url: finalUrl,
       currentAssetId: params.currentAssetId
-    }
-    const duplicate = findRemoteByName(remoteAssets, candidate.name)
-    const remoteCurrent = findRemoteById(remoteAssets, params.currentAssetId)
-
-    if (remoteCurrent && getAssetItemId(remoteCurrent)) {
-      scheduleTosDelete(getAssetItemId(remoteCurrent), {
-        source: 'relay-upload-replace-current',
-        kind: params.kind,
-        localId: params.localId
-      })
-      await deleteRemoteAsset(getAssetItemId(remoteCurrent))
-    }
-    if (duplicate && getAssetItemId(duplicate) !== params.currentAssetId) {
-      scheduleTosDelete(getAssetItemId(duplicate), {
-        source: 'relay-upload-replace-duplicate',
-        kind: params.kind,
-        localId: params.localId
-      })
-      await deleteRemoteAsset(getAssetItemId(duplicate))
     }
 
     params.onStage?.('start_relay_upload')

@@ -12,6 +12,7 @@ import {
 } from '../../services/modelRegistry'
 import { VideoModelDefinition } from '../../types/model'
 import { useResolvedVideoUrl } from '../../hooks/useResolvedVideoUrl'
+import { useAlert } from '../GlobalAlert'
 
 interface VideoGeneratorProps {
   shot: Shot
@@ -34,6 +35,7 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
   onEditPrompt,
   onModelChange
 }) => {
+  const { showAlert } = useAlert()
   const normalizeModelId = (modelId?: string) => {
     if (!modelId) return modelId
     const normalized = modelId.toLowerCase()
@@ -139,7 +141,12 @@ const VideoGenerator: React.FC<VideoGeneratorProps> = ({
     setVeoFastQuality(resolveVeoFastQuality(shot.videoModel))
   }, [shot.videoModel])
 
+  const TEMP_BLOCK_VIDEO_GENERATION = true
   const handleGenerate = () => {
+    if (TEMP_BLOCK_VIDEO_GENERATION) {
+      showAlert('功能未开放。', { type: 'warning' })
+      return
+    }
     onGenerate(aspectRatio, duration, effectiveModelId)
   }
 

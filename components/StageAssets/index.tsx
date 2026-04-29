@@ -104,6 +104,10 @@ type ImageFlowPanel = {
   createdAt: number
 }
 
+const MAX_CHARACTER_GENERATION_HISTORY = 20
+const MAX_SCENE_GENERATION_HISTORY = 20
+const MAX_PROP_GENERATION_HISTORY = 20
+
 const StageAssets: React.FC<Props> = ({
   project,
   updateProject,
@@ -184,17 +188,64 @@ const StageAssets: React.FC<Props> = ({
     if (!project.scriptData) return
     const next = cloneScriptData(project.scriptData)
     let hasChanged = false
+    const normalizeComparableUrl = (value?: string): string =>
+      String(value || '')
+        .trim()
+        .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
+        .trim()
+        .split('#')[0]
+        .split('?')[0]
+    const findHistoryAssetId = (
+      history: Array<{ imageUrl: string; assetId?: string }> | undefined,
+      referenceImage?: string
+    ): string => {
+      const normalizedReference = normalizeComparableUrl(referenceImage)
+      if (!normalizedReference || !history?.length) return ''
+      return String(
+        history.find(
+          (item) => normalizeComparableUrl(item.imageUrl) === normalizedReference
+        )
+          ?.assetId || ''
+      ).trim()
+    }
+    const isUrlMatchedWithAssetId = (
+      targetUrl?: string,
+      assetId?: string
+    ): boolean => {
+      const normalizedTarget = normalizeComparableUrl(targetUrl)
+      const normalizedResolved = normalizeComparableUrl(
+        resolveTosPublicUrlFromAssetId(assetId)
+      )
+      return Boolean(normalizedTarget && normalizedResolved && normalizedTarget === normalizedResolved)
+    }
 
     for (const character of next.characters || []) {
       const charUrl = resolveTosPublicUrlFromAssetId(character.assetId)
-      if (charUrl && charUrl !== character.referenceImage) {
+      const historyAssetId = findHistoryAssetId(
+        character.generationHistory,
+        character.referenceImage
+      )
+      if (!character.assetId && historyAssetId) {
+        character.assetId = historyAssetId
+        hasChanged = true
+      }
+      if (!character.referenceImage && charUrl) {
         character.referenceImage = charUrl
         hasChanged = true
+      } else if (
+        character.referenceImage &&
+        charUrl &&
+        !isUrlMatchedWithAssetId(character.referenceImage, character.assetId)
+      ) {
+        if (historyAssetId && historyAssetId !== character.assetId) {
+          character.assetId = historyAssetId
+          hasChanged = true
+        }
       }
 
       for (const variation of character.variations || []) {
         const variationUrl = resolveTosPublicUrlFromAssetId(variation.assetId)
-        if (variationUrl && variationUrl !== variation.referenceImage) {
+        if (!variation.referenceImage && variationUrl) {
           variation.referenceImage = variationUrl
           hasChanged = true
         }
@@ -204,7 +255,7 @@ const StageAssets: React.FC<Props> = ({
         const turnaroundUrl = resolveTosPublicUrlFromAssetId(
           character.turnaround.assetId
         )
-        if (turnaroundUrl && turnaroundUrl !== character.turnaround.imageUrl) {
+        if (!character.turnaround.imageUrl && turnaroundUrl) {
           character.turnaround.imageUrl = turnaroundUrl
           hasChanged = true
         }
@@ -213,17 +264,45 @@ const StageAssets: React.FC<Props> = ({
 
     for (const scene of next.scenes || []) {
       const sceneUrl = resolveTosPublicUrlFromAssetId(scene.assetId)
-      if (sceneUrl && sceneUrl !== scene.referenceImage) {
+      const historyAssetId = findHistoryAssetId(scene.generationHistory, scene.referenceImage)
+      if (!scene.assetId && historyAssetId) {
+        scene.assetId = historyAssetId
+        hasChanged = true
+      }
+      if (!scene.referenceImage && sceneUrl) {
         scene.referenceImage = sceneUrl
         hasChanged = true
+      } else if (
+        scene.referenceImage &&
+        sceneUrl &&
+        !isUrlMatchedWithAssetId(scene.referenceImage, scene.assetId)
+      ) {
+        if (historyAssetId && historyAssetId !== scene.assetId) {
+          scene.assetId = historyAssetId
+          hasChanged = true
+        }
       }
     }
 
     for (const prop of next.props || []) {
       const propUrl = resolveTosPublicUrlFromAssetId(prop.assetId)
-      if (propUrl && propUrl !== prop.referenceImage) {
+      const historyAssetId = findHistoryAssetId(prop.generationHistory, prop.referenceImage)
+      if (!prop.assetId && historyAssetId) {
+        prop.assetId = historyAssetId
+        hasChanged = true
+      }
+      if (!prop.referenceImage && propUrl) {
         prop.referenceImage = propUrl
         hasChanged = true
+      } else if (
+        prop.referenceImage &&
+        propUrl &&
+        !isUrlMatchedWithAssetId(prop.referenceImage, prop.assetId)
+      ) {
+        if (historyAssetId && historyAssetId !== prop.assetId) {
+          prop.assetId = historyAssetId
+          hasChanged = true
+        }
       }
     }
 
@@ -573,6 +652,75 @@ const StageAssets: React.FC<Props> = ({
     return true
   }
 
+  const appendCharacterGenerationHistory = (
+    character: Character,
+    imageUrl: string,
+    assetId?: string
+  ) => {
+    const existing = (character.generationHistory || []).find(
+      (item) => item.imageUrl === imageUrl
+    )
+    const nextItem = {
+      id: generateId('char_history'),
+      imageUrl,
+      assetId: assetId || existing?.assetId,
+      createdAt: Date.now()
+    }
+    const filtered = (character.generationHistory || []).filter(
+      (item) => item.imageUrl !== imageUrl
+    )
+    character.generationHistory = [nextItem, ...filtered].slice(
+      0,
+      MAX_CHARACTER_GENERATION_HISTORY
+    )
+  }
+
+  const appendSceneGenerationHistory = (
+    scene: Scene,
+    imageUrl: string,
+    assetId?: string
+  ) => {
+    const existing = (scene.generationHistory || []).find(
+      (item) => item.imageUrl === imageUrl
+    )
+    const nextItem = {
+      id: generateId('scene_history'),
+      imageUrl,
+      assetId: assetId || existing?.assetId,
+      createdAt: Date.now()
+    }
+    const filtered = (scene.generationHistory || []).filter(
+      (item) => item.imageUrl !== imageUrl
+    )
+    scene.generationHistory = [nextItem, ...filtered].slice(
+      0,
+      MAX_SCENE_GENERATION_HISTORY
+    )
+  }
+
+  const appendPropGenerationHistory = (
+    prop: Prop,
+    imageUrl: string,
+    assetId?: string
+  ) => {
+    const existing = (prop.generationHistory || []).find(
+      (item) => item.imageUrl === imageUrl
+    )
+    const nextItem = {
+      id: generateId('prop_history'),
+      imageUrl,
+      assetId: assetId || existing?.assetId,
+      createdAt: Date.now()
+    }
+    const filtered = (prop.generationHistory || []).filter(
+      (item) => item.imageUrl !== imageUrl
+    )
+    prop.generationHistory = [nextItem, ...filtered].slice(
+      0,
+      MAX_PROP_GENERATION_HISTORY
+    )
+  }
+
   const shapeReferenceStyleInstruction = `\n\nREFERENCE RULES: Use provided reference image ONLY for shape/silhouette/proportions/composition anchors. Do NOT copy the reference image's color grading, texture treatment, lighting style, or rendering medium.\nSTYLE LOCK: Final output MUST match the current project visual style (${visualStyle}).`
 
   /**
@@ -581,10 +729,18 @@ const StageAssets: React.FC<Props> = ({
   const handleGenerateAsset = async (
     type: 'character' | 'scene',
     id: string,
-    options?: { managedFlow?: boolean; flowPanelId?: string }
+    options?: {
+      managedFlow?: boolean
+      flowPanelId?: string
+      promptOverride?: string
+    }
   ) => {
     const managedFlow = options?.managedFlow === true
     let flowPanelId = options?.flowPanelId
+    const hasPromptOverride = typeof options?.promptOverride === 'string'
+    const normalizedPromptOverride = hasPromptOverride
+      ? (options?.promptOverride || '').trim()
+      : ''
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
     if (!managedFlow) {
@@ -616,9 +772,6 @@ const StageAssets: React.FC<Props> = ({
 
     if (existingAssetId) {
       clearLocalAssetId(type, id)
-      void deleteRemoteAsset(existingAssetId).catch((error) => {
-        console.warn('Delete remote asset before regenerate failed:', error)
-      })
     }
 
     // 设置生成状态
@@ -645,7 +798,10 @@ const StageAssets: React.FC<Props> = ({
         if (char) {
           shapeReferenceImage = char.shapeReferenceImage
 
-          if (char.visualPrompt) {
+          if (hasPromptOverride && normalizedPromptOverride) {
+            prompt = normalizedPromptOverride
+            negativePrompt = char.negativePrompt || ''
+          } else if (!hasPromptOverride && char.visualPrompt) {
             prompt = char.visualPrompt
             negativePrompt = char.negativePrompt || ''
           } else {
@@ -684,7 +840,10 @@ const StageAssets: React.FC<Props> = ({
         const scene = scriptSnapshot.scenes.find((s) => compareIds(s.id, id))
         if (scene) {
           shapeReferenceImage = scene.shapeReferenceImage
-          if (scene.visualPrompt) {
+          if (hasPromptOverride && normalizedPromptOverride) {
+            prompt = normalizedPromptOverride
+            negativePrompt = scene.negativePrompt || ''
+          } else if (!hasPromptOverride && scene.visualPrompt) {
             prompt = scene.visualPrompt
             negativePrompt = scene.negativePrompt || ''
           } else {
@@ -773,6 +932,7 @@ const StageAssets: React.FC<Props> = ({
           const c = newData.characters.find((c) => compareIds(c.id, id))
           if (c) {
             c.referenceImage = imageUrl
+            appendCharacterGenerationHistory(c, imageUrl)
             c.status = 'completed'
             delete c.assetId
           }
@@ -780,6 +940,7 @@ const StageAssets: React.FC<Props> = ({
           const s = newData.scenes.find((s) => compareIds(s.id, id))
           if (s) {
             s.referenceImage = imageUrl
+            appendSceneGenerationHistory(s, imageUrl)
             s.status = 'completed'
             delete s.assetId
           }
@@ -1100,21 +1261,45 @@ const StageAssets: React.FC<Props> = ({
         const target = nextEpisode.scriptData?.characters.find((item) =>
           compareIds(item.id, localId)
         )
-        if (target) target.assetId = assetId
+        if (target) {
+          target.assetId = assetId
+          const activeHistoryItem = (target.generationHistory || []).find(
+            (item) => item.imageUrl === target.referenceImage
+          )
+          if (activeHistoryItem) {
+            activeHistoryItem.assetId = assetId
+          }
+        }
         return nextEpisode
       }
       if (kind === 'scene') {
         const target = nextEpisode.scriptData?.scenes.find((item) =>
           compareIds(item.id, localId)
         )
-        if (target) target.assetId = assetId
+        if (target) {
+          target.assetId = assetId
+          const activeHistoryItem = (target.generationHistory || []).find(
+            (item) => item.imageUrl === target.referenceImage
+          )
+          if (activeHistoryItem) {
+            activeHistoryItem.assetId = assetId
+          }
+        }
         return nextEpisode
       }
       if (kind === 'prop') {
         const target = (nextEpisode.scriptData?.props || []).find((item) =>
           compareIds(item.id, localId)
         )
-        if (target) target.assetId = assetId
+        if (target) {
+          target.assetId = assetId
+          const activeHistoryItem = (target.generationHistory || []).find(
+            (item) => item.imageUrl === target.referenceImage
+          )
+          if (activeHistoryItem) {
+            activeHistoryItem.assetId = assetId
+          }
+        }
         return nextEpisode
       }
       if (kind === 'shot') {
@@ -1204,8 +1389,8 @@ const StageAssets: React.FC<Props> = ({
     const tosEnabled = hasVolcengineTosConfig()
     const relayEnabled = hasAssetRelayConfig()
     const manualSyncOnly = params.fromSyncButton === true
-    const relayOnlyByUrl =
-      manualSyncOnly && /^https?:\/\//i.test(String(params.url || '').trim())
+    // 始终执行 TOS 上传并使用 TOS 回写 URL，避免保留生图服务原始 URL
+    const relayOnlyByUrl = false
     let tosUploadStartedLogged = false
     let tosUploadSuccessLogged = false
     let relayUploadStartedLogged = false
@@ -1304,7 +1489,14 @@ const StageAssets: React.FC<Props> = ({
             params.flowPanelId
           )
         }
-        if (result.url) {
+      const resolvedResultUrl =
+        String(result.url || '').trim() ||
+        String(
+          resolveTosPublicUrlFromAssetId(
+            result.objectKey ? `tos:${result.objectKey}` : undefined
+          ) || ''
+        ).trim()
+      if (resolvedResultUrl) {
           updateProject((prev) => {
             if (!prev.scriptData) return prev
             const next = cloneScriptData(prev.scriptData)
@@ -1313,21 +1505,48 @@ const StageAssets: React.FC<Props> = ({
                 compareIds(item.id, params.localId)
               )
               if (target) {
-                target.referenceImage = result.url!
+                const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+                const activeHistoryItem = (target.generationHistory || []).find(
+                  (item) =>
+                    item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+                )
+                if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+                }
               }
             } else if (params.kind === 'scene') {
               const target = next.scenes.find((item) =>
                 compareIds(item.id, params.localId)
               )
               if (target) {
-                target.referenceImage = result.url!
+                const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+                const activeHistoryItem = (target.generationHistory || []).find(
+                  (item) =>
+                    item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+                )
+                if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+                }
               }
             } else {
               const target = (next.props || []).find((item) =>
                 compareIds(item.id, params.localId)
               )
               if (target) {
-                target.referenceImage = result.url!
+                const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+                const activeHistoryItem = (target.generationHistory || []).find(
+                  (item) =>
+                    item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+                )
+                if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+                }
               }
             }
             return { ...prev, scriptData: next }
@@ -1400,7 +1619,14 @@ const StageAssets: React.FC<Props> = ({
       if (result.assetId) {
         applyEpisodeAssetId(params.kind, params.localId, result.assetId)
       }
-      if (result.url) {
+      const resolvedResultUrl =
+        String(result.url || '').trim() ||
+        String(
+          resolveTosPublicUrlFromAssetId(
+            result.objectKey ? `tos:${result.objectKey}` : undefined
+          ) || ''
+        ).trim()
+      if (resolvedResultUrl) {
         updateProject((prev) => {
           if (!prev.scriptData) return prev
           const next = cloneScriptData(prev.scriptData)
@@ -1409,21 +1635,48 @@ const StageAssets: React.FC<Props> = ({
               compareIds(item.id, params.localId)
             )
             if (target) {
-              target.referenceImage = result.url!
+              const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+              const activeHistoryItem = (target.generationHistory || []).find(
+                (item) =>
+                  item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+              )
+              if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+              }
             }
           } else if (params.kind === 'scene') {
             const target = next.scenes.find((item) =>
               compareIds(item.id, params.localId)
             )
             if (target) {
-              target.referenceImage = result.url!
+              const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+              const activeHistoryItem = (target.generationHistory || []).find(
+                (item) =>
+                  item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+              )
+              if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+              }
             }
           } else {
             const target = (next.props || []).find((item) =>
               compareIds(item.id, params.localId)
             )
             if (target) {
-              target.referenceImage = result.url!
+              const prevReferenceImage = target.referenceImage
+              target.referenceImage = resolvedResultUrl
+              const activeHistoryItem = (target.generationHistory || []).find(
+                (item) =>
+                  item.imageUrl === prevReferenceImage ||
+                  item.imageUrl === resolvedResultUrl
+              )
+              if (activeHistoryItem) {
+                activeHistoryItem.imageUrl = resolvedResultUrl
+              }
             }
           }
           return { ...prev, scriptData: next }
@@ -1507,8 +1760,8 @@ const StageAssets: React.FC<Props> = ({
     const tosEnabled = hasVolcengineTosConfig()
     const relayEnabled = hasAssetRelayConfig()
     const manualSyncOnly = params.fromSyncButton === true
-    const relayOnlyByUrl =
-      manualSyncOnly && /^https?:\/\//i.test(String(params.url || '').trim())
+    // 始终执行 TOS 上传并使用 TOS 回写 URL，避免保留生图服务原始 URL
+    const relayOnlyByUrl = false
     let tosUploadStartedLogged = false
     let tosUploadSuccessLogged = false
     let relayUploadStartedLogged = false
@@ -1644,8 +1897,15 @@ const StageAssets: React.FC<Props> = ({
       if (result.assetId) {
         params.onSynced(result.assetId)
       }
-      if (result.url) {
-        params.onUrlUpdated?.(result.url)
+      const resolvedResultUrl =
+        String(result.url || '').trim() ||
+        String(
+          resolveTosPublicUrlFromAssetId(
+            result.objectKey ? `tos:${result.objectKey}` : undefined
+          ) || ''
+        ).trim()
+      if (resolvedResultUrl) {
+        params.onUrlUpdated?.(resolvedResultUrl)
       }
       completeImageFlow(
         manualSyncOnly ? '素材库同步完成' : '角色衍生资源同步完成',
@@ -2613,6 +2873,55 @@ const StageAssets: React.FC<Props> = ({
     )
   }
 
+  const handleDeleteCharacterHistoryItem = (
+    charId: string,
+    historyId: string
+  ) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = nextData.characters.find((char) => compareIds(char.id, charId))
+      if (!target || !target.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected || selected.imageUrl === target.referenceImage) return prev
+      if (selected.assetId) {
+        void deleteRemoteAsset(selected.assetId).catch((error) => {
+          console.warn('Delete remote character history asset failed:', error)
+        })
+      }
+      const nextHistory = target.generationHistory.filter(
+        (item) => item.id !== historyId
+      )
+      if (nextHistory.length === target.generationHistory.length) return prev
+      target.generationHistory = nextHistory
+      return { ...prev, scriptData: nextData }
+    })
+  }
+
+  const handleSelectCharacterHistoryItem = (
+    charId: string,
+    historyId: string
+  ) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = nextData.characters.find((char) => compareIds(char.id, charId))
+      if (!target?.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected) return prev
+      target.referenceImage = selected.imageUrl
+      if (selected.assetId) {
+        target.assetId = selected.assetId
+      } else {
+        delete target.assetId
+      }
+      target.status = 'completed'
+      return { ...prev, scriptData: nextData }
+    })
+  }
+
   /**
    * 新建场景
    */
@@ -2683,6 +2992,49 @@ const StageAssets: React.FC<Props> = ({
         }
       }
     )
+  }
+
+  const handleDeleteSceneHistoryItem = (sceneId: string, historyId: string) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = nextData.scenes.find((scene) => compareIds(scene.id, sceneId))
+      if (!target || !target.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected || selected.imageUrl === target.referenceImage) return prev
+      if (selected.assetId) {
+        void deleteRemoteAsset(selected.assetId).catch((error) => {
+          console.warn('Delete remote scene history asset failed:', error)
+        })
+      }
+      const nextHistory = target.generationHistory.filter(
+        (item) => item.id !== historyId
+      )
+      if (nextHistory.length === target.generationHistory.length) return prev
+      target.generationHistory = nextHistory
+      return { ...prev, scriptData: nextData }
+    })
+  }
+
+  const handleSelectSceneHistoryItem = (sceneId: string, historyId: string) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = nextData.scenes.find((scene) => compareIds(scene.id, sceneId))
+      if (!target?.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected) return prev
+      target.referenceImage = selected.imageUrl
+      if (selected.assetId) {
+        target.assetId = selected.assetId
+      } else {
+        delete target.assetId
+      }
+      target.status = 'completed'
+      return { ...prev, scriptData: nextData }
+    })
   }
 
   // ============================
@@ -2768,15 +3120,70 @@ const StageAssets: React.FC<Props> = ({
     )
   }
 
+  const handleDeletePropHistoryItem = (propId: string, historyId: string) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = (nextData.props || []).find((prop) =>
+        compareIds(prop.id, propId)
+      )
+      if (!target || !target.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected || selected.imageUrl === target.referenceImage) return prev
+      if (selected.assetId) {
+        void deleteRemoteAsset(selected.assetId).catch((error) => {
+          console.warn('Delete remote prop history asset failed:', error)
+        })
+      }
+      const nextHistory = target.generationHistory.filter(
+        (item) => item.id !== historyId
+      )
+      if (nextHistory.length === target.generationHistory.length) return prev
+      target.generationHistory = nextHistory
+      return { ...prev, scriptData: nextData }
+    })
+  }
+
+  const handleSelectPropHistoryItem = (propId: string, historyId: string) => {
+    if (!project.scriptData) return
+    updateProject((prev) => {
+      if (!prev.scriptData) return prev
+      const nextData = cloneScriptData(prev.scriptData)
+      const target = (nextData.props || []).find((prop) =>
+        compareIds(prop.id, propId)
+      )
+      if (!target?.generationHistory?.length) return prev
+      const selected = target.generationHistory.find((item) => item.id === historyId)
+      if (!selected) return prev
+      target.referenceImage = selected.imageUrl
+      if (selected.assetId) {
+        target.assetId = selected.assetId
+      } else {
+        delete target.assetId
+      }
+      target.status = 'completed'
+      return { ...prev, scriptData: nextData }
+    })
+  }
+
   /**
    * 生成道具图片
    */
   const handleGeneratePropAsset = async (
     propId: string,
-    options?: { managedFlow?: boolean; flowPanelId?: string }
+    options?: {
+      managedFlow?: boolean
+      flowPanelId?: string
+      promptOverride?: string
+    }
   ) => {
     const managedFlow = options?.managedFlow === true
     let flowPanelId = options?.flowPanelId
+    const hasPromptOverride = typeof options?.promptOverride === 'string'
+    const normalizedPromptOverride = hasPromptOverride
+      ? (options?.promptOverride || '').trim()
+      : ''
     const scriptSnapshot = project.scriptData
     if (!scriptSnapshot) return
     if (!managedFlow) {
@@ -2795,12 +3202,6 @@ const StageAssets: React.FC<Props> = ({
 
     if (existingAssetId) {
       clearLocalAssetId('prop', propId)
-      void deleteRemoteAsset(existingAssetId).catch((error) => {
-        console.warn(
-          'Delete remote prop asset before regenerate failed:',
-          error
-        )
-      })
     }
 
     // 设置生成状态
@@ -2821,7 +3222,9 @@ const StageAssets: React.FC<Props> = ({
       let prompt = ''
       const shapeReferenceImage = prop.shapeReferenceImage
       let negativePrompt = prop.negativePrompt || ''
-      if (prop.visualPrompt) {
+      if (hasPromptOverride && normalizedPromptOverride) {
+        prompt = normalizedPromptOverride
+      } else if (!hasPromptOverride && prop.visualPrompt) {
         prompt = prop.visualPrompt
       } else {
         const prompts = await generateVisualPrompts(
@@ -2887,6 +3290,7 @@ const StageAssets: React.FC<Props> = ({
         )
         if (updated) {
           updated.referenceImage = imageUrl
+          appendPropGenerationHistory(updated, imageUrl)
           updated.status = 'completed'
           delete updated.assetId
           if (!updated.visualPrompt) {
@@ -4355,7 +4759,9 @@ const StageAssets: React.FC<Props> = ({
                 isInProjectLibrary={!!char.libraryId}
                 isGenerating={char.status === 'generating'}
                 shapeReferenceImage={char.shapeReferenceImage}
-                onGenerate={() => handleGenerateAsset('character', char.id)}
+                onGenerate={(promptOverride) =>
+                  handleGenerateAsset('character', char.id, { promptOverride })
+                }
                 onUpload={(file) => handleUploadCharacterImage(char.id, file)}
                 onUploadShapeReference={(file) =>
                   handleUploadShapeReferenceImage('character', char.id, file)
@@ -4369,6 +4775,12 @@ const StageAssets: React.FC<Props> = ({
                 onOpenWardrobe={() => setSelectedCharId(char.id)}
                 onOpenTurnaround={() => setTurnaroundCharId(char.id)}
                 onImageClick={setPreviewImage}
+                onSelectHistoryItem={(historyId) =>
+                  handleSelectCharacterHistoryItem(char.id, historyId)
+                }
+                onDeleteHistoryItem={(historyId) =>
+                  handleDeleteCharacterHistoryItem(char.id, historyId)
+                }
                 onDelete={() => handleDeleteCharacter(char.id)}
                 onUpdateInfo={(updates) =>
                   handleUpdateCharacterInfo(char.id, updates)
@@ -4457,7 +4869,9 @@ const StageAssets: React.FC<Props> = ({
                 isInProjectLibrary={!!scene.libraryId}
                 isGenerating={scene.status === 'generating'}
                 shapeReferenceImage={scene.shapeReferenceImage}
-                onGenerate={() => handleGenerateAsset('scene', scene.id)}
+                onGenerate={(promptOverride) =>
+                  handleGenerateAsset('scene', scene.id, { promptOverride })
+                }
                 onUpload={(file) => handleUploadSceneImage(scene.id, file)}
                 onUploadShapeReference={(file) =>
                   handleUploadShapeReferenceImage('scene', scene.id, file)
@@ -4467,6 +4881,12 @@ const StageAssets: React.FC<Props> = ({
                 }
                 onPromptSave={(newPrompt) =>
                   handleSaveScenePrompt(scene.id, newPrompt)
+                }
+                onSelectHistoryItem={(historyId) =>
+                  handleSelectSceneHistoryItem(scene.id, historyId)
+                }
+                onDeleteHistoryItem={(historyId) =>
+                  handleDeleteSceneHistoryItem(scene.id, historyId)
                 }
                 onImageClick={setPreviewImage}
                 onDelete={() => handleDeleteScene(scene.id)}
@@ -4569,7 +4989,9 @@ const StageAssets: React.FC<Props> = ({
                   isInProjectLibrary={!!prop.libraryId}
                   isGenerating={prop.status === 'generating'}
                   shapeReferenceImage={prop.shapeReferenceImage}
-                  onGenerate={() => handleGeneratePropAsset(prop.id)}
+                  onGenerate={(promptOverride) =>
+                    handleGeneratePropAsset(prop.id, { promptOverride })
+                  }
                   onUpload={(file) => handleUploadPropImage(prop.id, file)}
                   onUploadShapeReference={(file) =>
                     handleUploadShapeReferenceImage('prop', prop.id, file)
@@ -4579,6 +5001,12 @@ const StageAssets: React.FC<Props> = ({
                   }
                   onPromptSave={(newPrompt) =>
                     handleSavePropPrompt(prop.id, newPrompt)
+                  }
+                  onSelectHistoryItem={(historyId) =>
+                    handleSelectPropHistoryItem(prop.id, historyId)
+                  }
+                  onDeleteHistoryItem={(historyId) =>
+                    handleDeletePropHistoryItem(prop.id, historyId)
                   }
                   onImageClick={setPreviewImage}
                   onDelete={() => handleDeleteProp(prop.id)}

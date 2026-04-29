@@ -400,12 +400,19 @@ export const formatEditorConsoleOutput = (
   }
 
   const resolveMentionAssetId = (attrs?: MentionNodeAttrs): string => {
+    const isAssetIdBoundToUrl = (assetId: string, targetUrl: string): boolean => {
+      const normalizedAssetId = String(assetId || '').trim()
+      const normalizedTargetUrl = normalizeUrl(targetUrl)
+      if (!normalizedAssetId || !normalizedTargetUrl) return false
+      const resolvedUrl = normalizeUrl(resolveTosPublicUrlFromAssetId(normalizedAssetId))
+      if (!resolvedUrl) return false
+      return resolvedUrl.split('?')[0] === normalizedTargetUrl.split('?')[0]
+    }
     const itemData = attrs?.itemData
     const mentionType = String(itemData?.type || '').trim()
-    const directAssetId = String(itemData?.assetId || '').trim()
-    if (directAssetId) return directAssetId
     const itemId = String(itemData?.id || attrs?.id || '').trim()
     const itemName = String(itemData?.name || attrs?.label || attrs?.id || '').trim()
+    const directAssetId = String(itemData?.assetId || '').trim()
 
     if (mentionType === 'video' || mentionType === 'audio' || mentionType === 'image') {
       const media = allMediaAssets.find((asset) => {
@@ -419,6 +426,8 @@ export const formatEditorConsoleOutput = (
     if (mentionType === 'character') {
       const baseCharacterId = itemId.split('::')[0]
       const baseName = String(itemData?.name || '').trim()
+      const variantName = String(itemData?.variantName || '').trim()
+      const variationId = itemId.includes('::') ? itemId.split('::')[1] : ''
       const character = allCharacters.find((char) => {
         const charId = String(char?.id || '').trim()
         const charName = String(char?.name || '').trim()
@@ -429,7 +438,38 @@ export const formatEditorConsoleOutput = (
           (itemName && charName === itemName)
         )
       })
-      return String(character?.assetId || '').trim()
+      if (!character) return directAssetId
+
+      let activeImageUrl = String(character.referenceImage || '').trim()
+      let activeAssetId = String(character.assetId || '').trim()
+
+      if (variantName || variationId) {
+        const variation = (character.variations || []).find((variationItem) => {
+          const id = String(variationItem?.id || '').trim()
+          const name = String(variationItem?.name || '').trim()
+          return (variationId && id === variationId) || (variantName && name === variantName)
+        })
+        if (variation) {
+          const variationUrl = String(variation.referenceImage || '').trim()
+          if (variationUrl) activeImageUrl = variationUrl
+          const variationAssetId = String(variation.assetId || '').trim()
+          if (variationAssetId) {
+            activeAssetId = variationAssetId
+          }
+        }
+      }
+
+      const historyAssetId = (character.generationHistory || [])
+        .find(
+          (item) =>
+            normalizeUrl(item.imageUrl) === normalizeUrl(activeImageUrl) &&
+            String(item.assetId || '').trim()
+        )
+        ?.assetId
+      const boundActiveAssetId = isAssetIdBoundToUrl(activeAssetId, activeImageUrl)
+        ? activeAssetId
+        : ''
+      return String(historyAssetId || boundActiveAssetId || directAssetId || '').trim()
     }
 
     if (mentionType === 'scene') {
@@ -438,7 +478,28 @@ export const formatEditorConsoleOutput = (
         const name = String(item?.location || '').trim()
         return (itemId && id === itemId) || (itemName && name === itemName)
       })
-      return String(scene?.assetId || '').trim()
+      if (!scene) return directAssetId
+      const historyAssetId = (scene.generationHistory || [])
+        .find(
+          (item) =>
+            normalizeUrl(item.imageUrl) === normalizeUrl(scene.referenceImage) &&
+            String(item.assetId || '').trim()
+        )
+        ?.assetId
+      const sceneAssetId = String(scene.assetId || '').trim()
+      const boundSceneAssetId = isAssetIdBoundToUrl(
+        sceneAssetId,
+        String(scene.referenceImage || '')
+      )
+        ? sceneAssetId
+        : ''
+      const boundDirectSceneAssetId = isAssetIdBoundToUrl(
+        directAssetId,
+        String(scene.referenceImage || '')
+      )
+        ? directAssetId
+        : ''
+      return String(historyAssetId || boundSceneAssetId || boundDirectSceneAssetId || '').trim()
     }
 
     if (mentionType === 'prop') {
@@ -447,10 +508,31 @@ export const formatEditorConsoleOutput = (
         const name = String(item?.name || '').trim()
         return (itemId && id === itemId) || (itemName && name === itemName)
       })
-      return String(prop?.assetId || '').trim()
+      if (!prop) return directAssetId
+      const historyAssetId = (prop.generationHistory || [])
+        .find(
+          (item) =>
+            normalizeUrl(item.imageUrl) === normalizeUrl(prop.referenceImage) &&
+            String(item.assetId || '').trim()
+        )
+        ?.assetId
+      const propAssetId = String(prop.assetId || '').trim()
+      const boundPropAssetId = isAssetIdBoundToUrl(
+        propAssetId,
+        String(prop.referenceImage || '')
+      )
+        ? propAssetId
+        : ''
+      const boundDirectPropAssetId = isAssetIdBoundToUrl(
+        directAssetId,
+        String(prop.referenceImage || '')
+      )
+        ? directAssetId
+        : ''
+      return String(historyAssetId || boundPropAssetId || boundDirectPropAssetId || '').trim()
     }
 
-    return ''
+    return directAssetId
   }
 
   const pushResourceReference = (
