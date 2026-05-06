@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import type { IncomingMessage, ServerResponse } from 'http'
 import { createNewApiProxyHandler } from './server/newApiProxyCore.mjs'
 import { createTosProxyHandler } from './server/tosProxyCore.mjs'
+import { createRelayProxyHandler } from './server/relayProxyCore.mjs'
 
 type RequestInitWithDuplex = RequestInit & { duplex?: 'half' }
 
@@ -216,18 +217,34 @@ const createDevTosProxyPlugin = (): Plugin => ({
   }
 })
 
+const createDevRelayProxyPlugin = (): Plugin => ({
+  name: 'dev-relay-proxy',
+  configureServer(server) {
+    const handler = createRelayProxyHandler()
+    server.middlewares.use(
+      handler as (
+        req: IncomingMessage,
+        res: ServerResponse,
+        next: (err?: unknown) => void
+      ) => void
+    )
+  }
+})
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
   return {
     server: {
       port: 3000,
-      host: '0.0.0.0'
+      host: '0.0.0.0',
+      allowedHosts: true
     },
     plugins: [
       react(),
       createDevMediaProxyPlugin(),
       createDevNewApiProxyPlugin(),
-      createDevTosProxyPlugin()
+      createDevTosProxyPlugin(),
+      createDevRelayProxyPlugin()
     ],
     define: {
       'process.env.API_KEY': JSON.stringify(env.ANTSK_API_KEY),

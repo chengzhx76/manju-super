@@ -2,9 +2,6 @@ import { Episode, MediaAssetType, Series, SeriesProject, Shot } from '../types'
 import type { AssetLibraryConfig, VolcengineTosConfig } from '../types/model'
 import { getAssetLibraryConfig, getVolcengineTosConfig } from './modelRegistry'
 
-const RELAY_SERVICE = 'ark'
-const RELAY_VERSION = '2024-01-01'
-const RELAY_REGION = 'cn-beijing'
 const RELAY_PROJECT_NAME = 'default'
 const RELAY_GROUP_TYPE = 'AIGC'
 const DESCRIPTION_LIMIT = 300
@@ -15,6 +12,7 @@ const TOS_UPLOAD_BY_URL_ENDPOINT = '/api/tos/upload-by-url'
 const TOS_UPLOAD_FILE_ENDPOINT = '/api/tos/upload-file'
 const TOS_DELETE_OBJECT_ENDPOINT = '/api/tos/delete-object'
 const TOS_VERIFY_OBJECT_ENDPOINT = '/api/tos/verify-object'
+const RELAY_SIGNED_CALL_ENDPOINT = '/api/relay/signed-call'
 const TOS_ASSET_ID_PREFIX = 'tos:'
 const TOS_PATH_PREFIX = 'manju'
 
@@ -591,103 +589,6 @@ const clearEpisodeAssetId = (
 const getCandidateLabel = (candidate: RelayLocalAssetCandidate): string =>
   `${candidate.label} (${candidate.name})`
 
-const hex = (buffer: ArrayBuffer): string =>
-  Array.from(new Uint8Array(buffer))
-    .map((value) => value.toString(16).padStart(2, '0'))
-    .join('')
-
-const encodeUtf8 = (value: string): Uint8Array<ArrayBuffer> =>
-  Uint8Array.from(new TextEncoder().encode(value))
-
-const sha256Hex = async (value: string): Promise<string> =>
-  hex(await crypto.subtle.digest('SHA-256', encodeUtf8(value)))
-
-const hmac = async (
-  key: ArrayBuffer | Uint8Array<ArrayBuffer>,
-  value: string
-): Promise<ArrayBuffer> => {
-  const rawKey: Uint8Array<ArrayBuffer> =
-    key instanceof Uint8Array ? Uint8Array.from(key) : new Uint8Array(key)
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    rawKey,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  )
-  return crypto.subtle.sign('HMAC', cryptoKey, encodeUtf8(value))
-}
-
-const encodeRFC3986 = (value: string): string =>
-  encodeURIComponent(value).replace(
-    /[!'()*]/g,
-    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`
-  )
-
-const toCanonicalPath = (url: URL): string =>
-  url.pathname
-    .split('/')
-    .map((segment) => encodeRFC3986(segment))
-    .join('/')
-
-const toCanonicalQuery = (url: URL): string =>
-  Array.from(url.searchParams.entries())
-    .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
-      if (leftKey !== rightKey) return leftKey.localeCompare(rightKey)
-      return leftValue.localeCompare(rightValue)
-    })
-    .map(([key, value]) => `${encodeRFC3986(key)}=${encodeRFC3986(value)}`)
-    .join('&')
-
-const toIsoDate = (date: Date): string =>
-  date.toISOString().replace(/[:-]|\.\d{3}/g, '')
-
-const buildSignedHeaders = async (
-  config: AssetLibraryConfig,
-  url: URL,
-  body: string
-): Promise<Record<string, string>> => {
-  const timestamp = toIsoDate(new Date())
-  const shortDate = timestamp.slice(0, 8)
-  const payloadHash = await sha256Hex(body)
-  const canonicalHeaders = [
-    ['content-type', 'application/json'],
-    ['host', url.host],
-    ['x-content-sha256', payloadHash],
-    ['x-date', timestamp]
-  ] as const
-  const signedHeaders = canonicalHeaders.map(([key]) => key).join(';')
-  const canonicalRequest = [
-    'POST',
-    toCanonicalPath(url) || '/',
-    toCanonicalQuery(url),
-    canonicalHeaders.map(([key, value]) => `${key}:${value}\n`).join(''),
-    signedHeaders,
-    payloadHash
-  ].join('\n')
-  const credentialScope = `${shortDate}/${RELAY_REGION}/${RELAY_SERVICE}/request`
-  const stringToSign = [
-    'HMAC-SHA256',
-    timestamp,
-    credentialScope,
-    await sha256Hex(canonicalRequest)
-  ].join('\n')
-
-  const dateKey = await hmac(encodeUtf8(config.secret_key), shortDate)
-  const regionKey = await hmac(dateKey, RELAY_REGION)
-  const serviceKey = await hmac(regionKey, RELAY_SERVICE)
-  const signingKey = await hmac(serviceKey, 'request')
-  const signature = hex(await hmac(signingKey, stringToSign))
-
-  return {
-    'Content-Type': 'application/json',
-    Host: url.host,
-    'X-Date': timestamp,
-    'X-Content-Sha256': payloadHash,
-    Authorization: `HMAC-SHA256 Credential=${config.access_key}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-  }
-}
-
 const parseJsonResponse = (raw: string): unknown => {
   try {
     return JSON.parse(raw)
@@ -728,14 +629,6 @@ const extractErrorMessage = (value: unknown): string => {
   return JSON.stringify(value)
 }
 
-const buildActionUrls = (endpoint: string, action: string): string[] => {
-  const base = endpoint.replace(/\/+$/, '')
-  return [
-    `${base}/?Action=${encodeURIComponent(action)}&Version=${encodeURIComponent(RELAY_VERSION)}`,
-    `${base}/open/${encodeURIComponent(action)}`
-  ]
-}
-
 const callRelay = async <T>(
   action: string,
   payload: Record<string, unknown>,
@@ -748,43 +641,26 @@ const callRelay = async <T>(
   if (!config) {
     throw new Error('素材库配置缺失')
   }
-
-  const body = JSON.stringify(payload)
-  let lastError: unknown = null
-
-  for (const requestUrl of buildActionUrls(config.address, action)) {
-    try {
-      const url = new URL(requestUrl)
-      const headers = await buildSignedHeaders(config, url, body)
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers,
-        body
-      })
-      if (options?.requireHttp200 && response.status !== 200) {
-        throw new Error(`素材库验证失败：HTTP ${response.status}`)
-      }
-      const responseText = await response.text()
-      const parsed = parseJsonResponse(responseText)
-      if (!response.ok) {
-        const message = extractErrorMessage(parsed)
-        if (response.status === 404 || response.status === 405) {
-          lastError = new Error(message)
-          continue
-        }
-        throw new Error(message)
-      }
-
-      if (parsed && typeof parsed === 'object' && 'Result' in parsed) {
-        return parsed.Result as T
-      }
-      return parsed as T
-    } catch (error) {
-      lastError = error
-    }
+  const response = await fetch(RELAY_SIGNED_CALL_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action,
+      payload,
+      config,
+      requireHttp200: Boolean(options?.requireHttp200)
+    })
+  })
+  const result = parseJsonResponse(await response.text()) as
+    | { success?: boolean; result?: T; message?: string }
+    | string
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(result))
   }
-
-  throw lastError instanceof Error ? lastError : new Error('素材库请求失败')
+  if (!isRecordObject(result) || result.success === false) {
+    throw new Error(extractErrorMessage(result))
+  }
+  return result.result as T
 }
 
 const callTosApi = async <T>(
