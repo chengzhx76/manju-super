@@ -76,7 +76,7 @@ import { cardClassName, SectionCard } from './account-center/ui'
 import { TokensPanel } from './account-center/TokensPanel'
 
 const createDefaultTokenForm = (): TokenFormState => ({
-  name: 'BigBanana',
+  name: '群星闪耀时',
   unlimitedQuota: true,
   creditsLimit: '1',
   expiredAt: ''

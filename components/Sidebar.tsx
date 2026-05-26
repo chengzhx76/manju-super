@@ -108,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       >
         <div className="p-6 border-b border-[var(--border-subtle)]">
           <a
-            href="https://tree456.com/"
+            href="https://chengzhx76.cn/"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 mb-6 group cursor-pointer"
@@ -120,7 +120,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             />
             <div className="overflow-hidden">
               <h1 className="text-sm font-bold text-[var(--text-primary)] tracking-wider group-hover:text-[var(--text-secondary)] transition-colors">
-                BigBanana
+                群星闪耀时
               </h1>
               <p className="text-[10px] text-[var(--text-tertiary)] tracking-widest group-hover:text-[var(--text-secondary)] transition-colors">
                 专业版

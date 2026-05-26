@@ -934,7 +934,7 @@ const LarkDirector: React.FC<Props> = ({
         {
           traceId,
           resourceId: traceId,
-          resourceName: `Lark视频 - ${(clip.title || clip.id).slice(0, 50)}`
+          resourceName: `Lark视频 - ${(clip.larkActionSummary || clip.id).slice(0, 50)}`
         }
       )
       const sourceVideoUrl = normalizeRemoteUrl(generatedVideo.videoUrl)
