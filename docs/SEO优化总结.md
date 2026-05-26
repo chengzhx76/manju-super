@@ -294,7 +294,7 @@ http://localhost:3000/seo-check.html
 
 ## 🎊 总结
 
-本次 SEO 优化为 **BigBanana AI Director** 建立了完整的搜索引擎优化体系，包括：
+本次 SEO 优化为 **群星闪耀时 AI Director** 建立了完整的搜索引擎优化体系，包括：
 
 1. ✅ **技术基础**：完整的 Meta 标签和结构化数据
 2. ✅ **社交优化**：支持所有主流社交平台

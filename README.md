@@ -1,4 +1,4 @@
-# BigBanana AI Director (AI 漫剧工场)
+# 群星闪耀时 AI Director (AI 漫剧工场)
 
 > **AI 一站式短剧/漫剧生成平台**
 > _Industrial AI Motion Comic & Video Workbench_
@@ -8,7 +8,7 @@
 [![日本語](https://img.shields.io/badge/Language-日本語-gray.svg)](./README_JA.md)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-**BigBanana AI Director** 是一个 **AI 一站式短剧/漫剧平台**，面向创作者,实现从灵感到成片的高效生产。
+**群星闪耀时 AI Director** 是一个 **AI 一站式短剧/漫剧平台**，面向创作者,实现从灵感到成片的高效生产。
 
 它摇弃了传统的"抽卡式"生成，采用 **"Script-to-Asset-to-Keyframe"** 的工业化工作流。通过深度集成 AntSK API 的先进 AI 模型，实现 **"一句话生成完整短剧，从剧本到成片全自动化"**，同时精准控制角色一致性、场景连续性与镜头运动。
 
@@ -165,7 +165,7 @@
 
 无需下载客户端，直接访问在线版即可开始使用：
 
-**🌐 访问 BigBanana AI Director 在线版**
+**🌐 访问 群星闪耀时 AI Director 在线版**
 
 [https://director.tree456.com/](https://director.tree456.com/)
 

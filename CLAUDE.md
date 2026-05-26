@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-BigBanana AI Director（AI 漫剧工场）是一个 AI 驱动的视频/动态漫画制作工作台。采用 "Script-to-Asset-to-Keyframe" 流水线，从文本输入生成完整短剧，可精准控制角色一致性、场景连续性和镜头运动。
+群星闪耀时 AI Director（AI 漫剧工场）是一个 AI 驱动的视频/动态漫画制作工作台。采用 "Script-to-Asset-to-Keyframe" 流水线，从文本输入生成完整短剧，可精准控制角色一致性、场景连续性和镜头运动。
 
 ## 常用命令
 

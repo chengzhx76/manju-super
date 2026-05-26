@@ -6,7 +6,7 @@
 
 ## 优化目标
 
-为 BigBanana AI Director 首页增加全面的 SEO 优化，提升搜索引擎排名和社交媒体分享效果。
+为 群星闪耀时 AI Director 首页增加全面的 SEO 优化，提升搜索引擎排名和社交媒体分享效果。
 
 ---
 
@@ -49,7 +49,7 @@
 <meta property="og:url" content="https://bigbanana.tree456.com/" />
 <meta
   property="og:title"
-  content="BigBanana AI Director - 工业级 AI 漫剧与视频生成工作台"
+  content="群星闪耀时 AI Director - 工业级 AI 漫剧与视频生成工作台"
 />
 <meta
   property="og:description"
@@ -59,7 +59,7 @@
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:locale" content="zh_CN" />
-<meta property="og:site_name" content="BigBanana AI Director" />
+<meta property="og:site_name" content="群星闪耀时 AI Director" />
 ```
 
 **优势：**
@@ -79,7 +79,7 @@
 <meta name="twitter:url" content="https://bigbanana.tree456.com/" />
 <meta
   name="twitter:title"
-  content="BigBanana AI Director - 工业级 AI 漫剧与视频生成工作台"
+  content="群星闪耀时 AI Director - 工业级 AI 漫剧与视频生成工作台"
 />
 <meta
   name="twitter:description"
@@ -103,7 +103,7 @@
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "BigBanana AI Director",
+  "name": "群星闪耀时 AI Director",
   "applicationCategory": "MultimediaApplication",
   "operatingSystem": "Web Browser",
   "description": "工业级 AI 漫剧与视频生成工作台...",
