@@ -7,7 +7,8 @@ import {
   Edit2,
   Film,
   MessageSquare,
-  Video as VideoIcon
+  Video as VideoIcon,
+  Copy
 } from 'lucide-react'
 import {
   ProjectState,
@@ -86,6 +87,11 @@ import { assessShotQualityWithLLM } from '../../services/qualityAssessmentV2Serv
 import { updatePromptWithVersion } from '../../services/promptVersionService'
 import { resolvePromptTemplateConfig } from '../../services/promptTemplateService'
 import { toFriendlyModerationMessage } from '../../services/errorMessageService'
+import {
+  appendVideoDebugLog,
+  formatVideoDebugReport,
+  getVideoDebugLogs
+} from '../../services/videoDebugLogService'
 import { useProjectContext } from '../../contexts/ProjectContext'
 import {
   hasAssetRelayConfig,
@@ -278,6 +284,98 @@ const StageDirector: React.FC<Props> = ({
     }
 
     return normalizedMessage || fallback
+  }
+
+  const createVideoTraceId = (shotId: string): string =>
+    `video-${shotId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+  const logVideoTrace = (
+    traceId: string,
+    stage: string,
+    details: Record<string, unknown> = {}
+  ) => {
+    const sanitized = Object.fromEntries(
+      Object.entries(details).filter(([, value]) => value !== undefined)
+    )
+    console.log(
+      `[StageDirector][video][${traceId}] ${stage}`,
+      sanitized
+    )
+    appendVideoDebugLog({
+      traceId,
+      source: 'stage-director',
+      stage,
+      level: 'info',
+      details: sanitized
+    })
+  }
+
+  const logVideoTraceError = (
+    traceId: string,
+    stage: string,
+    error: unknown,
+    details: Record<string, unknown> = {}
+  ) => {
+    const sanitized = Object.fromEntries(
+      Object.entries({
+        ...details,
+        errorMessage: getErrorMessage(error)
+      }).filter(([, value]) => value !== undefined)
+    )
+    console.error(
+      `[StageDirector][video][${traceId}] ${stage}`,
+      sanitized,
+      error
+    )
+    appendVideoDebugLog({
+      traceId,
+      source: 'stage-director',
+      stage,
+      level: 'error',
+      details: sanitized
+    })
+  }
+
+  const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+
+  const latestVideoRenderLog =
+    [...(project.renderLogs || [])]
+      .filter((log) => log.type === 'video')
+      .sort((a, b) => b.timestamp - a.timestamp)[0] || null
+
+  const handleCopyLatestVideoLog = async () => {
+    if (!latestVideoRenderLog) {
+      showAlert('当前还没有可复制的视频日志', { type: 'warning' })
+      return
+    }
+
+    try {
+      const report = formatVideoDebugReport(
+        latestVideoRenderLog,
+        getVideoDebugLogs(latestVideoRenderLog.resourceId)
+      )
+      await copyTextToClipboard(report)
+      showAlert('视频调试日志已复制，可直接发给我排查。', {
+        type: 'success'
+      })
+    } catch {
+      showAlert('复制视频日志失败，请稍后重试。', { type: 'error' })
+    }
   }
 
   const buildShotNegativePrompt = (shot: Shot, visualStyle: string): string => {
@@ -1114,6 +1212,7 @@ const StageDirector: React.FC<Props> = ({
     // 使用传入的 modelId 或默认模型
     const selectedModelInput: string =
       modelId || shot.videoModel || DEFAULTS.videoModel
+    const traceId = createVideoTraceId(shot.id)
     const selectedModelRouting = resolveVideoModelRouting(selectedModelInput)
     const routingModelId = selectedModelRouting.normalizedModelId
     // 规范化模型名称：旧模型名 -> 现行可用模型
@@ -1232,6 +1331,12 @@ const StageDirector: React.FC<Props> = ({
     })
 
     if (!preflightResult.canProceed) {
+      logVideoTrace(traceId, 'preflight:blocked', {
+        shotId: shot.id,
+        model: selectedModelInput,
+        issueCount: preflightResult.issues.length,
+        issueSummary: formatLintIssues(preflightResult.issues)
+      })
       if (!silent) {
         showAlert(
           `视频预检未通过：\n${formatLintIssues(preflightResult.issues)}`,
@@ -1282,6 +1387,19 @@ const StageDirector: React.FC<Props> = ({
     }))
 
     try {
+      logVideoTrace(traceId, 'generate:start', {
+        shotId: shot.id,
+        intervalId,
+        model: selectedModelInput,
+        aspectRatio,
+        duration,
+        videoInputMode,
+        isNineGridMode,
+        hasStartFrame: !!routedFrames.startImage,
+        hasEndFrame: !!routedFrames.endImage,
+        ignoredEndFrame: routedFrames.ignoredEndFrame,
+        promptLength: videoPrompt.length
+      })
       const generatedVideo = await generateVideo(
         [
           {
@@ -1293,7 +1411,13 @@ const StageDirector: React.FC<Props> = ({
         routedFrames.endImage,
         selectedModelInput,
         aspectRatio,
-        duration
+        duration,
+        undefined,
+        {
+          traceId,
+          resourceId: traceId,
+          resourceName: `镜头视频 - ${(shot.actionSummary || shot.id).slice(0, 50)}`
+        }
       )
       const videoUrl = generatedVideo.videoUrl
       const generatedDuration =
@@ -1302,6 +1426,17 @@ const StageDirector: React.FC<Props> = ({
         generatedVideo.durationSec > 0
           ? generatedVideo.durationSec
           : duration
+      logVideoTrace(traceId, 'generate:service-success', {
+        shotId: shot.id,
+        intervalId,
+        resultType: videoUrl.startsWith('data:') ? 'base64' : 'url',
+        generatedDuration
+      })
+      logVideoTrace(traceId, 'relay:start', {
+        shotId: shot.id,
+        intervalId,
+        hasCurrentAssetId: !!shot.interval?.assetId
+      })
       const relayResult = await syncRelayAsset({
         kind: 'video',
         localId: intervalId,
@@ -1314,6 +1449,12 @@ const StageDirector: React.FC<Props> = ({
       if (!finalVideoUrl) {
         throw new Error('对象存储上传完成但未返回视频URL，无法回填')
       }
+      logVideoTrace(traceId, 'relay:success', {
+        shotId: shot.id,
+        intervalId,
+        assetId: relayResult?.assetId,
+        finalUrlHost: finalVideoUrl.slice(0, 120)
+      })
       updateShot(shot.id, (s) => ({
         ...s,
         interval: s.interval
@@ -1343,6 +1484,13 @@ const StageDirector: React.FC<Props> = ({
       return true
     } catch (e: unknown) {
       console.error(e)
+      logVideoTraceError(traceId, 'generate:failed', e, {
+        shotId: shot.id,
+        intervalId,
+        model: selectedModelInput,
+        aspectRatio,
+        duration
+      })
       updateShot(shot.id, (s) => ({
         ...s,
         interval: s.interval
@@ -2914,6 +3062,14 @@ const StageDirector: React.FC<Props> = ({
             className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             失败重试({lastFailedVideoShotIds.length})
+          </button>
+          <button
+            onClick={() => void handleCopyLatestVideoLog()}
+            className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all flex items-center gap-2 bg-[var(--bg-surface)] text-[var(--text-tertiary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]"
+            title="复制最近一次视频生成调试日志"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            复制视频日志
           </button>
         </div>
       </div>

@@ -15,10 +15,18 @@ import {
   convertVideoUrlToBase64
 } from './apiCore'
 import { toFriendlyModerationMessage } from '../errorMessageService'
+import { addRenderLogWithTokens } from '../renderLogService'
+import { appendVideoDebugLog } from '../videoDebugLogService'
 
 export interface GeneratedVideoResult {
   videoUrl: string
   durationSec?: number
+}
+
+interface VideoLogOptions {
+  traceId?: string
+  resourceId?: string
+  resourceName?: string
 }
 
 const VOLCENGINE_TASK_DEFAULT_ENDPOINT = '/api/v3/contents/generations/tasks'
@@ -33,6 +41,93 @@ const isSoraCompatibleVideoModel = (modelName: string): boolean =>
 
 const toFriendlyVideoErrorMessage = (message: string): string =>
   toFriendlyModerationMessage(message) || message
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
+
+const createVideoTraceId = (): string =>
+  `video-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const trimPromptForLog = (prompt: string, maxLength: number = 2000): string => {
+  const normalized = prompt.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, maxLength)}...(truncated)`
+    : normalized
+}
+
+const buildVideoResourceName = (
+  resourceName: string | undefined,
+  prompt: string
+): string => {
+  const trimmedName = String(resourceName || '').trim()
+  if (trimmedName) return trimmedName
+  const promptPreview = trimPromptForLog(prompt, 60)
+  return promptPreview ? `视频生成 - ${promptPreview}` : '视频生成'
+}
+
+const sanitizeLogDetails = (
+  details: Record<string, unknown>
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(details).filter(([, value]) => value !== undefined)
+  )
+
+const logVideoDebug = (
+  traceId: string,
+  stage: string,
+  details: Record<string, unknown> = {}
+) => {
+  const sanitized = sanitizeLogDetails(details)
+  console.log(`[video][${traceId}] ${stage}`, sanitized)
+  appendVideoDebugLog({
+    traceId,
+    source: 'video-service',
+    stage,
+    level: 'info',
+    details: sanitized
+  })
+}
+
+const logVideoWarn = (
+  traceId: string,
+  stage: string,
+  details: Record<string, unknown> = {}
+) => {
+  const sanitized = sanitizeLogDetails(details)
+  console.warn(`[video][${traceId}] ${stage}`, sanitized)
+  appendVideoDebugLog({
+    traceId,
+    source: 'video-service',
+    stage,
+    level: 'warn',
+    details: sanitized
+  })
+}
+
+const logVideoError = (
+  traceId: string,
+  stage: string,
+  error: unknown,
+  details: Record<string, unknown> = {}
+) => {
+  const sanitized = sanitizeLogDetails({
+    ...details,
+    errorMessage: getErrorMessage(error)
+  })
+  console.error(
+    `[video][${traceId}] ${stage}`,
+    sanitized,
+    error
+  )
+  appendVideoDebugLog({
+    traceId,
+    source: 'video-service',
+    stage,
+    level: 'error',
+    details: sanitized
+  })
+}
 
 const mapVolcengineRatio = (
   aspectRatio: AspectRatio,
@@ -106,7 +201,8 @@ const generateVideoAsync = async (
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8,
   resolution: VideoResolution = '720p',
-  modelName: string = 'sora-2'
+  modelName: string = 'sora-2',
+  traceId: string = createVideoTraceId()
 ): Promise<string> => {
   let references = [startImageBase64, endImageBase64].filter(
     Boolean
@@ -137,6 +233,18 @@ const generateVideoAsync = async (
   console.log(`📐 视频尺寸: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}`)
 
   const apiBase = getApiBase('video', resolvedModelName)
+  logVideoDebug(traceId, 'async:init', {
+    model: resolvedModelName,
+    aspectRatio,
+    duration,
+    resolution,
+    videoSize,
+    apiBase,
+    referenceCount: references.length,
+    hasStartFrame: !!startImageBase64,
+    hasEndFrame: !!endImageBase64,
+    useReferenceArray
+  })
 
   // Step 1: 创建视频任务
   const formData = new FormData()
@@ -186,12 +294,23 @@ const generateVideoAsync = async (
     console.log('✅ 参考图片已调整尺寸并添加')
   }
 
+  logVideoDebug(traceId, 'async:create-task:request', {
+    endpoint: `${apiBase}/v1/videos`,
+    model: resolvedModelName,
+    duration,
+    videoSize,
+    referenceCount: references.length
+  })
   const createResponse = await fetch(`${apiBase}/v1/videos`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`
     },
     body: formData
+  })
+  logVideoDebug(traceId, 'async:create-task:response', {
+    ok: createResponse.ok,
+    status: createResponse.status
   })
 
   if (!createResponse.ok) {
@@ -221,6 +340,10 @@ const generateVideoAsync = async (
   }
 
   console.log(`📋 ${resolvedModelName} 任务已创建，任务ID:`, taskId)
+  logVideoDebug(traceId, 'async:task-created', {
+    taskId,
+    model: resolvedModelName
+  })
 
   // Step 2: 轮询查询任务状态
   const maxPollingTime = 1200000 // 20分钟超时
@@ -229,6 +352,7 @@ const generateVideoAsync = async (
 
   let videoId: string | null = null
   let videoUrlFromStatus: string | null = null
+  let lastLoggedStatus = ''
 
   while (Date.now() - startTime < maxPollingTime) {
     await new Promise((resolve) => setTimeout(resolve, pollingInterval))
@@ -243,6 +367,10 @@ const generateVideoAsync = async (
 
     if (!statusResponse.ok) {
       console.warn('⚠️ 查询任务状态失败，继续重试...')
+      logVideoWarn(traceId, 'async:task-status:request-failed', {
+        taskId,
+        status: statusResponse.status
+      })
       continue
     }
 
@@ -255,6 +383,14 @@ const generateVideoAsync = async (
       '进度:',
       statusData.progress
     )
+    if (status !== lastLoggedStatus) {
+      logVideoDebug(traceId, 'async:task-status', {
+        taskId,
+        status,
+        progress: statusData.progress
+      })
+      lastLoggedStatus = status
+    }
 
     if (status === 'completed' || status === 'succeeded') {
       videoUrlFromStatus = extractVideoUrlFromTaskPayload(statusData)
@@ -271,6 +407,11 @@ const generateVideoAsync = async (
         videoId = statusData.outputs[0]
       }
       console.log('✅ 任务完成，视频ID:', videoId)
+      logVideoDebug(traceId, 'async:task-completed', {
+        taskId,
+        videoId,
+        hasVideoUrlFromStatus: !!videoUrlFromStatus
+      })
       break
     } else if (status === 'failed' || status === 'error') {
       const errorMessage =
@@ -289,6 +430,10 @@ const generateVideoAsync = async (
   console.log(`✅ ${resolvedModelName} 视频生成完成，视频ID:`, videoId)
 
   if (videoUrlFromStatus) {
+    logVideoDebug(traceId, 'async:result-from-status', {
+      taskId,
+      hasVideoUrl: true
+    })
     return videoUrlFromStatus
   }
 
@@ -299,6 +444,12 @@ const generateVideoAsync = async (
   for (let attempt = 1; attempt <= maxDownloadRetries; attempt++) {
     try {
       console.log(`📥 尝试下载视频 (第${attempt}/${maxDownloadRetries}次)...`)
+      logVideoDebug(traceId, 'async:download:attempt', {
+        taskId,
+        videoId,
+        attempt,
+        maxDownloadRetries
+      })
 
       const downloadController = new AbortController()
       const downloadTimeoutId = setTimeout(
@@ -332,6 +483,12 @@ const generateVideoAsync = async (
       }
 
       const contentType = downloadResponse.headers.get('content-type')
+      logVideoDebug(traceId, 'async:download:response', {
+        taskId,
+        videoId,
+        attempt,
+        contentType
+      })
 
       if (contentType && contentType.includes('video')) {
         const videoBlob = await downloadResponse.blob()
@@ -340,6 +497,12 @@ const generateVideoAsync = async (
           reader.onloadend = () => {
             const result = reader.result as string
             console.log(`✅ ${resolvedModelName} 视频已转换为base64格式`)
+            logVideoDebug(traceId, 'async:download:base64-ready', {
+              taskId,
+              videoId,
+              attempt,
+              resultType: 'base64'
+            })
             resolve(result)
           }
           reader.onerror = () => reject(new Error('视频转base64失败'))
@@ -356,6 +519,12 @@ const generateVideoAsync = async (
           throw new Error('未获取到视频下载地址')
         }
 
+        logVideoDebug(traceId, 'async:download:url-ready', {
+          taskId,
+          videoId,
+          attempt,
+          resultType: 'url'
+        })
         return videoUrl
       }
     } catch (error: unknown) {
@@ -372,6 +541,12 @@ const generateVideoAsync = async (
       }
       const message = error instanceof Error ? error.message : String(error)
       console.warn(`⚠️ 下载出错: ${message}，${5 * attempt}秒后重试...`)
+      logVideoWarn(traceId, 'async:download:retrying', {
+        taskId,
+        videoId,
+        attempt,
+        message
+      })
       await new Promise((resolve) => setTimeout(resolve, 5000 * attempt))
     }
   }
@@ -465,7 +640,8 @@ const generateVideoVolcengineTask = async (
   duration: VideoDuration = 5,
   resolution: VideoResolution = '720p',
   modelName: string = VOLCENGINE_DEFAULT_MODEL,
-  endpoint: string = VOLCENGINE_TASK_DEFAULT_ENDPOINT
+  endpoint: string = VOLCENGINE_TASK_DEFAULT_ENDPOINT,
+  traceId: string = createVideoTraceId()
 ): Promise<GeneratedVideoResult> => {
   const taskEndpoint = normalizeEndpoint(
     endpoint,
@@ -518,7 +694,25 @@ const generateVideoVolcengineTask = async (
     resolution,
     watermark: false
   })
+  logVideoDebug(traceId, 'volcengine:init', {
+    model: modelName || VOLCENGINE_DEFAULT_MODEL,
+    aspectRatio,
+    ratio,
+    duration,
+    resolution,
+    apiBase,
+    taskEndpoint,
+    hasStartFrame: !!startImageBase64,
+    hasEndFrame: !!endImageBase64
+  })
 
+  logVideoDebug(traceId, 'volcengine:create-task:request', {
+    endpoint: `${apiBase}${taskEndpoint}`,
+    model: modelName || VOLCENGINE_DEFAULT_MODEL,
+    ratio,
+    duration,
+    resolution
+  })
   const createResponse = await fetch(`${apiBase}${taskEndpoint}`, {
   // const createResponse = await fetch(`https://www.trae.ai/account-setting#subscription`, {
     method: 'POST',
@@ -534,6 +728,10 @@ const generateVideoVolcengineTask = async (
       resolution,
       watermark: false
     })
+  })
+  logVideoDebug(traceId, 'volcengine:create-task:response', {
+    ok: createResponse.ok,
+    status: createResponse.status
   })
 
   if (!createResponse.ok) {
@@ -558,12 +756,17 @@ const generateVideoVolcengineTask = async (
   }
 
   console.log('📋 Volcengine 任务已创建，任务ID:', taskId)
+  logVideoDebug(traceId, 'volcengine:task-created', {
+    taskId,
+    model: modelName || VOLCENGINE_DEFAULT_MODEL
+  })
 
   const pollingInterval = 5000
   const maxPollingTime = 1200000 // 20 分钟
   const startTime = Date.now()
   const successStates = new Set(['succeeded', 'completed', 'success', 'done'])
   const failedStates = new Set(['failed', 'error', 'canceled', 'cancelled'])
+  let lastLoggedStatus = ''
 
   while (Date.now() - startTime < maxPollingTime) {
     await new Promise((resolve) => setTimeout(resolve, pollingInterval))
@@ -578,6 +781,10 @@ const generateVideoVolcengineTask = async (
 
     if (!statusResponse.ok) {
       console.warn('⚠️ Volcengine 任务查询失败，继续轮询...')
+      logVideoWarn(traceId, 'volcengine:task-status:request-failed', {
+        taskId,
+        status: statusResponse.status
+      })
       continue
     }
 
@@ -591,12 +798,24 @@ const generateVideoVolcengineTask = async (
       .toLowerCase()
 
     console.log('🔄 Volcengine 任务状态:', rawStatus || 'unknown')
+    if (rawStatus !== lastLoggedStatus) {
+      logVideoDebug(traceId, 'volcengine:task-status', {
+        taskId,
+        status: rawStatus || 'unknown'
+      })
+      lastLoggedStatus = rawStatus
+    }
 
     if (successStates.has(rawStatus)) {
       const videoUrl = extractVideoUrlFromTaskPayload(statusData)
       if (!videoUrl) {
         throw new Error('任务已完成，但未返回视频地址')
       }
+      logVideoDebug(traceId, 'volcengine:task-completed', {
+        taskId,
+        hasVideoUrl: true,
+        durationSec: extractDurationFromTaskPayload(statusData)
+      })
       return {
         videoUrl,
         durationSec: extractDurationFromTaskPayload(statusData)
@@ -633,10 +852,13 @@ export const generateVideo = async (
   model: string = 'sora-2',
   aspectRatio: AspectRatio = '16:9',
   duration: VideoDuration = 8,
-  resolution: VideoResolution = '720p'
+  resolution: VideoResolution = '720p',
+  options: VideoLogOptions = {}
 ): Promise<GeneratedVideoResult> => {
   console.log('[videoService] prompt:', prompt)
+  const startTime = Date.now()
   const promptText = toPromptText(prompt)
+  const traceId = options.traceId || createVideoTraceId()
   const resolvedVideoModel = resolveModel('video', model)
   const resolvedVideoModelId = resolvedVideoModel?.id || model
   const requestModel = resolveRequestModel('video', model) || ''
@@ -655,159 +877,234 @@ export const generateVideo = async (
     resolvedEndpoint.includes('/contents/generations/tasks') ||
     (normalizedRequestModel.startsWith('doubao-seedance') &&
       !isSoraCompatibleModel)
-
-  if (isVolcengineTaskMode) {
-    return generateVideoVolcengineTask(
-      prompt,
-      startImageBase64,
-      endImageBase64,
-      apiKey,
-      apiBase,
-      aspectRatio,
-      duration,
-      resolution,
-      requestModel || resolvedVideoModelId || VOLCENGINE_DEFAULT_MODEL,
-      resolvedEndpoint || VOLCENGINE_TASK_DEFAULT_ENDPOINT
-    )
-  }
-
   const isAsyncMode =
     (resolvedVideoModel?.type === 'video' &&
       resolvedVideoModel.params.mode === 'async') ||
     isSoraCompatibleModel ||
     normalizedRequestModel.startsWith('veo_3_1-fast')
+  const resourceId = String(options.resourceId || traceId).trim() || traceId
+  const resourceName = buildVideoResourceName(options.resourceName, promptText)
+  const loggedPrompt = trimPromptForLog(promptText)
 
-  // 异步模式
-  if (isAsyncMode) {
-    const videoUrl = await generateVideoAsync(
-      promptText,
-      startImageBase64,
-      endImageBase64,
-      apiKey,
-      aspectRatio,
-      duration,
-      resolution,
-      requestModel || resolvedVideoModelId || 'sora-2'
-    )
-    return {
-      videoUrl,
-      durationSec: normalizeDurationSec(duration)
-    }
-  }
-
-  // 同步模式：直接使用模型配置中的请求模型名
-  const actualModel = requestModel || resolvedVideoModelId || 'sora-2'
-
-  const messages: Array<{
-    role: 'user'
-    content:
-      | string
-      | Array<
-          | { type: 'text'; text: string }
-          | { type: 'image_url'; image_url: { url: string } }
-        >
-  }> = [{ role: 'user', content: promptText }]
-
-  const cleanStart =
-    startImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || ''
-  const cleanEnd =
-    endImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || ''
-
-  if (cleanStart) {
-    messages[0].content = [
-      { type: 'text', text: promptText },
-      {
-        type: 'image_url',
-        image_url: { url: `data:image/png;base64,${cleanStart}` }
-      }
-    ]
-  }
-
-  if (cleanEnd) {
-    if (Array.isArray(messages[0].content)) {
-      messages[0].content.push({
-        type: 'image_url',
-        image_url: { url: `data:image/png;base64,${cleanEnd}` }
-      })
-    }
-  }
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 1200000)
+  logVideoDebug(traceId, 'generate:start', {
+    model,
+    resolvedVideoModelId,
+    requestModel,
+    aspectRatio,
+    duration,
+    resolution,
+    apiBase,
+    endpoint: resolvedEndpoint || undefined,
+    isVolcengineTaskMode,
+    isAsyncMode,
+    hasStartFrame: !!startImageBase64,
+    hasEndFrame: !!endImageBase64,
+    promptLength: promptText.length,
+    resourceId,
+    resourceName
+  })
 
   try {
-    const response = await retryOperation(async () => {
-      const res = await fetch(`${apiBase}/v1/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: actualModel,
-          messages: messages,
-          stream: false,
-          temperature: 0.7
-        }),
-        signal: controller.signal
-      })
+    let result: GeneratedVideoResult
 
-      if (!res.ok) {
-        if (res.status === 400) {
-          throw new Error(
-            '提示词可能包含不安全或违规内容，未能处理。请修改后重试。'
-          )
-        } else if (res.status === 500) {
-          throw new Error('当前请求较多，暂时未能处理成功，请稍后重试。')
-        }
-
-        let errorMessage = `HTTP错误: ${res.status}`
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error?.message || errorMessage
-        } catch (e) {
-          const errorText = await res.text()
-          if (errorText) errorMessage = errorText
-        }
-        throw new Error(toFriendlyVideoErrorMessage(errorMessage))
-      }
-
-      return res
-    })
-
-    clearTimeout(timeoutId)
-
-    const data = await response.json()
-    const content = data.choices?.[0]?.message?.content || ''
-
-    const urlMatch = content.match(/(https?:\/\/[^\s]+\.mp4)/)
-    const videoUrl = urlMatch ? urlMatch[1] : ''
-
-    if (!videoUrl) {
-      throw new Error('视频生成失败 (No video URL returned)')
-    }
-
-    console.log('🎬 视频URL获取成功,正在转换为base64...')
-
-    try {
-      const videoBase64 = await convertVideoUrlToBase64(videoUrl)
-      console.log('✅ 视频已转换为base64格式,可安全存储到IndexedDB')
-      return {
-        videoUrl: videoBase64,
-        durationSec: normalizeDurationSec(duration)
-      }
-    } catch (error: unknown) {
-      console.error('❌ 视频转base64失败,返回原始URL:', error)
-      return {
+    if (isVolcengineTaskMode) {
+      result = await generateVideoVolcengineTask(
+        prompt,
+        startImageBase64,
+        endImageBase64,
+        apiKey,
+        apiBase,
+        aspectRatio,
+        duration,
+        resolution,
+        requestModel || resolvedVideoModelId || VOLCENGINE_DEFAULT_MODEL,
+        resolvedEndpoint || VOLCENGINE_TASK_DEFAULT_ENDPOINT,
+        traceId
+      )
+    } else if (isAsyncMode) {
+      const videoUrl = await generateVideoAsync(
+        promptText,
+        startImageBase64,
+        endImageBase64,
+        apiKey,
+        aspectRatio,
+        duration,
+        resolution,
+        requestModel || resolvedVideoModelId || 'sora-2',
+        traceId
+      )
+      result = {
         videoUrl,
         durationSec: normalizeDurationSec(duration)
       }
+    } else {
+      // 同步模式：直接使用模型配置中的请求模型名
+      const actualModel = requestModel || resolvedVideoModelId || 'sora-2'
+
+      const messages: Array<{
+        role: 'user'
+        content:
+          | string
+          | Array<
+              | { type: 'text'; text: string }
+              | { type: 'image_url'; image_url: { url: string } }
+            >
+      }> = [{ role: 'user', content: promptText }]
+
+      const cleanStart =
+        startImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || ''
+      const cleanEnd =
+        endImageBase64?.replace(/^data:image\/(png|jpeg|jpg);base64,/, '') || ''
+
+      if (cleanStart) {
+        messages[0].content = [
+          { type: 'text', text: promptText },
+          {
+            type: 'image_url',
+            image_url: { url: `data:image/png;base64,${cleanStart}` }
+          }
+        ]
+      }
+
+      if (cleanEnd) {
+        if (Array.isArray(messages[0].content)) {
+          messages[0].content.push({
+            type: 'image_url',
+            image_url: { url: `data:image/png;base64,${cleanEnd}` }
+          })
+        }
+      }
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 1200000)
+
+      try {
+        logVideoDebug(traceId, 'sync:request', {
+          endpoint: `${apiBase}/v1/chat/completions`,
+          model: actualModel,
+          hasStartFrame: !!cleanStart,
+          hasEndFrame: !!cleanEnd
+        })
+        const response = await retryOperation(async () => {
+          const res = await fetch(`${apiBase}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              model: actualModel,
+              messages: messages,
+              stream: false,
+              temperature: 0.7
+            }),
+            signal: controller.signal
+          })
+
+          if (!res.ok) {
+            if (res.status === 400) {
+              throw new Error(
+                '提示词可能包含不安全或违规内容，未能处理。请修改后重试。'
+              )
+            } else if (res.status === 500) {
+              throw new Error('当前请求较多，暂时未能处理成功，请稍后重试。')
+            }
+
+            let errorMessage = `HTTP错误: ${res.status}`
+            try {
+              const errorData = await res.json()
+              errorMessage = errorData.error?.message || errorMessage
+            } catch (e) {
+              const errorText = await res.text()
+              if (errorText) errorMessage = errorText
+            }
+            throw new Error(toFriendlyVideoErrorMessage(errorMessage))
+          }
+
+          return res
+        })
+
+        clearTimeout(timeoutId)
+        logVideoDebug(traceId, 'sync:response', {
+          ok: response.ok,
+          status: response.status
+        })
+
+        const data = await response.json()
+        const content = data.choices?.[0]?.message?.content || ''
+
+        const urlMatch = content.match(/(https?:\/\/[^\s]+\.mp4)/)
+        const videoUrl = urlMatch ? urlMatch[1] : ''
+
+        if (!videoUrl) {
+          throw new Error('视频生成失败 (No video URL returned)')
+        }
+
+        console.log('🎬 视频URL获取成功,正在转换为base64...')
+        logVideoDebug(traceId, 'sync:video-url-ready', {
+          resultType: 'url'
+        })
+
+        try {
+          const videoBase64 = await convertVideoUrlToBase64(videoUrl)
+          console.log('✅ 视频已转换为base64格式,可安全存储到IndexedDB')
+          logVideoDebug(traceId, 'sync:video-base64-ready', {
+            resultType: 'base64'
+          })
+          result = {
+            videoUrl: videoBase64,
+            durationSec: normalizeDurationSec(duration)
+          }
+        } catch (error: unknown) {
+          console.error('❌ 视频转base64失败,返回原始URL:', error)
+          logVideoWarn(traceId, 'sync:video-base64-failed-fallback-url', {
+            message: getErrorMessage(error)
+          })
+          result = {
+            videoUrl,
+            durationSec: normalizeDurationSec(duration)
+          }
+        }
+      } catch (error: unknown) {
+        clearTimeout(timeoutId)
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new Error('视频生成超时 (20分钟)')
+        }
+        throw error
+      }
     }
+
+    addRenderLogWithTokens({
+      type: 'video',
+      resourceId,
+      resourceName,
+      status: 'success',
+      model: requestModel || resolvedVideoModelId || model,
+      prompt: loggedPrompt,
+      duration: Date.now() - startTime
+    })
+    logVideoDebug(traceId, 'generate:success', {
+      durationMs: Date.now() - startTime,
+      outputDurationSec: result.durationSec,
+      hasVideoUrl: !!result.videoUrl,
+      resultType: result.videoUrl.startsWith('data:') ? 'base64' : 'url'
+    })
+    return result
   } catch (error: unknown) {
-    clearTimeout(timeoutId)
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('视频生成超时 (20分钟)')
-    }
+    addRenderLogWithTokens({
+      type: 'video',
+      resourceId,
+      resourceName,
+      status: 'failed',
+      model: requestModel || resolvedVideoModelId || model,
+      prompt: loggedPrompt,
+      error: getErrorMessage(error),
+      duration: Date.now() - startTime
+    })
+    logVideoError(traceId, 'generate:failed', error, {
+      durationMs: Date.now() - startTime,
+      model: requestModel || resolvedVideoModelId || model
+    })
     throw error
   }
 }

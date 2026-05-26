@@ -36,6 +36,11 @@ import {
   parseRichDocFromHtml
 } from './editor/multimodalFormatter'
 import {
+  appendVideoDebugLog,
+  formatVideoDebugReport,
+  getVideoDebugLogs
+} from '../../services/videoDebugLogService'
+import {
   Plus,
   Users,
   Image as ImageIcon,
@@ -60,7 +65,8 @@ import {
   Square,
   CheckSquare,
   Check,
-  History
+  History,
+  Copy
 } from 'lucide-react'
 import ScriptEditorRich from './editor/ScriptEditorRich'
 
@@ -72,6 +78,74 @@ const sanitizeUrlString = (value: unknown): string =>
     .trim()
     .replace(/^[`'"\s]+|[`'"\s]+$/g, '')
     .trim()
+
+const createVideoTraceId = (clipId: string): string =>
+  `lark-video-${clipId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+const logLarkVideoTrace = (
+  traceId: string,
+  stage: string,
+  details: Record<string, unknown> = {}
+) => {
+  const sanitized = Object.fromEntries(
+    Object.entries(details).filter(([, value]) => value !== undefined)
+  )
+  console.log(
+    `[LarkDirector][video][${traceId}] ${stage}`,
+    sanitized
+  )
+  appendVideoDebugLog({
+    traceId,
+    source: 'lark-director',
+    stage,
+    level: 'info',
+    details: sanitized
+  })
+}
+
+const logLarkVideoTraceError = (
+  traceId: string,
+  stage: string,
+  error: unknown,
+  details: Record<string, unknown> = {}
+) => {
+  const errorMessage = error instanceof Error ? error.message : String(error)
+  const sanitized = Object.fromEntries(
+    Object.entries({
+      ...details,
+      errorMessage
+    }).filter(([, value]) => value !== undefined)
+  )
+  console.error(
+    `[LarkDirector][video][${traceId}] ${stage}`,
+    sanitized,
+    error
+  )
+  appendVideoDebugLog({
+    traceId,
+    source: 'lark-director',
+    stage,
+    level: 'error',
+    details: sanitized
+  })
+}
+
+const copyTextToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
 
 const MAX_VIDEO_GENERATION_HISTORY = 20
 const appendVideoGenerationHistory = (
@@ -538,6 +612,10 @@ const LarkDirector: React.FC<Props> = ({
       }
     ]
   })()
+  const latestVideoRenderLog =
+    [...(project.renderLogs || [])]
+      .filter((log) => log.type === 'video')
+      .sort((a, b) => b.timestamp - a.timestamp)[0] || null
   const activeClipRenderState = getClipRenderState(activeClip)
 
   useEffect(() => {
@@ -726,6 +804,27 @@ const LarkDirector: React.FC<Props> = ({
       }
     })
   }
+
+  const handleCopyLatestVideoLog = async () => {
+    if (!latestVideoRenderLog) {
+      showAlert('当前还没有可复制的视频日志', { type: 'warning' })
+      return
+    }
+
+    try {
+      const report = formatVideoDebugReport(
+        latestVideoRenderLog,
+        getVideoDebugLogs(latestVideoRenderLog.resourceId)
+      )
+      await copyTextToClipboard(report)
+      showAlert('视频调试日志已复制，可直接发给我排查。', {
+        type: 'success'
+      })
+    } catch {
+      showAlert('复制视频日志失败，请稍后重试。', { type: 'error' })
+    }
+  }
+
   const handleChangeActiveClipVideoModel = (modelId: string): void => {
     if (!activeClip) return
     updateClipById(activeClip.id, (target) => ({
@@ -794,6 +893,7 @@ const LarkDirector: React.FC<Props> = ({
     }
 
     const intervalId = clip.interval?.id || generateId(`int-${clip.id}`)
+    const traceId = createVideoTraceId(clip.id)
     updateClipById(clip.id, (target) => ({
       ...target,
       interval: target.interval
@@ -815,6 +915,14 @@ const LarkDirector: React.FC<Props> = ({
     onGeneratingChange?.(true)
 
     try {
+      logLarkVideoTrace(traceId, 'generate:start', {
+        clipId: clip.id,
+        intervalId,
+        model: clip.videoModel || defaultVideoModelId,
+        aspectRatio,
+        resolution,
+        promptLength: storyboardText.length
+      })
       const generatedVideo = await generateVideo(
         payload.multimodalPayload,
         undefined,
@@ -822,7 +930,12 @@ const LarkDirector: React.FC<Props> = ({
         clip.videoModel || defaultVideoModelId,
         aspectRatio,
         -1,
-        resolution
+        resolution,
+        {
+          traceId,
+          resourceId: traceId,
+          resourceName: `Lark视频 - ${(clip.title || clip.id).slice(0, 50)}`
+        }
       )
       const sourceVideoUrl = normalizeRemoteUrl(generatedVideo.videoUrl)
       const generatedDurationSec = Number(generatedVideo.durationSec || 0)
@@ -832,8 +945,19 @@ const LarkDirector: React.FC<Props> = ({
           : Number(clip.interval?.duration || 8)
       let finalVideoUrl = sourceVideoUrl
       let finalAssetId: string | undefined = clip.interval?.assetId
+      logLarkVideoTrace(traceId, 'generate:service-success', {
+        clipId: clip.id,
+        intervalId,
+        resultType: sourceVideoUrl.startsWith('http') ? 'url' : 'non-http',
+        generatedDurationSec
+      })
 
       if (seriesProject && currentEpisode && sourceVideoUrl) {
+        logLarkVideoTrace(traceId, 'relay:start', {
+          clipId: clip.id,
+          intervalId,
+          hasCurrentAssetId: !!clip.interval?.assetId
+        })
         const relayResult = await uploadGeneratedAssetToRelay({
           project: seriesProject,
           seriesList: allSeries || [],
@@ -862,6 +986,12 @@ const LarkDirector: React.FC<Props> = ({
           throw new Error('TOS上传成功但未返回可用公网URL')
         }
         finalAssetId = relayResult.assetId || finalAssetId
+        logLarkVideoTrace(traceId, 'relay:success', {
+          clipId: clip.id,
+          intervalId,
+          assetId: finalAssetId,
+          finalVideoUrl: finalVideoUrl.slice(0, 120)
+        })
         console.info('[LarkDirector] 视频生成回填完成', {
           actor: 'user',
           action: 'sync-generated-video-to-tos',
@@ -922,6 +1052,13 @@ const LarkDirector: React.FC<Props> = ({
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : '视频生成失败，请稍后重试。'
+      logLarkVideoTraceError(traceId, 'generate:failed', error, {
+        clipId: clip.id,
+        intervalId,
+        model: clip.videoModel || defaultVideoModelId,
+        aspectRatio,
+        resolution
+      })
       updateClipById(clip.id, (target) => ({
         ...target,
         interval: target.interval
@@ -1940,6 +2077,14 @@ const LarkDirector: React.FC<Props> = ({
           <span className="text-xs text-[var(--text-tertiary)] mr-4 font-mono">
             {generatedClipCount} / {clips.length}
           </span>
+          <button
+            onClick={() => void handleCopyLatestVideoLog()}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold bg-[var(--bg-hover)] text-[var(--text-secondary)] border border-[var(--border-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors"
+            title="复制最近一次视频生成调试日志"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            复制视频日志
+          </button>
         </div>
       </div>
 

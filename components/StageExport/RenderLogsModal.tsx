@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, ChevronUp, ChevronDown } from 'lucide-react'
+import { Clock, ChevronUp, ChevronDown, Copy, Check } from 'lucide-react'
 import { RenderLog } from '../../types'
 import { STYLES } from './constants'
 import {
@@ -12,6 +12,10 @@ import {
   getStatusColorClass,
   hasLogDetails
 } from './utils'
+import {
+  formatVideoDebugReport,
+  getVideoDebugLogs
+} from '../../services/videoDebugLogService'
 
 interface Props {
   logs: RenderLog[]
@@ -27,6 +31,43 @@ const RenderLogsModal: React.FC<Props> = ({
   onToggleExpand
 }) => {
   const stats = getLogStats(logs)
+  const [copiedKey, setCopiedKey] = React.useState<string | null>(null)
+  const [copyError, setCopyError] = React.useState<string | null>(null)
+  const latestVideoLog = React.useMemo(
+    () => logs.find((log) => log.type === 'video') || null,
+    [logs]
+  )
+
+  const copyTextToClipboard = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+
+  const handleCopyVideoLog = async (log: RenderLog, copyKey: string) => {
+    try {
+      const report = formatVideoDebugReport(log, getVideoDebugLogs(log.resourceId))
+      await copyTextToClipboard(report)
+      setCopyError(null)
+      setCopiedKey(copyKey)
+      window.setTimeout(() => {
+        setCopiedKey((current) => (current === copyKey ? null : current))
+      }, 2000)
+    } catch {
+      setCopyError('复制失败，请稍后重试。')
+    }
+  }
 
   return (
     <div className={STYLES.modal.overlay}>
@@ -42,13 +83,34 @@ const RenderLogsModal: React.FC<Props> = ({
               {logs.length} 条记录
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            {latestVideoLog && (
+              <button
+                onClick={() => handleCopyVideoLog(latestVideoLog, 'latest-video-log')}
+                className="px-3 py-2 flex items-center gap-2 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors text-xs font-bold"
+                title="复制最近一次视频生成的调试日志"
+              >
+                {copiedKey === 'latest-video-log' ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+                {copiedKey === 'latest-video-log' ? '已复制' : '复制最近视频日志'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+            >
+              ✕
+            </button>
+          </div>
         </div>
+        {copyError && (
+          <div className="mx-6 mt-4 rounded-lg border border-[var(--error-border)] bg-[var(--error-bg)] px-3 py-2 text-xs text-[var(--error-text)]">
+            {copyError}
+          </div>
+        )}
 
         {/* Stats Panel */}
         <div className={STYLES.statsPanel.container}>
@@ -168,6 +230,22 @@ const RenderLogsModal: React.FC<Props> = ({
                           <div className="text-[10px] text-[var(--text-secondary)] bg-[var(--bg-base)]/30 px-3 py-2 rounded max-h-32 overflow-y-auto">
                             {log.prompt}
                           </div>
+                        </div>
+                      )}
+
+                      {log.type === 'video' && (
+                        <div className="pt-1">
+                          <button
+                            onClick={() => handleCopyVideoLog(log, log.id)}
+                            className="px-3 py-2 flex items-center gap-2 rounded-lg bg-[var(--bg-elevated)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors text-xs font-bold"
+                          >
+                            {copiedKey === log.id ? (
+                              <Check className="w-4 h-4" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                            {copiedKey === log.id ? '已复制调试日志' : '复制这次视频调试日志'}
+                          </button>
                         </div>
                       )}
 
