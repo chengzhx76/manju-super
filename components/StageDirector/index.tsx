@@ -86,7 +86,10 @@ import {
 import { assessShotQualityWithLLM } from '../../services/qualityAssessmentV2Service'
 import { updatePromptWithVersion } from '../../services/promptVersionService'
 import { resolvePromptTemplateConfig } from '../../services/promptTemplateService'
-import { toFriendlyModerationMessage } from '../../services/errorMessageService'
+import {
+  toFriendlyModerationMessage,
+  toFriendlyVideoFailureMessage
+} from '../../services/errorMessageService'
 import {
   appendVideoDebugLog,
   formatVideoDebugReport,
@@ -267,8 +270,12 @@ const StageDirector: React.FC<Props> = ({
     const moderationMessage = toFriendlyModerationMessage(rawMessage, {
       includeUnknownReasonCode: import.meta.env.DEV
     })
+    const videoFailureMessage = toFriendlyVideoFailureMessage(rawMessage, {
+      includeUnknownReasonCode: import.meta.env.DEV,
+      status
+    })
 
-    let normalizedMessage = moderationMessage || rawMessage
+    let normalizedMessage = videoFailureMessage || moderationMessage || rawMessage
     if (!normalizedMessage) {
       if (status === 400) {
         normalizedMessage = '提示词可能被风控拦截，请修改提示词后重试。'
@@ -631,6 +638,7 @@ const StageDirector: React.FC<Props> = ({
     url?: string
     currentAssetId?: string
     strict?: boolean
+    traceId?: string
   }): Promise<{
     url?: string
     assetId?: string
@@ -668,6 +676,8 @@ const StageDirector: React.FC<Props> = ({
         url: params.url,
         currentAssetId: params.currentAssetId,
         skipRelayUpload: params.kind === 'video',
+        debugTraceId: params.traceId,
+        debugSource: 'stage-director',
         onStage: (stage) => {
           if (stage === 'start_tos_upload' && !tosUploadStartedLogged) {
             tosUploadStartedLogged = true
@@ -1443,7 +1453,8 @@ const StageDirector: React.FC<Props> = ({
         shotId: shot.id,
         url: videoUrl,
         currentAssetId: shot.interval?.assetId,
-        strict: true
+        strict: true,
+        traceId
       })
       const finalVideoUrl = String(relayResult?.url || '').trim()
       if (!finalVideoUrl) {

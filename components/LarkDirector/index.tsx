@@ -40,6 +40,7 @@ import {
   formatVideoDebugReport,
   getVideoDebugLogs
 } from '../../services/videoDebugLogService'
+import { toFriendlyVideoFailureMessage } from '../../services/errorMessageService'
 import {
   Plus,
   Users,
@@ -967,7 +968,9 @@ const LarkDirector: React.FC<Props> = ({
           localId: intervalId,
           url: sourceVideoUrl,
           currentAssetId: clip.interval?.assetId,
-          skipRelayUpload: true
+          skipRelayUpload: true,
+          debugTraceId: traceId,
+          debugSource: 'lark-director'
         })
         if (relayResult.tosStatus !== 'success') {
           throw new Error(
@@ -1050,8 +1053,12 @@ const LarkDirector: React.FC<Props> = ({
       }
       return true
     } catch (error: unknown) {
-      const message =
+      const rawMessage =
         error instanceof Error ? error.message : '视频生成失败，请稍后重试。'
+      const message =
+        toFriendlyVideoFailureMessage(rawMessage, {
+          includeUnknownReasonCode: import.meta.env.DEV
+        }) || rawMessage
       logLarkVideoTraceError(traceId, 'generate:failed', error, {
         clipId: clip.id,
         intervalId,

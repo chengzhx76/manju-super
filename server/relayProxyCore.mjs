@@ -10,6 +10,30 @@ const json = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+const nowIso = () => new Date().toISOString();
+
+const createRequestId = () => crypto.randomUUID().slice(0, 8);
+
+const summarizeEndpoint = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    return parsed.origin;
+  } catch {
+    return raw.slice(0, 160);
+  }
+};
+
+const logRelayProxy = (level, event, details = {}) => {
+  const logger =
+    level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
+  logger(`[relay-proxy] ${event}`, {
+    timestamp: nowIso(),
+    ...details,
+  });
+};
+
 const isRecordObject = (value) => typeof value === 'object' && value !== null;
 
 const parseJsonBody = async (req) => {
@@ -157,14 +181,27 @@ class RelayProxyError extends Error {
   }
 }
 
-const callRelay = async ({ config, action, payload, requireHttp200 = false }) => {
+const callRelay = async ({
+  config,
+  action,
+  payload,
+  requireHttp200 = false,
+  requestId,
+}) => {
   const body = JSON.stringify(payload || {});
   let lastError = null;
 
   for (const requestUrl of buildActionUrls(config.address, action)) {
+    const startedAt = Date.now();
     try {
       const url = new URL(requestUrl);
       const headers = buildSignedHeaders({ config, url, body });
+      logRelayProxy('info', 'upstream:start', {
+        requestId,
+        action,
+        endpoint: summarizeEndpoint(config.address),
+        requestUrl: `${url.origin}${url.pathname}`,
+      });
       const response = await fetch(url.toString(), {
         method: 'POST',
         headers,
@@ -179,6 +216,15 @@ const callRelay = async ({ config, action, payload, requireHttp200 = false }) =>
       const parsed = parseJsonResponse(responseText);
       if (!response.ok) {
         const message = extractErrorMessage(parsed);
+        logRelayProxy('warn', 'upstream:response-error', {
+          requestId,
+          action,
+          endpoint: summarizeEndpoint(config.address),
+          requestUrl: `${url.origin}${url.pathname}`,
+          statusCode: response.status,
+          durationMs: Date.now() - startedAt,
+          message,
+        });
         if (response.status === 404 || response.status === 405) {
           lastError = new RelayProxyError(message, response.status);
           continue;
@@ -187,10 +233,34 @@ const callRelay = async ({ config, action, payload, requireHttp200 = false }) =>
       }
 
       if (parsed && typeof parsed === 'object' && 'Result' in parsed) {
+        logRelayProxy('info', 'upstream:success', {
+          requestId,
+          action,
+          endpoint: summarizeEndpoint(config.address),
+          requestUrl: `${url.origin}${url.pathname}`,
+          statusCode: response.status,
+          durationMs: Date.now() - startedAt,
+        });
         return parsed.Result;
       }
+      logRelayProxy('info', 'upstream:success', {
+        requestId,
+        action,
+        endpoint: summarizeEndpoint(config.address),
+        requestUrl: `${url.origin}${url.pathname}`,
+        statusCode: response.status,
+        durationMs: Date.now() - startedAt,
+      });
       return parsed;
     } catch (error) {
+      logRelayProxy('error', 'upstream:failed', {
+        requestId,
+        action,
+        endpoint: summarizeEndpoint(config.address),
+        requestUrl: requestUrl.split('?')[0],
+        durationMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      });
       lastError = error;
     }
   }
@@ -206,6 +276,13 @@ export const createRelayProxyHandler = () => {
   return async (req, res, next) => {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     const pathname = requestUrl.pathname;
+    const requestId = createRequestId();
+    const startedAt = Date.now();
+    const context = {
+      requestId,
+      pathname,
+      method: req.method || 'GET',
+    };
     if (!pathname.startsWith('/api/relay/')) {
       if (typeof next === 'function') {
         next();
@@ -217,6 +294,7 @@ export const createRelayProxyHandler = () => {
 
     if (pathname === '/api/relay/signed-call' && req.method === 'POST') {
       try {
+        logRelayProxy('info', 'request:start', context);
         const body = await parseJsonBody(req);
         const config = normalizeConfig(body.config);
         const action = String(body.action || '').trim();
@@ -235,10 +313,24 @@ export const createRelayProxyHandler = () => {
           action,
           payload,
           requireHttp200,
+          requestId,
+        });
+        logRelayProxy('info', 'request:success', {
+          ...context,
+          action,
+          endpoint: summarizeEndpoint(config?.address),
+          durationMs: Date.now() - startedAt,
+          statusCode: 200,
         });
         json(res, 200, { success: true, result });
       } catch (error) {
         const statusCode = Number(error?.statusCode || 500);
+        logRelayProxy('error', 'request:failed', {
+          ...context,
+          durationMs: Date.now() - startedAt,
+          statusCode,
+          message: error instanceof Error ? error.message : String(error),
+        });
         json(res, statusCode, {
           success: false,
           message: error instanceof Error ? error.message : String(error),

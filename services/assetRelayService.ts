@@ -1,6 +1,7 @@
 import { Episode, MediaAssetType, Series, SeriesProject, Shot } from '../types'
 import type { AssetLibraryConfig, VolcengineTosConfig } from '../types/model'
 import { getAssetLibraryConfig, getVolcengineTosConfig } from './modelRegistry'
+import { appendVideoDebugLog } from './videoDebugLogService'
 
 const RELAY_PROJECT_NAME = 'default'
 const RELAY_GROUP_TYPE = 'AIGC'
@@ -15,6 +16,13 @@ const TOS_VERIFY_OBJECT_ENDPOINT = '/api/tos/verify-object'
 const RELAY_SIGNED_CALL_ENDPOINT = '/api/relay/signed-call'
 const TOS_ASSET_ID_PREFIX = 'tos:'
 const TOS_PATH_PREFIX = 'manju'
+
+type RelayDebugContext = {
+  traceId?: string
+  source?: string
+  kind?: RelayResourceKind
+  localId?: string
+}
 
 export type RelayResourceKind =
   | 'character'
@@ -629,6 +637,69 @@ const extractErrorMessage = (value: unknown): string => {
   return JSON.stringify(value)
 }
 
+const summarizeHttpUrl = (value?: string): string => {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  try {
+    const parsed = new URL(raw)
+    return `${parsed.origin}${parsed.pathname}`.slice(0, 200)
+  } catch {
+    return raw.slice(0, 200)
+  }
+}
+
+const getBrowserDebugSnapshot = (): Record<string, unknown> => ({
+  online: typeof navigator !== 'undefined' ? navigator.onLine : undefined,
+  visibilityState:
+    typeof document !== 'undefined' ? document.visibilityState : undefined,
+  hasFocus:
+    typeof document !== 'undefined' && typeof document.hasFocus === 'function'
+      ? document.hasFocus()
+      : undefined,
+  page:
+    typeof window !== 'undefined' ? window.location.pathname || '/' : undefined
+})
+
+const logRelayDebug = (
+  context: RelayDebugContext | undefined,
+  stage: string,
+  details: Record<string, unknown> = {},
+  level: 'info' | 'warn' | 'error' = 'info'
+) => {
+  const normalizedContext = context || {}
+  const payload = {
+    ...details,
+    kind: normalizedContext.kind,
+    localId: normalizedContext.localId
+  }
+  const traceOrLocalId =
+    String(normalizedContext.traceId || '').trim() ||
+    String(normalizedContext.localId || '').trim() ||
+    'asset-relay'
+  const prefix = `[asset-relay][${traceOrLocalId}] ${stage}`
+
+  if (level === 'error') {
+    console.error(prefix, payload)
+  } else if (level === 'warn') {
+    console.warn(prefix, payload)
+  } else {
+    console.info(prefix, payload)
+  }
+
+  if (normalizedContext.traceId) {
+    appendVideoDebugLog({
+      traceId: normalizedContext.traceId,
+      source: normalizedContext.source || 'asset-relay',
+      stage: `asset-relay:${stage}`,
+      level,
+      details: {
+        ...payload,
+        ...getBrowserDebugSnapshot()
+      }
+    })
+  }
+}
+
 const callRelay = async <T>(
   action: string,
   payload: Record<string, unknown>,
@@ -665,14 +736,73 @@ const callRelay = async <T>(
 
 const callTosApi = async <T>(
   endpoint: string,
-  init: RequestInit
-): Promise<T> => {
-  const response = await fetch(endpoint, init)
-  const payload = parseJsonResponse(await response.text())
-  if (!response.ok) {
-    throw new Error(extractErrorMessage(payload))
+  init: RequestInit,
+  options?: {
+    debugContext?: RelayDebugContext
+    debugRequest?: Record<string, unknown>
   }
-  return payload as T
+): Promise<T> => {
+  const method = String(init.method || 'GET').toUpperCase()
+  const startedAt = Date.now()
+  logRelayDebug(
+    options?.debugContext,
+    'tos-api:request',
+    {
+      endpoint,
+      method,
+      ...(options?.debugRequest || {})
+    },
+    'info'
+  )
+  try {
+    const response = await fetch(endpoint, init)
+    const payload = parseJsonResponse(await response.text())
+    const durationMs = Date.now() - startedAt
+    if (!response.ok) {
+      logRelayDebug(
+        options?.debugContext,
+        'tos-api:response-error',
+        {
+          endpoint,
+          method,
+          status: response.status,
+          durationMs,
+          responseMessage: extractErrorMessage(payload),
+          ...(options?.debugRequest || {})
+        },
+        'error'
+      )
+      throw new Error(extractErrorMessage(payload))
+    }
+    logRelayDebug(
+      options?.debugContext,
+      'tos-api:response-success',
+      {
+        endpoint,
+        method,
+        status: response.status,
+        durationMs,
+        ...(options?.debugRequest || {})
+      },
+      'info'
+    )
+    return payload as T
+  } catch (error) {
+    logRelayDebug(
+      options?.debugContext,
+      'tos-api:fetch-failed',
+      {
+        endpoint,
+        method,
+        durationMs: Date.now() - startedAt,
+        errorMessage: extractErrorMessage(error),
+        errorName: error instanceof Error ? error.name : undefined,
+        ...(options?.debugRequest || {})
+      },
+      'error'
+    )
+    throw error
+  }
 }
 
 type TosUploadByUrlPayload = {
@@ -698,7 +828,8 @@ type TosDeleteObjectPayload = {
 
 const uploadToTosByUrl = async (
   config: VolcengineTosConfig,
-  payload: TosUploadByUrlPayload
+  payload: TosUploadByUrlPayload,
+  debugContext?: RelayDebugContext
 ): Promise<{ objectKey: string; url: string }> => {
   const response = await callTosApi<TosUploadResponse>(
     TOS_UPLOAD_BY_URL_ENDPOINT,
@@ -713,6 +844,21 @@ const uploadToTosByUrl = async (
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey
       })
+    },
+    {
+      debugContext,
+      debugRequest: {
+        uploadMode: 'by-url',
+        objectKey: payload.objectKey,
+        sourceUrl: summarizeHttpUrl(payload.sourceUrl),
+        sourceOrigin: (() => {
+          try {
+            return new URL(payload.sourceUrl).origin
+          } catch {
+            return undefined
+          }
+        })()
+      }
     }
   )
   const objectKey = String(
@@ -770,6 +916,7 @@ const uploadGeneratedAssetToTos = async (params: {
   kind: RelayResourceKind
   localId: string
   url?: string
+  debugContext?: RelayDebugContext
 }): Promise<{ assetId: string; objectKey: string; url: string }> => {
   const config = normalizeTosConfig()
   if (!config) {
@@ -789,6 +936,17 @@ const uploadGeneratedAssetToTos = async (params: {
       params.kind === 'video' ? '.mp4' : '.png'
     )
   })
+  logRelayDebug(
+    params.debugContext,
+    'tos-upload:start',
+    {
+      objectKey,
+      sourceUrl: summarizeHttpUrl(params.url),
+      projectId: params.project.id,
+      episodeId: params.episode.id
+    },
+    'info'
+  )
   const uploaded = await uploadToTosByUrl(config, {
     sourceUrl: params.url!,
     objectKey,
@@ -797,7 +955,16 @@ const uploadGeneratedAssetToTos = async (params: {
     host: config.host,
     accessKeyId: config.accessKeyId,
     secretAccessKey: config.secretAccessKey
-  })
+  }, params.debugContext)
+  logRelayDebug(
+    params.debugContext,
+    'tos-upload:success',
+    {
+      objectKey: uploaded.objectKey,
+      publicUrl: summarizeHttpUrl(uploaded.url)
+    },
+    'info'
+  )
   return {
     assetId: toTosAssetId(uploaded.objectKey),
     objectKey: uploaded.objectKey,
@@ -1355,10 +1522,18 @@ export const uploadGeneratedAssetToRelay = async (params: {
   currentAssetId?: string
   skipTosUploadWhenUrlAvailable?: boolean
   skipRelayUpload?: boolean
+  debugTraceId?: string
+  debugSource?: string
   onStage?: (
     stage: 'start_tos_upload' | 'tos_upload_success' | 'start_relay_upload'
   ) => void
 }): Promise<RelayUploadResult> => {
+  const debugContext: RelayDebugContext = {
+    traceId: params.debugTraceId,
+    source: params.debugSource || 'asset-relay',
+    kind: params.kind,
+    localId: params.localId
+  }
   const logUploadFlow = (payload: {
     result: 'success' | 'skipped' | 'failed'
     reason?: string
@@ -1382,6 +1557,19 @@ export const uploadGeneratedAssetToRelay = async (params: {
 
   const tosConfig = normalizeTosConfig()
   const config = params.skipRelayUpload ? null : normalizeConfig()
+  logRelayDebug(
+    debugContext,
+    'upload:prepare',
+    {
+      hasTosConfig: !!tosConfig,
+      hasRelayConfig: !!config,
+      skipRelayUpload: !!params.skipRelayUpload,
+      skipTosUploadWhenUrlAvailable: !!params.skipTosUploadWhenUrlAvailable,
+      hasCurrentAssetId: !!params.currentAssetId,
+      sourceUrl: summarizeHttpUrl(params.url)
+    },
+    'info'
+  )
   if (!tosConfig) {
     logUploadFlow({
       result: 'skipped',
@@ -1414,11 +1602,21 @@ export const uploadGeneratedAssetToRelay = async (params: {
         episode: params.episode,
         kind: params.kind,
         localId: params.localId,
-        url: params.url
+        url: params.url,
+        debugContext
       })
       params.onStage?.('tos_upload_success')
       finalUrl = tosUploaded.url
     } catch (error) {
+      logRelayDebug(
+        debugContext,
+        'upload:tos-failed',
+        {
+          errorMessage: extractErrorMessage(error),
+          sourceUrl: summarizeHttpUrl(params.url)
+        },
+        'error'
+      )
       logUploadFlow({
         result: 'failed',
         reason: `对象存储上传失败：${extractErrorMessage(error)}`,
@@ -1439,6 +1637,16 @@ export const uploadGeneratedAssetToRelay = async (params: {
   }
 
   if (!config) {
+    logRelayDebug(
+      debugContext,
+      'upload:relay-skipped',
+      {
+        reason: '素材库未配置或调用方跳过 relay 上传',
+        objectKey: tosUploaded?.objectKey,
+        finalUrl: summarizeHttpUrl(finalUrl)
+      },
+      'info'
+    )
     logUploadFlow({
       result: 'success',
       finalUrl,
@@ -1509,6 +1717,15 @@ export const uploadGeneratedAssetToRelay = async (params: {
     }
 
     params.onStage?.('start_relay_upload')
+    logRelayDebug(
+      debugContext,
+      'upload:relay-start',
+      {
+        groupId: nextProject.assetGroupId,
+        finalUrl: summarizeHttpUrl(finalUrl)
+      },
+      'info'
+    )
     const assetId = await createRemoteAssetWithPolling(
       nextProject.assetGroupId!,
       candidate
@@ -1537,6 +1754,16 @@ export const uploadGeneratedAssetToRelay = async (params: {
     })
     return result
   } catch (error) {
+    logRelayDebug(
+      debugContext,
+      'upload:relay-failed',
+      {
+        errorMessage: extractErrorMessage(error),
+        finalUrl: summarizeHttpUrl(finalUrl),
+        objectKey: tosUploaded?.objectKey
+      },
+      'error'
+    )
     logUploadFlow({
       result: 'failed',
       reason: `素材库上传失败：${extractErrorMessage(error)}`,

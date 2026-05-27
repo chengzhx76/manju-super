@@ -1,4 +1,5 @@
 import { TosClient } from '@volcengine/tos-sdk';
+import crypto from 'node:crypto';
 
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
@@ -6,6 +7,19 @@ const json = (res, statusCode, payload) => {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(payload));
+};
+
+const nowIso = () => new Date().toISOString();
+
+const createRequestId = () => crypto.randomUUID().slice(0, 8);
+
+const logTosProxy = (level, event, details = {}) => {
+  const logger =
+    level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
+  logger(`[tos-proxy] ${event}`, {
+    timestamp: nowIso(),
+    ...details,
+  });
 };
 
 const normalizeText = (value) => String(value || '').trim();
@@ -16,6 +30,17 @@ const stripWrappingQuotes = (value) =>
     .replace(/^["'`]+/, '')
     .replace(/["'`]+$/, '')
     .trim();
+
+const summarizeUrlForLog = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.origin}${parsed.pathname}`.slice(0, 240);
+  } catch {
+    return raw.slice(0, 240);
+  }
+};
 
 const encodeRfc3986 = (value) =>
   encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
@@ -138,10 +163,22 @@ const uploadBytesToTos = async ({
   host,
   accessKeyId,
   secretAccessKey,
+  requestId,
 }) => {
   validateCredentials({ accessKeyId, secretAccessKey, host });
   const secretCandidates = getSecretCandidates(secretAccessKey);
   let lastError = null;
+  const startedAt = Date.now();
+  logTosProxy('info', 'put-object:start', {
+    requestId,
+    operator: 'frontend-user',
+    action: 'upload_object',
+    objectKey: String(objectKey || ''),
+    bucketName: normalizeText(bucketName),
+    region: normalizeText(region),
+    contentType: normalizeText(contentType) || 'application/octet-stream',
+    bytes: bodyBuffer.byteLength,
+  });
   for (const candidateSecret of secretCandidates) {
     const client = createTosClient({
       accessKeyId,
@@ -159,6 +196,15 @@ const uploadBytesToTos = async ({
       });
       const baseUrl = buildPublicBaseUrl({ host, bucketName, region });
       const publicUrl = `${baseUrl.replace(/\/+$/, '')}/${String(objectKey).replace(/^\/+/, '')}`;
+      logTosProxy('info', 'put-object:success', {
+        requestId,
+        operator: 'frontend-user',
+        action: 'upload_object',
+        objectKey: String(objectKey || ''),
+        bytes: bodyBuffer.byteLength,
+        publicUrl: summarizeUrlForLog(publicUrl),
+        durationMs: Date.now() - startedAt,
+      });
       return { objectKey: String(objectKey), url: publicUrl };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -168,25 +214,64 @@ const uploadBytesToTos = async ({
         const code = normalizeText(error?.code || error?.data?.Code);
         const message = normalizeText(error?.message || error?.data?.Message);
         const detail = code || message ? ` Code=${code || '-'} Message=${message || '-'}` : '';
+        logTosProxy('error', 'put-object:failed', {
+          requestId,
+          operator: 'frontend-user',
+          action: 'upload_object',
+          objectKey: String(objectKey || ''),
+          bucketName: normalizeText(bucketName),
+          region: normalizeText(region),
+          statusCode,
+          code,
+          message,
+          durationMs: Date.now() - startedAt,
+        });
         throw new Error(`TOS 上传失败(${statusCode})${detail}`);
       }
-      console.warn('[tos-proxy] upload signature mismatch, retrying with decoded secret candidate');
+      logTosProxy('warn', 'put-object:retry-signature-mismatch', {
+        requestId,
+        objectKey: String(objectKey || ''),
+        bucketName: normalizeText(bucketName),
+        region: normalizeText(region),
+      });
     }
   }
   throw lastError || new Error('TOS 上传失败');
 };
 
-const handleUploadByUrl = async (req, res) => {
+const handleUploadByUrl = async (req, res, context = {}) => {
+  const startedAt = Date.now();
   const body = await parseJsonBody(req);
   const sourceUrl = stripWrappingQuotes(body.sourceUrl);
   if (!/^https?:\/\//i.test(sourceUrl)) {
     throw new Error('sourceUrl 必须是 http/https URL');
   }
+  logTosProxy('info', 'upload-by-url:start', {
+    ...context,
+    operator: 'frontend-user',
+    action: 'fetch_source_and_upload',
+    objectKey: String(body.objectKey || ''),
+    bucketName: normalizeText(body.bucketName),
+    region: normalizeText(body.region),
+    sourceUrl: summarizeUrlForLog(sourceUrl),
+  });
+  const fetchStartedAt = Date.now();
   const upstream = await fetch(sourceUrl, { redirect: 'follow' });
   if (!upstream.ok) {
     const detail = await upstream.text();
     throw new Error(`拉取源文件失败(${upstream.status}) ${detail || ''}`.trim());
   }
+  logTosProxy('info', 'upload-by-url:source-ready', {
+    ...context,
+    operator: 'frontend-user',
+    action: 'fetch_source_and_upload',
+    objectKey: String(body.objectKey || ''),
+    sourceUrl: summarizeUrlForLog(sourceUrl),
+    upstreamStatus: upstream.status,
+    contentType: upstream.headers.get('content-type') || 'application/octet-stream',
+    contentLength: upstream.headers.get('content-length') || '',
+    fetchDurationMs: Date.now() - fetchStartedAt,
+  });
   const buffer = Buffer.from(await upstream.arrayBuffer());
   const uploaded = await uploadBytesToTos({
     bodyBuffer: buffer,
@@ -197,17 +282,21 @@ const handleUploadByUrl = async (req, res) => {
     host: body.host,
     accessKeyId: body.accessKeyId,
     secretAccessKey: body.secretAccessKey,
+    requestId: context.requestId,
   });
-  console.info('[tos-proxy] upload-by-url', {
+  logTosProxy('info', 'upload-by-url:success', {
+    ...context,
     operator: 'frontend-user',
     action: 'upload_object',
     objectKey: uploaded.objectKey,
-    sourceUrl,
+    sourceUrl: summarizeUrlForLog(sourceUrl),
+    totalDurationMs: Date.now() - startedAt,
   });
   json(res, 200, uploaded);
 };
 
-const handleUploadFile = async (req, res) => {
+const handleUploadFile = async (req, res, context = {}) => {
+  const startedAt = Date.now();
   const request = new Request('http://localhost/api/tos/upload-file', {
     method: req.method || 'POST',
     headers: req.headers,
@@ -228,18 +317,21 @@ const handleUploadFile = async (req, res) => {
     host: formData.get('host'),
     accessKeyId: formData.get('accessKeyId'),
     secretAccessKey: formData.get('secretAccessKey'),
+    requestId: context.requestId,
   });
-  console.info('[tos-proxy] upload-file', {
+  logTosProxy('info', 'upload-file:success', {
+    ...context,
     operator: 'frontend-user',
     action: 'upload_object',
     objectKey: uploaded.objectKey,
     fileName: file.name,
     fileSize: file.size,
+    totalDurationMs: Date.now() - startedAt,
   });
   json(res, 200, uploaded);
 };
 
-const handleDeleteObject = async (req, res) => {
+const handleDeleteObject = async (req, res, context = {}) => {
   const body = await parseJsonBody(req);
   validateCredentials({
     accessKeyId: body.accessKeyId,
@@ -279,13 +371,17 @@ const handleDeleteObject = async (req, res) => {
         throw new Error(`TOS 删除失败(${statusCode})${detail}`);
       }
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn('[tos-proxy] delete signature mismatch, retrying with decoded secret candidate');
+      logTosProxy('warn', 'delete-object:retry-signature-mismatch', {
+        ...context,
+        objectKey: String(body.objectKey || ''),
+      });
     }
   }
   if (lastError) {
     throw lastError || new Error('TOS 删除失败');
   }
-  console.info('[tos-proxy] delete-object', {
+  logTosProxy('info', 'delete-object:success', {
+    ...context,
     operator: 'frontend-user',
     action: 'delete_object',
     objectKey: body.objectKey,
@@ -294,7 +390,7 @@ const handleDeleteObject = async (req, res) => {
   json(res, 200, { success: true, objectKey: body.objectKey });
 };
 
-const handleVerifyObject = async (req, res) => {
+const handleVerifyObject = async (req, res, context = {}) => {
   const body = await parseJsonBody(req);
   validateCredentials({
     accessKeyId: body.accessKeyId,
@@ -340,13 +436,17 @@ const handleVerifyObject = async (req, res) => {
       if (!(hasNextCandidate && /SignatureDoesNotMatch/i.test(`${code} ${message}`))) {
         throw lastError;
       }
-      console.warn('[tos-proxy] verify signature mismatch, retrying with decoded secret candidate');
+      logTosProxy('warn', 'verify-object:retry-signature-mismatch', {
+        ...context,
+        objectKey,
+      });
     }
   }
   if (lastError) {
     throw lastError;
   }
-  console.info('[tos-proxy] verify-object', {
+  logTosProxy('info', 'verify-object:success', {
+    ...context,
     operator: 'frontend-user',
     action: 'verify_object',
     objectKey,
@@ -364,6 +464,13 @@ export const createTosProxyHandler = () => {
   return async (req, res, next) => {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     const pathname = requestUrl.pathname;
+    const requestId = createRequestId();
+    const startedAt = Date.now();
+    const context = {
+      requestId,
+      pathname,
+      method: req.method || 'GET',
+    };
     if (!pathname.startsWith('/api/tos/')) {
       if (typeof next === 'function') {
         next();
@@ -373,24 +480,57 @@ export const createTosProxyHandler = () => {
       return;
     }
     try {
+      logTosProxy('info', 'request:start', context);
       if (pathname === '/api/tos/upload-by-url' && req.method === 'POST') {
-        await handleUploadByUrl(req, res);
+        await handleUploadByUrl(req, res, context);
+        logTosProxy('info', 'request:success', {
+          ...context,
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
       if (pathname === '/api/tos/upload-file' && req.method === 'POST') {
-        await handleUploadFile(req, res);
+        await handleUploadFile(req, res, context);
+        logTosProxy('info', 'request:success', {
+          ...context,
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
       if (pathname === '/api/tos/delete-object' && req.method === 'POST') {
-        await handleDeleteObject(req, res);
+        await handleDeleteObject(req, res, context);
+        logTosProxy('info', 'request:success', {
+          ...context,
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
       if (pathname === '/api/tos/verify-object' && req.method === 'POST') {
-        await handleVerifyObject(req, res);
+        await handleVerifyObject(req, res, context);
+        logTosProxy('info', 'request:success', {
+          ...context,
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
       json(res, 404, { success: false, message: 'TOS API Not Found' });
+      logTosProxy('warn', 'request:not-found', {
+        ...context,
+        durationMs: Date.now() - startedAt,
+        statusCode: 404,
+      });
     } catch (error) {
+      logTosProxy('error', 'request:failed', {
+        ...context,
+        operator: 'frontend-user',
+        action: 'tos_proxy_request',
+        message: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - startedAt,
+      });
       json(res, 500, {
         success: false,
         message: error instanceof Error ? error.message : String(error),

@@ -2,6 +2,10 @@ interface FriendlyModerationOptions {
   includeUnknownReasonCode?: boolean
 }
 
+interface FriendlyVideoFailureOptions extends FriendlyModerationOptions {
+  status?: unknown
+}
+
 interface ModerationReasonCopy {
   label: string
   suggestion: string
@@ -85,4 +89,80 @@ export const toFriendlyModerationMessage = (
   })
 
   return lines.join('\n')
+}
+
+export const toFriendlyVideoFailureMessage = (
+  message?: string | null,
+  options: FriendlyVideoFailureOptions = {}
+): string | null => {
+  if (!message) return null
+
+  const moderationMessage = toFriendlyModerationMessage(message, options)
+  if (moderationMessage) return moderationMessage
+
+  const normalizedMessage = String(message || '').trim()
+  const compactMessage = normalizedMessage.toLowerCase()
+  const numericStatus = Number(options.status)
+
+  if (
+    normalizedMessage.includes('对象存储未配置') ||
+    normalizedMessage.includes('当前项目上下文不可用，无法同步到对象存储')
+  ) {
+    return '对象存储未配置或项目上下文不完整，请先检查对象存储配置后再重试。'
+  }
+
+  if (
+    normalizedMessage.includes('上传资源到对象存储失败') ||
+    normalizedMessage.includes('对象存储上传失败') ||
+    normalizedMessage.includes('TOS上传失败')
+  ) {
+    if (compactMessage.includes('failed to fetch')) {
+      return [
+        '视频已生成成功，但回填到对象存储时网络请求中断。',
+        '这更像本地代理、浏览器扩展、网络抖动或页面热更新导致的中断。',
+        '建议重试一次；如仍失败，请复制视频日志并附带终端里的 [tos-proxy] 日志。'
+      ].join('\n')
+    }
+
+    if (
+      normalizedMessage.includes('当前资源缺少可上传的公网 URL') ||
+      normalizedMessage.includes('未返回可用公网URL')
+    ) {
+      return '视频已生成，但回填时没有拿到可用的公网地址，请检查对象存储配置或源视频链接后重试。'
+    }
+
+    if (normalizedMessage.includes('未返回 objectKey')) {
+      return '对象存储已响应，但没有返回有效的 objectKey，请检查 TOS 代理服务和对象存储配置。'
+    }
+
+    return '视频已生成成功，但上传到对象存储时失败。请重试；如仍失败，请把复制的视频日志和终端里的 [tos-proxy] 日志发我。'
+  }
+
+  if (compactMessage.includes('failed to fetch')) {
+    return [
+      '网络请求未完成，可能是本地代理、浏览器扩展、网络中断或页面刷新导致。',
+      '建议先重试一次；若仍失败，请把复制的视频日志发我排查。'
+    ].join('\n')
+  }
+
+  if (
+    normalizedMessage.includes('创建视频任务失败') ||
+    normalizedMessage.includes('下载视频失败') ||
+    normalizedMessage.includes('未返回任务 ID') ||
+    normalizedMessage.includes('未返回任务ID') ||
+    normalizedMessage.includes('No video URL returned') ||
+    normalizedMessage.includes('视频转base64失败')
+  ) {
+    return '视频生成服务返回异常，问题更可能发生在任务创建、结果下载或结果解析阶段，请稍后重试。'
+  }
+
+  if (numericStatus === 400) {
+    return '请求参数可能有误，或提示词触发了风控限制，请调整后重试。'
+  }
+
+  if (numericStatus === 500 || numericStatus === 503) {
+    return '视频生成服务繁忙，请稍后重试。'
+  }
+
+  return null
 }

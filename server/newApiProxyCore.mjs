@@ -17,6 +17,30 @@ const json = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+const nowIso = () => new Date().toISOString();
+
+const createRequestId = () => crypto.randomUUID().slice(0, 8);
+
+const summarizeEndpoint = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    return parsed.origin;
+  } catch {
+    return raw.slice(0, 160);
+  }
+};
+
+const logNewApiProxy = (level, event, details = {}) => {
+  const logger =
+    level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
+  logger(`[new-api-proxy] ${event}`, {
+    timestamp: nowIso(),
+    ...details,
+  });
+};
+
 const readBody = async (req) => {
   const chunks = [];
   for await (const chunk of req) {
@@ -268,7 +292,15 @@ const normalizeUpstreamEnvelope = (response, payload) => {
   };
 };
 
-const callNewApi = async ({ endpoint, path, method = 'GET', body, jar, userId }) => {
+const callNewApi = async ({
+  endpoint,
+  path,
+  method = 'GET',
+  body,
+  jar,
+  userId,
+  requestId,
+}) => {
   const headers = {
     Accept: 'application/json',
   };
@@ -286,16 +318,46 @@ const callNewApi = async ({ endpoint, path, method = 'GET', body, jar, userId })
     headers['New-Api-User'] = String(userId);
   }
 
-  return fetch(`${endpoint}${path}`, {
+  const startedAt = Date.now();
+  logNewApiProxy('info', 'upstream:start', {
+    requestId,
     method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    redirect: 'follow',
+    endpoint: summarizeEndpoint(endpoint),
+    path,
+    hasBody: body !== undefined,
+    hasUserId: !!userId,
   });
+  try {
+    const response = await fetch(`${endpoint}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      redirect: 'follow',
+    });
+    logNewApiProxy('info', 'upstream:response', {
+      requestId,
+      method,
+      endpoint: summarizeEndpoint(endpoint),
+      path,
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+    });
+    return response;
+  } catch (error) {
+    logNewApiProxy('error', 'upstream:failed', {
+      requestId,
+      method,
+      endpoint: summarizeEndpoint(endpoint),
+      path,
+      durationMs: Date.now() - startedAt,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 };
 
 const proxyStatus = async (req, res, endpoint) => {
-  const response = await callNewApi({ endpoint, path: '/api/status' });
+  const response = await callNewApi({ endpoint, path: '/api/status', requestId: req.__proxyRequestId });
   const payload = normalizeUpstreamEnvelope(response, await parseUpstreamJson(response));
   json(res, response.status || 200, payload);
 };
@@ -305,6 +367,7 @@ const proxyVerification = async (req, res, endpoint, body) => {
   const response = await callNewApi({
     endpoint,
     path: `/api/verification${buildQueryString({ email })}`,
+    requestId: req.__proxyRequestId,
   });
 
   const payload = normalizeUpstreamEnvelope(response, await parseUpstreamJson(response));
@@ -317,6 +380,7 @@ const proxyRegister = async (req, res, endpoint, body) => {
     path: '/api/user/register',
     method: 'POST',
     body,
+    requestId: req.__proxyRequestId,
   });
 
   const payload = normalizeUpstreamEnvelope(response, await parseUpstreamJson(response));
@@ -333,6 +397,7 @@ const proxyLogin = async (req, res, endpoint, body) => {
       username: body.username,
       password: body.password,
     },
+    requestId: req.__proxyRequestId,
   });
 
   mergeSetCookieIntoJar(upstreamJar, response);
@@ -365,6 +430,7 @@ const proxyTwoFactor = async (req, res, body) => {
     method: 'POST',
     body: { code: body.code },
     jar: session.upstreamJar,
+    requestId: req.__proxyRequestId,
   });
 
   mergeSetCookieIntoJar(session.upstreamJar, response);
@@ -406,6 +472,7 @@ const proxySession = async (req, res, endpoint) => {
     path: '/api/user/self',
     jar: session.upstreamJar,
     userId: session.user.id,
+    requestId: req.__proxyRequestId,
   });
 
   const payload = normalizeUpstreamEnvelope(response, await parseUpstreamJson(response));
@@ -428,6 +495,7 @@ const proxyLogout = async (req, res) => {
         endpoint: local.session.endpoint,
         path: '/api/user/logout',
         jar: local.session.upstreamJar,
+        requestId: req.__proxyRequestId,
       });
     } catch {
       // ignore upstream logout failures
@@ -462,12 +530,19 @@ const proxyAuthed = async (req, res, upstreamPath, options = {}) => {
     body: options.body,
     jar: session.upstreamJar,
     userId: session.user.id,
+    requestId: req.__proxyRequestId,
   });
 
   mergeSetCookieIntoJar(session.upstreamJar, response);
   updateLocalSession(local.sessionId, { upstreamJar: session.upstreamJar });
 
   const payload = normalizeUpstreamEnvelope(response, await parseUpstreamJson(response));
+  logNewApiProxy(payload.success ? 'info' : 'warn', 'request:authed-response', {
+    requestId: req.__proxyRequestId,
+    upstreamPath,
+    statusCode: response.status || 200,
+    success: !!payload.success,
+  });
 
   if (!payload.success && [401, 403].includes(response.status)) {
     destroyLocalSession(local.sessionId);
@@ -482,6 +557,9 @@ export const createNewApiProxyHandler = () => {
   return async (req, res, next) => {
     const requestUrl = new URL(req.url || '/', 'http://localhost');
     const pathname = requestUrl.pathname;
+    const requestId = createRequestId();
+    req.__proxyRequestId = requestId;
+    const startedAt = Date.now();
 
     if (!pathname.startsWith('/api/new-api')) {
       if (typeof next === 'function') {
@@ -500,6 +578,11 @@ export const createNewApiProxyHandler = () => {
     }
 
     try {
+      logNewApiProxy('info', 'request:start', {
+        requestId,
+        pathname,
+        method: req.method || 'GET',
+      });
       const body = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method).toUpperCase())
         ? await readBody(req)
         : {};
@@ -509,36 +592,90 @@ export const createNewApiProxyHandler = () => {
 
       if (pathname === '/api/new-api/status' && req.method === 'GET') {
         await proxyStatus(req, res, endpoint);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          endpoint: summarizeEndpoint(endpoint),
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/verification' && req.method === 'POST') {
         await proxyVerification(req, res, endpoint, body);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          endpoint: summarizeEndpoint(endpoint),
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/register' && req.method === 'POST') {
         await proxyRegister(req, res, endpoint, body);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          endpoint: summarizeEndpoint(endpoint),
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/session/login' && req.method === 'POST') {
         await proxyLogin(req, res, endpoint, body);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          endpoint: summarizeEndpoint(endpoint),
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/session/2fa' && req.method === 'POST') {
         await proxyTwoFactor(req, res, body);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/session' && req.method === 'GET') {
         await proxySession(req, res, endpoint);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          endpoint: summarizeEndpoint(endpoint),
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
       if (pathname === '/api/new-api/session/logout' && req.method === 'POST') {
         await proxyLogout(req, res);
+        logNewApiProxy('info', 'request:success', {
+          requestId,
+          pathname,
+          method: req.method || 'GET',
+          durationMs: Date.now() - startedAt,
+          statusCode: res.statusCode,
+        });
         return;
       }
 
@@ -684,7 +821,22 @@ export const createNewApiProxyHandler = () => {
       }
 
       json(res, 404, { success: false, message: '未找到对应代理接口', data: null });
+      logNewApiProxy('warn', 'request:not-found', {
+        requestId,
+        pathname,
+        method: req.method || 'GET',
+        durationMs: Date.now() - startedAt,
+        statusCode: 404,
+      });
     } catch (error) {
+      logNewApiProxy('error', 'request:failed', {
+        requestId,
+        pathname,
+        method: req.method || 'GET',
+        durationMs: Date.now() - startedAt,
+        statusCode: 500,
+        message: error instanceof Error ? error.message : '代理服务异常',
+      });
       json(res, 500, {
         success: false,
         message: error instanceof Error ? error.message : '代理服务异常',
