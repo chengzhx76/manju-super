@@ -637,6 +637,16 @@ const extractErrorMessage = (value: unknown): string => {
   return JSON.stringify(value)
 }
 
+const isRelayGroupMissingError = (error: unknown): boolean => {
+  const message = extractErrorMessage(error).toLowerCase()
+  return (
+    message.includes('404') ||
+    message.includes('not found') ||
+    message.includes('不存在') ||
+    message.includes('无权访问')
+  )
+}
+
 const summarizeHttpUrl = (value?: string): string => {
   const raw = String(value || '').trim()
   if (!raw) return ''
@@ -647,6 +657,36 @@ const summarizeHttpUrl = (value?: string): string => {
     return raw.slice(0, 200)
   }
 }
+
+const summarizeHostForDebug = (value?: string): string => {
+  const raw = String(value || '').trim().replace(/\/+$/, '')
+  if (!raw) return ''
+  const hostWithProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+  try {
+    const parsed = new URL(hostWithProtocol)
+    return `${parsed.protocol}//${parsed.host}`
+  } catch {
+    return raw.slice(0, 200)
+  }
+}
+
+const maskAccessKeyForDebug = (value?: string): string => {
+  const normalized = String(value || '').trim()
+  if (!normalized) return ''
+  if (normalized.length <= 8) {
+    return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`
+  }
+  return `${normalized.slice(0, 4)}***${normalized.slice(-4)}`
+}
+
+const summarizeTosConfigForDebug = (
+  config?: VolcengineTosConfig | null
+): Record<string, unknown> => ({
+  bucketName: String(config?.bucketName || '').trim(),
+  region: String(config?.region || '').trim(),
+  host: summarizeHostForDebug(config?.host),
+  accessKeyId: maskAccessKeyForDebug(config?.accessKeyId)
+})
 
 const getBrowserDebugSnapshot = (): Record<string, unknown> => ({
   online: typeof navigator !== 'undefined' ? navigator.onLine : undefined,
@@ -758,6 +798,12 @@ const callTosApi = async <T>(
     const response = await fetch(endpoint, init)
     const payload = parseJsonResponse(await response.text())
     const durationMs = Date.now() - startedAt
+    const proxyRequestId =
+      response.headers.get('x-tos-proxy-request-id') ||
+      (isRecordObject(payload) && typeof payload.requestId === 'string'
+        ? payload.requestId
+        : undefined)
+    const responseMessage = extractErrorMessage(payload)
     if (!response.ok) {
       logRelayDebug(
         options?.debugContext,
@@ -767,12 +813,17 @@ const callTosApi = async <T>(
           method,
           status: response.status,
           durationMs,
-          responseMessage: extractErrorMessage(payload),
+          proxyRequestId,
+          responseMessage,
           ...(options?.debugRequest || {})
         },
         'error'
       )
-      throw new Error(extractErrorMessage(payload))
+      throw new Error(
+        proxyRequestId
+          ? `${responseMessage} [requestId=${proxyRequestId}]`
+          : responseMessage
+      )
     }
     logRelayDebug(
       options?.debugContext,
@@ -782,6 +833,7 @@ const callTosApi = async <T>(
         method,
         status: response.status,
         durationMs,
+        proxyRequestId,
         ...(options?.debugRequest || {})
       },
       'info'
@@ -850,6 +902,7 @@ const uploadToTosByUrl = async (
       debugRequest: {
         uploadMode: 'by-url',
         objectKey: payload.objectKey,
+        ...summarizeTosConfigForDebug(config),
         sourceUrl: summarizeHttpUrl(payload.sourceUrl),
         sourceOrigin: (() => {
           try {
@@ -878,7 +931,8 @@ const uploadToTosByUrl = async (
 
 const uploadToTosByFile = async (
   config: VolcengineTosConfig,
-  params: { file: File; objectKey: string }
+  params: { file: File; objectKey: string },
+  debugContext?: RelayDebugContext
 ): Promise<{ objectKey: string; url: string }> => {
   const formData = new FormData()
   formData.set('file', params.file)
@@ -893,6 +947,17 @@ const uploadToTosByFile = async (
     {
       method: 'POST',
       body: formData
+    },
+    {
+      debugContext,
+      debugRequest: {
+        uploadMode: 'by-file',
+        objectKey: params.objectKey,
+        ...summarizeTosConfigForDebug(config),
+        fileName: params.file.name,
+        fileType: params.file.type,
+        fileSize: params.file.size
+      }
     }
   )
   const objectKey = String(
@@ -942,6 +1007,7 @@ const uploadGeneratedAssetToTos = async (params: {
     {
       objectKey,
       sourceUrl: summarizeHttpUrl(params.url),
+      ...summarizeTosConfigForDebug(config),
       projectId: params.project.id,
       episodeId: params.episode.id
     },
@@ -993,10 +1059,13 @@ export const uploadAssetFileToTos = async (params: {
       params.type === 'video' ? '.mp4' : '.png'
     )
   })
-  const uploaded = await uploadToTosByFile(config, {
-    file: params.file,
-    objectKey
-  })
+  const uploaded = await uploadToTosByFile(
+    config,
+    {
+      file: params.file,
+      objectKey
+    }
+  )
   return {
     assetId: toTosAssetId(uploaded.objectKey),
     objectKey: uploaded.objectKey,
@@ -1190,8 +1259,7 @@ const ensureProjectGroup = async (
   const safeName =
     truncate(project.title || project.id, NAME_LIMIT) || project.id
   const nextProject = { ...project }
-
-  if (!nextProject.assetGroupId) {
+  const createProjectGroup = async (): Promise<string> => {
     const result = await callRelay<{ Id?: string; id?: string }>(
       'CreateAssetGroup',
       {
@@ -1201,19 +1269,36 @@ const ensureProjectGroup = async (
         ProjectName: RELAY_PROJECT_NAME
       }
     )
-    nextProject.assetGroupId = String(result.Id || result.id || '').trim()
-    if (!nextProject.assetGroupId) {
+    const groupId = String(result.Id || result.id || '').trim()
+    if (!groupId) {
       throw new Error('CreateAssetGroup 未返回 GroupId')
     }
+    return groupId
+  }
+
+  if (!nextProject.assetGroupId) {
+    nextProject.assetGroupId = await createProjectGroup()
     return nextProject
   }
 
-  await callRelay('UpdateAssetGroup', {
-    Id: nextProject.assetGroupId,
-    Name: safeName,
-    Description: description,
-    ProjectName: RELAY_PROJECT_NAME
-  })
+  try {
+    await callRelay('UpdateAssetGroup', {
+      Id: nextProject.assetGroupId,
+      Name: safeName,
+      Description: description,
+      ProjectName: RELAY_PROJECT_NAME
+    })
+  } catch (error) {
+    if (!isRelayGroupMissingError(error)) {
+      throw error
+    }
+    console.warn('[asset-relay] asset group became unavailable, recreating', {
+      projectId: project.id,
+      staleGroupId: nextProject.assetGroupId,
+      reason: extractErrorMessage(error)
+    })
+    nextProject.assetGroupId = await createProjectGroup()
+  }
   return nextProject
 }
 

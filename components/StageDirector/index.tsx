@@ -749,7 +749,8 @@ const StageDirector: React.FC<Props> = ({
         }
         if (params.strict) {
           throw new Error(
-            result.tosMessage ||
+            result.relayMessage ||
+              result.tosMessage ||
               result.reason ||
               '上传资源到对象存储失败，视频回填中止'
           )

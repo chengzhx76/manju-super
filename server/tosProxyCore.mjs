@@ -42,6 +42,33 @@ const summarizeUrlForLog = (value) => {
   }
 };
 
+const summarizeHostForLog = (value) => {
+  const raw = stripWrappingQuotes(value).replace(/\/+$/, '');
+  if (!raw) return '';
+  const hostWithProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(hostWithProtocol);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return raw.slice(0, 240);
+  }
+};
+
+const summarizeResponseText = (value) =>
+  String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 300);
+
+const maskAccessKeyForLog = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (normalized.length <= 8) {
+    return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`;
+  }
+  return `${normalized.slice(0, 4)}***${normalized.slice(-4)}`;
+};
+
 const encodeRfc3986 = (value) =>
   encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
     `%${char.charCodeAt(0).toString(16).toUpperCase()}`
@@ -259,6 +286,22 @@ const handleUploadByUrl = async (req, res, context = {}) => {
   const upstream = await fetch(sourceUrl, { redirect: 'follow' });
   if (!upstream.ok) {
     const detail = await upstream.text();
+    logTosProxy('error', 'upload-by-url:source-failed', {
+      ...context,
+      operator: 'frontend-user',
+      action: 'fetch_source_and_upload',
+      objectKey: String(body.objectKey || ''),
+      bucketName: normalizeText(body.bucketName),
+      region: normalizeText(body.region),
+      host: summarizeHostForLog(body.host),
+      accessKeyId: maskAccessKeyForLog(body.accessKeyId),
+      sourceUrl: summarizeUrlForLog(sourceUrl),
+      upstreamStatus: upstream.status,
+      upstreamStatusText: normalizeText(upstream.statusText),
+      responsePreview: summarizeResponseText(detail),
+      fetchDurationMs: Date.now() - fetchStartedAt,
+      totalDurationMs: Date.now() - startedAt,
+    });
     throw new Error(`拉取源文件失败(${upstream.status}) ${detail || ''}`.trim());
   }
   logTosProxy('info', 'upload-by-url:source-ready', {
@@ -273,26 +316,47 @@ const handleUploadByUrl = async (req, res, context = {}) => {
     fetchDurationMs: Date.now() - fetchStartedAt,
   });
   const buffer = Buffer.from(await upstream.arrayBuffer());
-  const uploaded = await uploadBytesToTos({
-    bodyBuffer: buffer,
-    contentType: upstream.headers.get('content-type') || 'application/octet-stream',
-    region: body.region,
-    bucketName: body.bucketName,
-    objectKey: body.objectKey,
-    host: body.host,
-    accessKeyId: body.accessKeyId,
-    secretAccessKey: body.secretAccessKey,
-    requestId: context.requestId,
-  });
-  logTosProxy('info', 'upload-by-url:success', {
-    ...context,
-    operator: 'frontend-user',
-    action: 'upload_object',
-    objectKey: uploaded.objectKey,
-    sourceUrl: summarizeUrlForLog(sourceUrl),
-    totalDurationMs: Date.now() - startedAt,
-  });
-  json(res, 200, uploaded);
+  try {
+    const uploaded = await uploadBytesToTos({
+      bodyBuffer: buffer,
+      contentType:
+        upstream.headers.get('content-type') || 'application/octet-stream',
+      region: body.region,
+      bucketName: body.bucketName,
+      objectKey: body.objectKey,
+      host: body.host,
+      accessKeyId: body.accessKeyId,
+      secretAccessKey: body.secretAccessKey,
+      requestId: context.requestId,
+    });
+    logTosProxy('info', 'upload-by-url:success', {
+      ...context,
+      operator: 'frontend-user',
+      action: 'upload_object',
+      objectKey: uploaded.objectKey,
+      sourceUrl: summarizeUrlForLog(sourceUrl),
+      totalDurationMs: Date.now() - startedAt,
+    });
+    json(res, 200, uploaded);
+  } catch (error) {
+    logTosProxy('error', 'upload-by-url:put-object-failed', {
+      ...context,
+      operator: 'frontend-user',
+      action: 'upload_object',
+      objectKey: String(body.objectKey || ''),
+      bucketName: normalizeText(body.bucketName),
+      region: normalizeText(body.region),
+      host: summarizeHostForLog(body.host),
+      accessKeyId: maskAccessKeyForLog(body.accessKeyId),
+      sourceUrl: summarizeUrlForLog(sourceUrl),
+      bytes: buffer.byteLength,
+      contentType:
+        upstream.headers.get('content-type') || 'application/octet-stream',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      totalDurationMs: Date.now() - startedAt,
+    });
+    throw error;
+  }
 };
 
 const handleUploadFile = async (req, res, context = {}) => {
@@ -308,27 +372,65 @@ const handleUploadFile = async (req, res, context = {}) => {
   if (!(file instanceof File)) {
     throw new Error('file 缺失');
   }
-  const uploaded = await uploadBytesToTos({
-    bodyBuffer: Buffer.from(await file.arrayBuffer()),
-    contentType: file.type || 'application/octet-stream',
-    region: formData.get('region'),
-    bucketName: formData.get('bucketName'),
-    objectKey: formData.get('objectKey'),
-    host: formData.get('host'),
-    accessKeyId: formData.get('accessKeyId'),
-    secretAccessKey: formData.get('secretAccessKey'),
-    requestId: context.requestId,
-  });
-  logTosProxy('info', 'upload-file:success', {
+  const objectKey = formData.get('objectKey');
+  const region = formData.get('region');
+  const bucketName = formData.get('bucketName');
+  const host = formData.get('host');
+  const accessKeyId = formData.get('accessKeyId');
+  const secretAccessKey = formData.get('secretAccessKey');
+  logTosProxy('info', 'upload-file:start', {
     ...context,
     operator: 'frontend-user',
     action: 'upload_object',
-    objectKey: uploaded.objectKey,
+    objectKey: String(objectKey || ''),
+    bucketName: normalizeText(bucketName),
+    region: normalizeText(region),
+    host: summarizeHostForLog(host),
+    accessKeyId: maskAccessKeyForLog(accessKeyId),
     fileName: file.name,
     fileSize: file.size,
-    totalDurationMs: Date.now() - startedAt,
+    contentType: file.type || 'application/octet-stream',
   });
-  json(res, 200, uploaded);
+  try {
+    const uploaded = await uploadBytesToTos({
+      bodyBuffer: Buffer.from(await file.arrayBuffer()),
+      contentType: file.type || 'application/octet-stream',
+      region,
+      bucketName,
+      objectKey,
+      host,
+      accessKeyId,
+      secretAccessKey,
+      requestId: context.requestId,
+    });
+    logTosProxy('info', 'upload-file:success', {
+      ...context,
+      operator: 'frontend-user',
+      action: 'upload_object',
+      objectKey: uploaded.objectKey,
+      fileName: file.name,
+      fileSize: file.size,
+      totalDurationMs: Date.now() - startedAt,
+    });
+    json(res, 200, uploaded);
+  } catch (error) {
+    logTosProxy('error', 'upload-file:put-object-failed', {
+      ...context,
+      operator: 'frontend-user',
+      action: 'upload_object',
+      objectKey: String(objectKey || ''),
+      bucketName: normalizeText(bucketName),
+      region: normalizeText(region),
+      host: summarizeHostForLog(host),
+      accessKeyId: maskAccessKeyForLog(accessKeyId),
+      fileName: file.name,
+      fileSize: file.size,
+      contentType: file.type || 'application/octet-stream',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      totalDurationMs: Date.now() - startedAt,
+    });
+    throw error;
+  }
 };
 
 const handleDeleteObject = async (req, res, context = {}) => {
@@ -471,6 +573,7 @@ export const createTosProxyHandler = () => {
       pathname,
       method: req.method || 'GET',
     };
+    res.setHeader('X-TOS-Proxy-Request-Id', requestId);
     if (!pathname.startsWith('/api/tos/')) {
       if (typeof next === 'function') {
         next();
@@ -534,6 +637,7 @@ export const createTosProxyHandler = () => {
       json(res, 500, {
         success: false,
         message: error instanceof Error ? error.message : String(error),
+        requestId,
       });
     }
   };

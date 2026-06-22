@@ -281,6 +281,26 @@ const LarkDirector: React.FC<Props> = ({
 
   const activeClipTitle = activeClip ? `片段 ${activeClipIndex + 1}` : '片段'
   const normalizeRemoteUrl = (value: unknown): string => sanitizeUrlString(value)
+  const ensureEpisodeScriptData = (
+    episode: ProjectState
+  ): NonNullable<ProjectState['scriptData']> => ({
+    title: episode.scriptData?.title || episode.title || '',
+    genre: episode.scriptData?.genre || '',
+    logline: episode.scriptData?.logline || '',
+    targetDuration:
+      episode.scriptData?.targetDuration || episode.targetDuration || '',
+    language: episode.scriptData?.language || episode.language || '',
+    visualStyle: episode.scriptData?.visualStyle || episode.visualStyle || '',
+    shotGenerationModel:
+      episode.scriptData?.shotGenerationModel || episode.shotGenerationModel || '',
+    artDirection: episode.scriptData?.artDirection,
+    characters: episode.scriptData?.characters || [],
+    scenes: episode.scriptData?.scenes || [],
+    props: episode.scriptData?.props || [],
+    mediaAssets: episode.scriptData?.mediaAssets || [],
+    storyParagraphs: episode.scriptData?.storyParagraphs || [],
+    generationMeta: episode.scriptData?.generationMeta
+  })
   const resolveMediaRenderUrl = (asset: MediaAsset): string => {
     const directRemoteUrl = normalizeRemoteUrl(asset.remoteUrl)
     if (directRemoteUrl) return directRemoteUrl
@@ -290,7 +310,9 @@ const LarkDirector: React.FC<Props> = ({
     if (tosRemoteUrl) return tosRemoteUrl
     return String(asset.dataUrl || '').trim()
   }
-  const mediaAssets = project.scriptData?.mediaAssets || []
+  const assetPanelEpisode = currentEpisode || project
+  const assetPanelScriptData = ensureEpisodeScriptData(assetPanelEpisode)
+  const mediaAssets = assetPanelScriptData.mediaAssets || []
   const mediaImages = mediaAssets.filter((item) => item.type === 'image')
   const mediaVideos = mediaAssets.filter((item) => item.type === 'video')
   const mediaAudios = mediaAssets.filter((item) => item.type === 'audio')
@@ -1542,12 +1564,12 @@ const LarkDirector: React.FC<Props> = ({
     if (!hasFileChanged && isEditing && hasNameChanged) {
       const now = Date.now()
       updateProject((prev) => {
-        if (!prev.scriptData) return prev
+        const scriptData = ensureEpisodeScriptData(prev)
         return {
           ...prev,
           scriptData: {
-            ...prev.scriptData,
-            mediaAssets: (prev.scriptData.mediaAssets || []).map((item) =>
+            ...scriptData,
+            mediaAssets: (scriptData.mediaAssets || []).map((item) =>
               item.id === editingAssetId
                 ? {
                     ...item,
@@ -1689,19 +1711,19 @@ const LarkDirector: React.FC<Props> = ({
       }
 
       updateProject((prev) => {
-        if (!prev.scriptData) return prev
-        const exists = (prev.scriptData.mediaAssets || []).some(
+        const scriptData = ensureEpisodeScriptData(prev)
+        const exists = (scriptData.mediaAssets || []).some(
           (item) => item.id === mediaAsset.id
         )
         return {
           ...prev,
           scriptData: {
-            ...prev.scriptData,
+            ...scriptData,
             mediaAssets: exists
-              ? (prev.scriptData.mediaAssets || []).map((item) =>
+              ? (scriptData.mediaAssets || []).map((item) =>
                   item.id === mediaAsset.id ? mediaAsset : item
                 )
-              : [...(prev.scriptData.mediaAssets || []), mediaAsset]
+              : [...(scriptData.mediaAssets || []), mediaAsset]
           }
         }
       })
@@ -2161,10 +2183,10 @@ const LarkDirector: React.FC<Props> = ({
             <div>
               <div className={assetSectionTitleClass}>
                 <Users className="w-3 h-3" />
-                <span>角色 ({project.scriptData?.characters.length || 0})</span>
+                <span>角色 ({assetPanelScriptData.characters.length || 0})</span>
               </div>
               <div className={assetGridClass}>
-                {project.scriptData?.characters.map((char) => (
+                {assetPanelScriptData.characters.map((char) => (
                   <div key={char.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {char.referenceImage ? (
@@ -2198,10 +2220,10 @@ const LarkDirector: React.FC<Props> = ({
             <div>
               <div className={assetSectionTitleClass}>
                 <ImageIcon className="w-3 h-3" />
-                <span>场景 ({project.scriptData?.scenes.length || 0})</span>
+                <span>场景 ({assetPanelScriptData.scenes.length || 0})</span>
               </div>
               <div className={assetGridClass}>
-                {project.scriptData?.scenes.map((scene) => (
+                {assetPanelScriptData.scenes.map((scene) => (
                   <div key={scene.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {scene.referenceImage ? (
@@ -2235,10 +2257,10 @@ const LarkDirector: React.FC<Props> = ({
             <div>
               <div className={assetSectionTitleClass}>
                 <Package className="w-3 h-3" />
-                <span>道具 ({project.scriptData?.props.length || 0})</span>
+                <span>道具 ({assetPanelScriptData.props.length || 0})</span>
               </div>
               <div className={assetGridClass}>
-                {project.scriptData?.props.map((prop) => (
+                {assetPanelScriptData.props.map((prop) => (
                   <div key={prop.id} className={`${assetCardClass} group`}>
                     <div className={assetImageWrapClass}>
                       {prop.referenceImage ? (
