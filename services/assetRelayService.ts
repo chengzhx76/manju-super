@@ -3,7 +3,7 @@ import type { AssetLibraryConfig, VolcengineTosConfig } from '../types/model'
 import { getAssetLibraryConfig, getVolcengineTosConfig } from './modelRegistry'
 import { appendVideoDebugLog } from './videoDebugLogService'
 
-const RELAY_PROJECT_NAME = 'default'
+const DEFAULT_RELAY_PROJECT_NAME = 'default'
 const RELAY_GROUP_TYPE = 'AIGC'
 const DESCRIPTION_LIMIT = 300
 const NAME_LIMIT = 64
@@ -57,8 +57,26 @@ type RelayAssetItem = {
   groupId?: string
 }
 
+type RelayAssetGroupItem = {
+  Id?: string
+  id?: string
+  Name?: string
+  name?: string
+  Description?: string
+  description?: string
+  GroupType?: string
+  groupType?: string
+}
+
 type RelayListAssetsResponse = {
   Items?: RelayAssetItem[]
+  TotalCount?: number
+  PageNumber?: number
+  PageSize?: number
+}
+
+type RelayListAssetGroupsResponse = {
+  Items?: RelayAssetGroupItem[]
   TotalCount?: number
   PageNumber?: number
   PageSize?: number
@@ -143,19 +161,55 @@ const normalizeConfig = (
 ): AssetLibraryConfig | null => {
   const source = rawConfig || getAssetLibraryConfig()
   if (!source) return null
-  const address = String(source.address || '')
-    .trim()
-    .replace(/\/+$/, '')
-  const accessKey = String(source.access_key || '').trim()
-  const secretKey = String(source.secret_key || '').trim()
-  if (!address || !accessKey || !secretKey) {
+  const accessKeyId = String(source.accessKeyId || '').trim()
+  const secretAccessKey = String(source.secretAccessKey || '').trim()
+  const projectName =
+    String(source.projectName || '').trim() || DEFAULT_RELAY_PROJECT_NAME
+  if (!accessKeyId || !secretAccessKey) {
     return null
   }
   return {
     ...source,
-    address,
-    access_key: accessKey,
-    secret_key: secretKey
+    accessKeyId,
+    secretAccessKey,
+    projectName
+  }
+}
+
+type RelayCallOptions = {
+  config?: AssetLibraryConfig
+  requireHttp200?: boolean
+}
+
+type RelayRequestContext = {
+  config: AssetLibraryConfig
+  projectName: string
+}
+
+const getRelayRequestContext = (
+  rawConfig?: AssetLibraryConfig | null
+): RelayRequestContext => {
+  const config = normalizeConfig(rawConfig)
+  if (!config) {
+    throw new Error('素材库配置缺失')
+  }
+  return {
+    config,
+    projectName: config.projectName
+  }
+}
+
+const injectProjectName = (
+  payload: Record<string, unknown>,
+  projectName: string
+): Record<string, unknown> => {
+  const currentProjectName = String(payload.ProjectName || '').trim()
+  if (currentProjectName) {
+    return payload
+  }
+  return {
+    ...payload,
+    ProjectName: projectName
   }
 }
 
@@ -743,10 +797,7 @@ const logRelayDebug = (
 const callRelay = async <T>(
   action: string,
   payload: Record<string, unknown>,
-  options?: {
-    config?: AssetLibraryConfig
-    requireHttp200?: boolean
-  }
+  options?: RelayCallOptions
 ): Promise<T> => {
   const config = normalizeConfig(options?.config)
   if (!config) {
@@ -772,6 +823,22 @@ const callRelay = async <T>(
     throw new Error(extractErrorMessage(result))
   }
   return result.result as T
+}
+
+const callRelayAssetApi = async <T>(
+  action: string,
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<T> => {
+  const context = getRelayRequestContext(options?.config)
+  return callRelay<T>(
+    action,
+    injectProjectName(payload, context.projectName),
+    {
+      config: context.config,
+      requireHttp200: options?.requireHttp200
+    }
+  )
 }
 
 const callTosApi = async <T>(
@@ -1231,20 +1298,105 @@ const scheduleTosDelete = (
     })
 }
 
+const getAssetGroupItemId = (item: RelayAssetGroupItem): string =>
+  String(item.Id || item.id || '').trim()
+
+const getAssetGroupItemName = (item: RelayAssetGroupItem): string =>
+  String(item.Name || item.name || '').trim()
+
+const getAssetGroupItemDescription = (item: RelayAssetGroupItem): string =>
+  String(item.Description || item.description || '').trim()
+
+const getAssetItemGroupId = (item: RelayAssetItem): string =>
+  String(item.GroupId || item.groupId || '').trim()
+
+export const listAssetGroups = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<RelayListAssetGroupsResponse> =>
+  callRelayAssetApi<RelayListAssetGroupsResponse>(
+    'ListAssetGroups',
+    payload,
+    options
+  )
+
+export const createAssetGroup = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<RelayAssetGroupItem> =>
+  callRelayAssetApi<RelayAssetGroupItem>('CreateAssetGroup', payload, options)
+
+export const getAssetGroup = async (
+  groupId: string,
+  options?: RelayCallOptions
+): Promise<RelayAssetGroupItem> =>
+  callRelayAssetApi<RelayAssetGroupItem>('GetAssetGroup', { Id: groupId }, options)
+
+export const updateAssetGroup = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<void> => {
+  await callRelayAssetApi<void>('UpdateAssetGroup', payload, options)
+}
+
+export const deleteAssetGroup = async (
+  groupId: string,
+  options?: RelayCallOptions
+): Promise<void> => {
+  await callRelayAssetApi<void>('DeleteAssetGroup', { Id: groupId }, options)
+}
+
+export const listAssets = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<RelayListAssetsResponse> =>
+  callRelayAssetApi<RelayListAssetsResponse>('ListAssets', payload, options)
+
+export const createAsset = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<RelayAssetItem> =>
+  callRelayAssetApi<RelayAssetItem>('CreateAsset', payload, options)
+
+export const getAsset = async (
+  assetId: string,
+  options?: RelayCallOptions
+): Promise<RelayAssetItem> =>
+  callRelayAssetApi<RelayAssetItem>('GetAsset', { Id: assetId }, options)
+
+export const updateAsset = async (
+  payload: Record<string, unknown>,
+  options?: RelayCallOptions
+): Promise<void> => {
+  await callRelayAssetApi<void>('UpdateAsset', payload, options)
+}
+
+export const deleteAsset = async (
+  assetId: string,
+  options?: RelayCallOptions
+): Promise<void> => {
+  await callRelayAssetApi<void>('DeleteAsset', { Id: assetId }, options)
+}
+
 export const verifyRelayConfigByListAssetGroups = async (
   config: AssetLibraryConfig
 ): Promise<void> => {
-  await callRelay(
-    'ListAssetGroups',
+  const normalizedConfig = normalizeConfig(config)
+  if (!normalizedConfig) {
+    throw new Error('素材库配置缺失')
+  }
+  await listAssetGroups(
     {
       Filter: {
         name: '',
         GroupIds: [],
         GroupType: RELAY_GROUP_TYPE
-      }
+      },
+      PageNumber: 1,
+      PageSize: 1
     },
     {
-      config,
+      config: normalizedConfig,
       requireHttp200: true
     }
   )
@@ -1260,16 +1412,14 @@ const ensureProjectGroup = async (
     truncate(project.title || project.id, NAME_LIMIT) || project.id
   const nextProject = { ...project }
   const createProjectGroup = async (): Promise<string> => {
-    const result = await callRelay<{ Id?: string; id?: string }>(
-      'CreateAssetGroup',
+    const result = await createAssetGroup(
       {
         Name: safeName,
         Description: description,
-        GroupType: RELAY_GROUP_TYPE,
-        ProjectName: RELAY_PROJECT_NAME
+        GroupType: RELAY_GROUP_TYPE
       }
     )
-    const groupId = String(result.Id || result.id || '').trim()
+    const groupId = getAssetGroupItemId(result)
     if (!groupId) {
       throw new Error('CreateAssetGroup 未返回 GroupId')
     }
@@ -1282,12 +1432,16 @@ const ensureProjectGroup = async (
   }
 
   try {
-    await callRelay('UpdateAssetGroup', {
-      Id: nextProject.assetGroupId,
-      Name: safeName,
-      Description: description,
-      ProjectName: RELAY_PROJECT_NAME
-    })
+    const remoteGroup = await getAssetGroup(nextProject.assetGroupId)
+    const remoteName = getAssetGroupItemName(remoteGroup)
+    const remoteDescription = getAssetGroupItemDescription(remoteGroup)
+    if (remoteName !== safeName || remoteDescription !== description) {
+      await updateAssetGroup({
+        Id: nextProject.assetGroupId,
+        Name: safeName,
+        Description: description
+      })
+    }
   } catch (error) {
     if (!isRelayGroupMissingError(error)) {
       throw error
@@ -1310,15 +1464,14 @@ const listAssetsByGroup = async (
   let totalCount = Number.MAX_SAFE_INTEGER
 
   while (items.length < totalCount) {
-    const response = await callRelay<RelayListAssetsResponse>('ListAssets', {
+    const response = await listAssets({
       Filter: {
         GroupIds: [groupId],
         GroupType: RELAY_GROUP_TYPE,
         Statuses: ['Active', 'Processing', 'Failed']
       },
       PageNumber: pageNumber,
-      PageSize: 100,
-      ProjectName: RELAY_PROJECT_NAME
+      PageSize: 100
     })
     const pageItems = response.Items || []
     items.push(...pageItems)
@@ -1334,17 +1487,15 @@ const createRemoteAsset = async (
   groupId: string,
   candidate: RelayLocalAssetCandidate
 ): Promise<string> => {
-  const response = await callRelay<{ Id?: string; id?: string }>(
-    'CreateAsset',
+  const response = await createAsset(
     {
       GroupId: groupId,
       URL: candidate.url,
       Name: truncate(candidate.name, NAME_LIMIT),
-      AssetType: getAssetType(candidate.kind),
-      ProjectName: RELAY_PROJECT_NAME
+      AssetType: getAssetType(candidate.kind)
     }
   )
-  const assetId = String(response.Id || response.id || '').trim()
+  const assetId = getAssetItemId(response)
   if (!assetId) {
     throw new Error(`CreateAsset 未返回 AssetId: ${candidate.name}`)
   }
@@ -1352,10 +1503,33 @@ const createRemoteAsset = async (
 }
 
 const getRemoteAsset = async (assetId: string): Promise<RelayAssetItem> =>
-  callRelay<RelayAssetItem>('GetAsset', {
+  getAsset(assetId)
+
+const shouldUpdateRemoteAsset = (
+  remoteAsset: RelayAssetItem,
+  groupId: string,
+  candidate: RelayLocalAssetCandidate
+): boolean =>
+  getAssetItemGroupId(remoteAsset) !== groupId ||
+  getAssetItemName(remoteAsset) !== truncate(candidate.name, NAME_LIMIT) ||
+  getAssetItemUrl(remoteAsset) !== String(candidate.url || '').trim() ||
+  getAssetItemAssetType(remoteAsset) !== getAssetType(candidate.kind)
+
+const updateRemoteAssetWithPolling = async (
+  assetId: string,
+  groupId: string,
+  candidate: RelayLocalAssetCandidate
+): Promise<string> => {
+  await updateAsset({
     Id: assetId,
-    ProjectName: RELAY_PROJECT_NAME
+    GroupId: groupId,
+    URL: candidate.url,
+    Name: truncate(candidate.name, NAME_LIMIT),
+    AssetType: getAssetType(candidate.kind)
   })
+  await waitForAssetActive(assetId)
+  return assetId
+}
 
 const waitForAssetActive = async (assetId: string): Promise<RelayAssetItem> => {
   const startedAt = Date.now()
@@ -1379,10 +1553,7 @@ export const deleteRemoteAsset = async (assetId?: string): Promise<void> => {
     return
   }
   if (!hasAssetRelayConfig()) return
-  void callRelay('DeleteAsset', {
-    Id: assetId,
-    ProjectName: RELAY_PROJECT_NAME
-  }).catch((error) => {
+  void deleteAsset(assetId).catch((error) => {
     console.error('[relay-delete] failed', {
       action: 'DeleteAsset',
       assetId,
@@ -1391,10 +1562,37 @@ export const deleteRemoteAsset = async (assetId?: string): Promise<void> => {
   })
 }
 
+export const deleteRemoteAssetGroup = async (
+  groupId?: string
+): Promise<void> => {
+  const normalizedGroupId = String(groupId || '').trim()
+  if (!normalizedGroupId || !hasAssetRelayConfig()) return
+  await deleteAssetGroup(normalizedGroupId)
+}
+
 const createRemoteAssetWithPolling = async (
   groupId: string,
   candidate: RelayLocalAssetCandidate
 ): Promise<string> => {
+  const currentAssetId = String(candidate.currentAssetId || '').trim()
+  if (currentAssetId && !parseTosObjectKeyFromAssetId(currentAssetId)) {
+    try {
+      const remoteAsset = await getRemoteAsset(currentAssetId)
+      if (!shouldUpdateRemoteAsset(remoteAsset, groupId, candidate)) {
+        return currentAssetId
+      }
+      return await updateRemoteAssetWithPolling(currentAssetId, groupId, candidate)
+    } catch (error) {
+      if (!isRelayGroupMissingError(error)) {
+        throw error
+      }
+      console.warn('[asset-relay] asset became unavailable, recreating', {
+        assetId: currentAssetId,
+        candidate: candidate.name,
+        reason: extractErrorMessage(error)
+      })
+    }
+  }
   const assetId = await createRemoteAsset(groupId, candidate)
   await waitForAssetActive(assetId)
   return assetId

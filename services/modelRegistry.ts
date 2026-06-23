@@ -26,14 +26,19 @@ import { normalizeChatModelId } from './modelIdUtils'
 // localStorage 键名
 const STORAGE_KEY = 'bigbanana_model_registry'
 const API_KEY_STORAGE_KEY = 'antsk_api_key'
+const DEFAULT_ASSET_LIBRARY_PROJECT_NAME = 'default'
+type LegacyAssetLibraryConfigShape = Partial<AssetLibraryConfig> & {
+  address?: string
+  access_key?: string
+  secret_key?: string
+  region?: string
+  bucketName?: string
+  host?: string
+}
+
 const DEFAULT_ASSET_LIBRARY_CONFIG: AssetLibraryConfig = {
   id: 'asset_lib_default',
-  address: '',
-  access_key: '',
-  secret_key: '',
-  region: '',
-  bucketName: '',
-  host: '',
+  projectName: DEFAULT_ASSET_LIBRARY_PROJECT_NAME,
   accessKeyId: '',
   secretAccessKey: '',
   isDefault: true
@@ -55,32 +60,36 @@ const createAssetLibraryConfigId = (): string =>
   `asset_lib_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
 const normalizeAssetLibraryConfig = (
-  config?: Partial<AssetLibraryConfig>
+  config?: LegacyAssetLibraryConfigShape
 ): AssetLibraryConfig => {
-  const normalizedAddress = (config?.address || '').trim().replace(/\/+$/, '')
-  const normalizedHost = (config?.host || '').trim().replace(/\/+$/, '')
-  const normalizedAccessKeyId = (config?.accessKeyId || '').trim()
-  const normalizedSecretAccessKey = (config?.secretAccessKey || '').trim()
-  const normalizedAccessKey = (
-    config?.access_key || normalizedAccessKeyId
+  const normalizedAccessKeyId = String(
+    config?.accessKeyId || config?.access_key || ''
   ).trim()
-  const normalizedSecretKey = (
-    config?.secret_key || normalizedSecretAccessKey
+  const normalizedSecretAccessKey = String(
+    config?.secretAccessKey || config?.secret_key || ''
   ).trim()
+  const normalizedProjectName =
+    String(config?.projectName || '').trim() || DEFAULT_ASSET_LIBRARY_PROJECT_NAME
 
   return {
     id: config?.id?.trim() || createAssetLibraryConfigId(),
-    address: normalizedAddress || normalizedHost,
-    access_key: normalizedAccessKey,
-    secret_key: normalizedSecretKey,
-    region: (config?.region || '').trim(),
-    bucketName: (config?.bucketName || '').trim(),
-    host: normalizedHost || normalizedAddress,
-    accessKeyId: normalizedAccessKeyId || normalizedAccessKey,
-    secretAccessKey: normalizedSecretAccessKey || normalizedSecretKey,
+    projectName: normalizedProjectName,
+    accessKeyId: normalizedAccessKeyId,
+    secretAccessKey: normalizedSecretAccessKey,
     isDefault: !!config?.isDefault
   }
 }
+
+const toLegacyTosConfigFromAssetConfig = (
+  config?: LegacyAssetLibraryConfigShape | null
+): VolcengineTosConfig =>
+  normalizeVolcengineTosConfig({
+    region: config?.region,
+    bucketName: config?.bucketName,
+    host: config?.host,
+    accessKeyId: config?.accessKeyId || config?.access_key,
+    secretAccessKey: config?.secretAccessKey || config?.secret_key
+  })
 
 const normalizeVolcengineTosConfig = (
   config?: Partial<VolcengineTosConfig> | null
@@ -390,12 +399,13 @@ export const loadRegistry = (): ModelRegistryState => {
       let assetLibraryConfigMigrated = false
       let volcengineTosConfigMigrated = false
       const parsedAny = parsed as ModelRegistryState & {
-        assetLibraryConfig?: Partial<AssetLibraryConfig>
+        assetLibraryConfig?: LegacyAssetLibraryConfigShape
         volcengineTosConfig?: Partial<VolcengineTosConfig>
       }
       const legacyAssetLibraryConfig = parsedAny.assetLibraryConfig
-      const rawAssetLibraryConfigs = Array.isArray(parsed.assetLibraryConfigs)
-        ? parsed.assetLibraryConfigs
+      const rawAssetLibraryConfigs: LegacyAssetLibraryConfigShape[] =
+        Array.isArray(parsed.assetLibraryConfigs)
+          ? (parsed.assetLibraryConfigs as LegacyAssetLibraryConfigShape[])
         : []
 
       let normalizedAssetLibraryConfigs = rawAssetLibraryConfigs.map((config) =>
@@ -406,9 +416,10 @@ export const loadRegistry = (): ModelRegistryState => {
       if (
         normalizedAssetLibraryConfigs.length === 0 &&
         legacyAssetLibraryConfig &&
-        (legacyAssetLibraryConfig.address ||
-          legacyAssetLibraryConfig.access_key ||
-          legacyAssetLibraryConfig.secret_key)
+        (legacyAssetLibraryConfig.access_key ||
+          legacyAssetLibraryConfig.secret_key ||
+          legacyAssetLibraryConfig.accessKeyId ||
+          legacyAssetLibraryConfig.secretAccessKey)
       ) {
         normalizedAssetLibraryConfigs = [
           normalizeAssetLibraryConfig({
@@ -456,16 +467,12 @@ export const loadRegistry = (): ModelRegistryState => {
       )
       let nextTosConfig = storedTosConfig
       if (!hasCompleteVolcengineTosConfig(storedTosConfig)) {
-        const defaultAssetConfig =
-          normalizedAssetLibraryConfigs.find((config) => config.isDefault) ||
-          normalizedAssetLibraryConfigs[0]
-        const migratedFromAssetConfig = normalizeVolcengineTosConfig({
-          region: defaultAssetConfig?.region,
-          bucketName: defaultAssetConfig?.bucketName,
-          host: defaultAssetConfig?.host,
-          accessKeyId: defaultAssetConfig?.accessKeyId,
-          secretAccessKey: defaultAssetConfig?.secretAccessKey
-        })
+        const defaultRawAssetConfig =
+          rawAssetLibraryConfigs.find((config) => config?.isDefault) ||
+          rawAssetLibraryConfigs[0] ||
+          legacyAssetLibraryConfig
+        const migratedFromAssetConfig =
+          toLegacyTosConfigFromAssetConfig(defaultRawAssetConfig)
         if (hasCompleteVolcengineTosConfig(migratedFromAssetConfig)) {
           nextTosConfig = migratedFromAssetConfig
           volcengineTosConfigMigrated = true
@@ -1036,7 +1043,7 @@ export const removeAssetLibraryConfig = (id: string): boolean => {
  * 兼容旧调用：更新当前使用配置（不存在则自动新增）
  */
 export const setAssetLibraryConfig = (
-  config: Partial<AssetLibraryConfig>
+  config: LegacyAssetLibraryConfigShape
 ): void => {
   const state = loadRegistry()
   const current =

@@ -157,10 +157,10 @@ const ObjectStorageSettings: React.FC<ObjectStorageSettingsProps> = ({
             </p>
             <div className="flex items-center gap-3">
               <span className="text-[10px] text-[var(--text-tertiary)]">
-                access_key: {maskAccessKey(accessKeyId)}
+                accessKeyId: {maskAccessKey(accessKeyId)}
               </span>
               <span className="text-[10px] text-[var(--text-tertiary)]">
-                secret_key: {secretAccessKey ? '已配置' : '未配置'}
+                secretAccessKey: {secretAccessKey ? '已配置' : '未配置'}
               </span>
             </div>
           </div>

@@ -1,0 +1,8 @@
+- [x] 素材库配置支持 `ProjectName` 且 UI 可编辑、可切换默认配置；缺省时回退 `default`
+- [x] 所有素材库 API 调用统一携带配置中的 `ProjectName`，不再硬编码 `default`
+- [x] 服务端素材库转发层上游请求直连火山官方 Ark OpenAPI（支持可选 BaseURL 覆盖）
+- [x] 服务端与前端日志/错误信息不包含 AK/SK 明文（仅可脱敏展示）
+- [x] 10 个 API 封装齐全：CreateAssetGroup/CreateAsset/ListAssetGroups/ListAssets/GetAsset/GetAssetGroup/UpdateAssetGroup/UpdateAsset/DeleteAsset/DeleteAssetGroup
+- [x] “验证配置”功能在配置了 ProjectName 的情况下可正确验证，并与业务请求一致
+- [x] 旧配置（中转站 address）场景下有明确失败提示与迁移指引
+- [ ] 回归验证通过：创建素材组、上传素材（含轮询到 Active）、查询列表、删除素材、切换 ProjectName 后隔离生效

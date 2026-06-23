@@ -10,6 +10,7 @@
     "build": "pnpm run check:utf8 && vite build",
     "preview": "vite preview",
     "media-proxy": "node server/mediaProxyServer.mjs",
+    "test:relay": "node scripts/assert-asset-relay-project-name.mjs && node --test server/relayProxyCore.test.mjs",
     "lint": "eslint . --fix --ignore-pattern \".trae/**\"",
     "format": "prettier --ignore-path .prettierignore --write \"App.tsx\" \"index.tsx\" \"vite.config.ts\" \"global.d.ts\" \"components/**/*.{ts,tsx}\" \"services/**/*.{ts,tsx}\" \"hooks/**/*.{ts,tsx}\" \"types/**/*.ts\" \"types.ts\" \"styles/**/*.{css,scss}\" \"public/styles/**/*.css\"",
     "check:format": "prettier --ignore-path .prettierignore --check \"App.tsx\" \"index.tsx\" \"vite.config.ts\" \"global.d.ts\" \"components/**/*.{ts,tsx}\" \"services/**/*.{ts,tsx}\" \"hooks/**/*.{ts,tsx}\" \"types/**/*.ts\" \"types.ts\" \"styles/**/*.{css,scss}\" \"public/styles/**/*.css\"",

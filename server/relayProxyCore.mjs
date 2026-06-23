@@ -3,6 +3,10 @@ import crypto from 'node:crypto';
 const RELAY_SERVICE = 'ark';
 const RELAY_VERSION = '2024-01-01';
 const RELAY_REGION = 'cn-beijing';
+const OFFICIAL_ARK_OPENAPI_BASE_URL = 'https://ark.cn-beijing.volcengineapi.com';
+const RELAY_PROXY_REQUEST_ID_HEADER = 'X-Relay-Proxy-Request-Id';
+const RELAY_UPSTREAM_REQUEST_ID_HEADER = 'X-Relay-Upstream-Request-Id';
+const RELAY_UPSTREAM_TRACE_ID_HEADER = 'X-Relay-Upstream-Trace-Id';
 
 const json = (res, statusCode, payload) => {
   res.statusCode = statusCode;
@@ -13,6 +17,15 @@ const json = (res, statusCode, payload) => {
 const nowIso = () => new Date().toISOString();
 
 const createRequestId = () => crypto.randomUUID().slice(0, 8);
+
+const maskValue = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return '';
+  if (normalized.length <= 8) {
+    return `${normalized.slice(0, 2)}***${normalized.slice(-2)}`;
+  }
+  return `${normalized.slice(0, 4)}***${normalized.slice(-4)}`;
+};
 
 const summarizeEndpoint = (value) => {
   const raw = String(value || '').trim();
@@ -25,12 +38,53 @@ const summarizeEndpoint = (value) => {
   }
 };
 
+const sanitizeText = (value) => {
+  const raw = String(value || '');
+  if (!raw) return '';
+  return raw
+    .replace(
+      /\b(Authorization\s*[:=]\s*)([^\s,;]+(?:\s+[^\s,;]+)*)/gi,
+      '$1[REDACTED]'
+    )
+    .replace(/\b(Credential=)([^,\s]+)/gi, '$1[REDACTED]')
+    .replace(/\b(Signature=)([a-f0-9]+)/gi, '$1[REDACTED]')
+    .replace(
+      /("?(?:access[_-]?key|accessKeyId|secret[_-]?key|secretAccessKey)"?\s*[:=]\s*"?)([^",\s}]+)/gi,
+      '$1[REDACTED]'
+    )
+    .replace(/\b(AK|SK)\s*[:=]\s*([^\s,;]+)/gi, '$1=[REDACTED]');
+};
+
+const sanitizeForLogs = (value, seen = new WeakSet()) => {
+  if (typeof value === 'string') return sanitizeText(value);
+  if (!value || typeof value !== 'object') return value;
+  if (seen.has(value)) return '[Circular]';
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLogs(item, seen));
+  }
+
+  return Object.entries(value).reduce((acc, [key, current]) => {
+    if (/secret[_-]?key|secretAccessKey|authorization|signature/i.test(key)) {
+      acc[key] = '[REDACTED]';
+      return acc;
+    }
+    if (/access[_-]?key|accessKeyId/i.test(key)) {
+      acc[key] = maskValue(current);
+      return acc;
+    }
+    acc[key] = sanitizeForLogs(current, seen);
+    return acc;
+  }, {});
+};
+
 const logRelayProxy = (level, event, details = {}) => {
   const logger =
     level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
   logger(`[relay-proxy] ${event}`, {
     timestamp: nowIso(),
-    ...details,
+    ...sanitizeForLogs(details),
   });
 };
 
@@ -83,16 +137,67 @@ const extractErrorMessage = (value) => {
   return JSON.stringify(value);
 };
 
+const pickFirstNonEmptyString = (...values) => {
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+  return undefined;
+};
+
+const extractUpstreamMeta = (payload, response) => {
+  const responseMetadata = isRecordObject(payload?.ResponseMetadata)
+    ? payload.ResponseMetadata
+    : null;
+  return {
+    requestId: pickFirstNonEmptyString(
+      responseMetadata?.RequestId,
+      responseMetadata?.RequestID,
+      payload?.requestId,
+      payload?.RequestId,
+      response?.headers?.get?.('x-tt-logid'),
+      response?.headers?.get?.('x-request-id'),
+      response?.headers?.get?.('x-requestid')
+    ),
+    traceId: pickFirstNonEmptyString(
+      responseMetadata?.TraceId,
+      responseMetadata?.TraceID,
+      payload?.traceId,
+      payload?.TraceId,
+      response?.headers?.get?.('x-trace-id'),
+      response?.headers?.get?.('x-traceid')
+    ),
+  };
+};
+
+const normalizeBaseUrl = () => {
+  let url;
+  try {
+    url = new URL(OFFICIAL_ARK_OPENAPI_BASE_URL);
+  } catch {
+    throw new RelayProxyError('官方素材库 BaseURL 配置无效', 500);
+  }
+
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new RelayProxyError('官方素材库 BaseURL 协议无效', 500);
+  }
+
+  url.search = '';
+  url.hash = '';
+  return url.toString().replace(/\/+$/, '');
+};
+
 const normalizeConfig = (rawConfig) => {
   if (!isRecordObject(rawConfig)) return null;
-  const address = String(rawConfig.address || '').trim().replace(/\/+$/, '');
-  const accessKey = String(rawConfig.access_key || '').trim();
-  const secretKey = String(rawConfig.secret_key || '').trim();
-  if (!address || !accessKey || !secretKey) return null;
+  const accessKey = String(rawConfig.accessKeyId || rawConfig.access_key || '').trim();
+  const secretKey = String(
+    rawConfig.secretAccessKey || rawConfig.secret_key || ''
+  ).trim();
+  if (!accessKey || !secretKey) return null;
   return {
-    address,
-    access_key: accessKey,
-    secret_key: secretKey,
+    endpoint: normalizeBaseUrl(),
+    accessKeyId: accessKey,
+    secretAccessKey: secretKey,
   };
 };
 
@@ -151,7 +256,7 @@ const buildSignedHeaders = ({ config, url, body }) => {
     sha256Hex(canonicalRequest),
   ].join('\n');
 
-  const dateKey = hmac(Buffer.from(config.secret_key, 'utf8'), shortDate);
+  const dateKey = hmac(Buffer.from(config.secretAccessKey, 'utf8'), shortDate);
   const regionKey = hmac(dateKey, RELAY_REGION);
   const serviceKey = hmac(regionKey, RELAY_SERVICE);
   const signingKey = hmac(serviceKey, 'request');
@@ -162,22 +267,23 @@ const buildSignedHeaders = ({ config, url, body }) => {
     Host: url.host,
     'X-Date': timestamp,
     'X-Content-Sha256': payloadHash,
-    Authorization: `HMAC-SHA256 Credential=${config.access_key}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    Authorization: `HMAC-SHA256 Credential=${config.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
   };
 };
 
-const buildActionUrls = (endpoint, action) => {
-  const base = endpoint.replace(/\/+$/, '');
-  return [
-    `${base}/?Action=${encodeURIComponent(action)}&Version=${encodeURIComponent(RELAY_VERSION)}`,
-    `${base}/open/${encodeURIComponent(action)}`,
-  ];
+const buildActionUrl = (endpoint, action) => {
+  const requestUrl = new URL(`${endpoint.replace(/\/+$/, '')}/`);
+  requestUrl.searchParams.set('Action', action);
+  requestUrl.searchParams.set('Version', RELAY_VERSION);
+  return requestUrl;
 };
 
 class RelayProxyError extends Error {
-  constructor(message, statusCode = 500) {
-    super(message);
+  constructor(message, statusCode = 500, metadata = {}) {
+    super(sanitizeText(message));
     this.statusCode = statusCode;
+    this.requestId = metadata.requestId;
+    this.traceId = metadata.traceId;
   }
 }
 
@@ -189,87 +295,76 @@ const callRelay = async ({
   requestId,
 }) => {
   const body = JSON.stringify(payload || {});
-  let lastError = null;
+  const startedAt = Date.now();
+  const url = buildActionUrl(config.endpoint, action);
+  try {
+    const headers = buildSignedHeaders({ config, url, body });
+    logRelayProxy('info', 'upstream:start', {
+      requestId,
+      action,
+      endpoint: summarizeEndpoint(config.endpoint),
+      requestUrl: `${url.origin}${url.pathname}`,
+    });
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body,
+    });
 
-  for (const requestUrl of buildActionUrls(config.address, action)) {
-    const startedAt = Date.now();
-    try {
-      const url = new URL(requestUrl);
-      const headers = buildSignedHeaders({ config, url, body });
-      logRelayProxy('info', 'upstream:start', {
+    if (requireHttp200 && response.status !== 200) {
+      throw new RelayProxyError(`素材库验证失败：HTTP ${response.status}`, response.status);
+    }
+
+    const responseText = await response.text();
+    const parsed = parseJsonResponse(responseText);
+    const upstreamMeta = extractUpstreamMeta(parsed, response);
+    if (!response.ok) {
+      const message = sanitizeText(extractErrorMessage(parsed));
+      logRelayProxy('warn', 'upstream:response-error', {
         requestId,
         action,
-        endpoint: summarizeEndpoint(config.address),
-        requestUrl: `${url.origin}${url.pathname}`,
-      });
-      const response = await fetch(url.toString(), {
-        method: 'POST',
-        headers,
-        body,
-      });
-
-      if (requireHttp200 && response.status !== 200) {
-        throw new RelayProxyError(`素材库验证失败：HTTP ${response.status}`, response.status);
-      }
-
-      const responseText = await response.text();
-      const parsed = parseJsonResponse(responseText);
-      if (!response.ok) {
-        const message = extractErrorMessage(parsed);
-        logRelayProxy('warn', 'upstream:response-error', {
-          requestId,
-          action,
-          endpoint: summarizeEndpoint(config.address),
-          requestUrl: `${url.origin}${url.pathname}`,
-          statusCode: response.status,
-          durationMs: Date.now() - startedAt,
-          message,
-        });
-        if (response.status === 404 || response.status === 405) {
-          lastError = new RelayProxyError(message, response.status);
-          continue;
-        }
-        throw new RelayProxyError(message, response.status);
-      }
-
-      if (parsed && typeof parsed === 'object' && 'Result' in parsed) {
-        logRelayProxy('info', 'upstream:success', {
-          requestId,
-          action,
-          endpoint: summarizeEndpoint(config.address),
-          requestUrl: `${url.origin}${url.pathname}`,
-          statusCode: response.status,
-          durationMs: Date.now() - startedAt,
-        });
-        return parsed.Result;
-      }
-      logRelayProxy('info', 'upstream:success', {
-        requestId,
-        action,
-        endpoint: summarizeEndpoint(config.address),
+        endpoint: summarizeEndpoint(config.endpoint),
         requestUrl: `${url.origin}${url.pathname}`,
         statusCode: response.status,
         durationMs: Date.now() - startedAt,
+        upstreamRequestId: upstreamMeta.requestId,
+        upstreamTraceId: upstreamMeta.traceId,
+        message,
       });
-      return parsed;
-    } catch (error) {
-      logRelayProxy('error', 'upstream:failed', {
-        requestId,
-        action,
-        endpoint: summarizeEndpoint(config.address),
-        requestUrl: requestUrl.split('?')[0],
-        durationMs: Date.now() - startedAt,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      lastError = error;
+      throw new RelayProxyError(message, response.status, upstreamMeta);
     }
-  }
 
-  if (lastError instanceof RelayProxyError) throw lastError;
-  throw new RelayProxyError(
-    lastError instanceof Error ? lastError.message : '素材库请求失败',
-    500
-  );
+    logRelayProxy('info', 'upstream:success', {
+      requestId,
+      action,
+      endpoint: summarizeEndpoint(config.endpoint),
+      requestUrl: `${url.origin}${url.pathname}`,
+      statusCode: response.status,
+      durationMs: Date.now() - startedAt,
+      upstreamRequestId: upstreamMeta.requestId,
+      upstreamTraceId: upstreamMeta.traceId,
+    });
+    if (parsed && typeof parsed === 'object' && 'Result' in parsed) {
+      return parsed.Result;
+    }
+    return parsed;
+  } catch (error) {
+    logRelayProxy('error', 'upstream:failed', {
+      requestId,
+      action,
+      endpoint: summarizeEndpoint(config.endpoint),
+      requestUrl: `${url.origin}${url.pathname}`,
+      durationMs: Date.now() - startedAt,
+      upstreamRequestId: error?.requestId,
+      upstreamTraceId: error?.traceId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    if (error instanceof RelayProxyError) throw error;
+    throw new RelayProxyError(
+      error instanceof Error ? error.message : '素材库请求失败',
+      500
+    );
+  }
 };
 
 export const createRelayProxyHandler = () => {
@@ -283,6 +378,7 @@ export const createRelayProxyHandler = () => {
       pathname,
       method: req.method || 'GET',
     };
+    res.setHeader(RELAY_PROXY_REQUEST_ID_HEADER, requestId);
     if (!pathname.startsWith('/api/relay/')) {
       if (typeof next === 'function') {
         next();
@@ -318,22 +414,33 @@ export const createRelayProxyHandler = () => {
         logRelayProxy('info', 'request:success', {
           ...context,
           action,
-          endpoint: summarizeEndpoint(config?.address),
+          endpoint: summarizeEndpoint(config?.endpoint),
           durationMs: Date.now() - startedAt,
           statusCode: 200,
         });
         json(res, 200, { success: true, result });
       } catch (error) {
         const statusCode = Number(error?.statusCode || 500);
+        if (error?.requestId) {
+          res.setHeader(RELAY_UPSTREAM_REQUEST_ID_HEADER, String(error.requestId));
+        }
+        if (error?.traceId) {
+          res.setHeader(RELAY_UPSTREAM_TRACE_ID_HEADER, String(error.traceId));
+        }
         logRelayProxy('error', 'request:failed', {
           ...context,
           durationMs: Date.now() - startedAt,
           statusCode,
+          upstreamRequestId: error?.requestId,
+          upstreamTraceId: error?.traceId,
           message: error instanceof Error ? error.message : String(error),
         });
         json(res, statusCode, {
           success: false,
           message: error instanceof Error ? error.message : String(error),
+          requestId: String(error?.requestId || requestId),
+          relayRequestId: requestId,
+          ...(error?.traceId ? { traceId: String(error.traceId) } : {}),
         });
       }
       return;

@@ -27,15 +27,18 @@ interface AssetLibrarySettingsProps {
   onRefresh: () => void
 }
 
+const OFFICIAL_ARK_OPENAPI_BASE_URL =
+  'https://ark.cn-beijing.volcengineapi.com'
+
 const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
   onRefresh
 }) => {
   const [configs, setConfigs] = useState<AssetLibraryConfig[]>([])
   const [isAdding, setIsAdding] = useState(false)
   const [editingConfigId, setEditingConfigId] = useState<string | null>(null)
-  const [address, setAddress] = useState('')
-  const [accessKey, setAccessKey] = useState('')
-  const [secretKey, setSecretKey] = useState('')
+  const [accessKeyId, setAccessKeyId] = useState('')
+  const [secretAccessKey, setSecretAccessKey] = useState('')
+  const [projectName, setProjectName] = useState('default')
   const [verifyingConfigId, setVerifyingConfigId] = useState<string | null>(
     null
   )
@@ -51,16 +54,16 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     const normalizedConfigs =
       allConfigs.length > 0
         ? allConfigs
-        : currentConfig.address
+        : currentConfig.accessKeyId || currentConfig.secretAccessKey
           ? [currentConfig]
           : []
     setConfigs(normalizedConfigs)
   }
 
   const resetForm = () => {
-    setAddress('')
-    setAccessKey('')
-    setSecretKey('')
+    setAccessKeyId('')
+    setSecretAccessKey('')
+    setProjectName('default')
   }
 
   const cancelEditOrAdd = () => {
@@ -70,11 +73,11 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
   }
 
   const handleAddOrUpdate = () => {
-    const normalizedAddress = address.trim().replace(/\/+$/, '')
-    const normalizedAccessKey = accessKey.trim()
-    const normalizedSecretKey = secretKey.trim()
-    if (!normalizedAddress || !normalizedAccessKey || !normalizedSecretKey) {
-      showAlert('素材库配置需完整填写地址、access_key 和 secret_key', {
+    const normalizedAccessKeyId = accessKeyId.trim()
+    const normalizedSecretAccessKey = secretAccessKey.trim()
+    const normalizedProjectName = projectName.trim() || 'default'
+    if (!normalizedAccessKeyId || !normalizedSecretAccessKey) {
+      showAlert('素材库配置需完整填写 accessKeyId 和 secretAccessKey', {
         type: 'warning'
       })
       return
@@ -82,9 +85,9 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
 
     if (editingConfigId) {
       const ok = updateAssetLibraryConfig(editingConfigId, {
-        address: normalizedAddress,
-        access_key: normalizedAccessKey,
-        secret_key: normalizedSecretKey
+        accessKeyId: normalizedAccessKeyId,
+        secretAccessKey: normalizedSecretAccessKey,
+        projectName: normalizedProjectName
       })
       if (!ok) {
         showAlert('更新素材库配置失败：未找到对应配置', { type: 'error' })
@@ -94,9 +97,9 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
       setEditingConfigId(null)
     } else {
       addAssetLibraryConfig({
-        address: normalizedAddress,
-        access_key: normalizedAccessKey,
-        secret_key: normalizedSecretKey
+        accessKeyId: normalizedAccessKeyId,
+        secretAccessKey: normalizedSecretAccessKey,
+        projectName: normalizedProjectName
       })
       showAlert('素材库配置已添加', { type: 'success' })
       setIsAdding(false)
@@ -115,9 +118,9 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
     }
     setIsAdding(false)
     setEditingConfigId(config.id)
-    setAddress(config.address || config.host || '')
-    setAccessKey(config.access_key || config.accessKeyId || '')
-    setSecretKey(config.secret_key || config.secretAccessKey || '')
+    setAccessKeyId(config.accessKeyId || '')
+    setSecretAccessKey(config.secretAccessKey || '')
+    setProjectName(config.projectName || 'default')
   }
 
   const handleDelete = (config: AssetLibraryConfig) => {
@@ -155,12 +158,12 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
   }
 
   const handleVerify = async (config: AssetLibraryConfig) => {
-    const normalizedAddress = config.address.trim().replace(/\/+$/, '')
-    const normalizedAccessKey = config.access_key.trim()
-    const normalizedSecretKey = config.secret_key.trim()
+    const normalizedAccessKeyId = config.accessKeyId.trim()
+    const normalizedSecretAccessKey = config.secretAccessKey.trim()
+    const normalizedProjectName = String(config.projectName || '').trim() || 'default'
 
-    if (!normalizedAddress || !normalizedAccessKey || !normalizedSecretKey) {
-      showAlert('请先完整填写地址、access_key 和 secret_key 后再验证', {
+    if (!normalizedAccessKeyId || !normalizedSecretAccessKey) {
+      showAlert('请先完整填写 accessKeyId 和 secretAccessKey 后再验证', {
         type: 'warning'
       })
       return
@@ -168,30 +171,18 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
 
     setVerifyingConfigId(config.id)
     try {
-      let isValidUrl = true
-      try {
-        const url = new URL(normalizedAddress)
-        isValidUrl = !!url.protocol && !!url.host
-      } catch {
-        isValidUrl = false
-      }
-
       await new Promise((resolve) => setTimeout(resolve, 350))
-
-      if (!isValidUrl) {
-        showAlert('验证失败：地址格式不正确，请输入完整 URL', {
-          type: 'error'
-        })
-        return
-      }
 
       await verifyRelayConfigByListAssetGroups({
         ...config,
-        address: normalizedAddress,
-        access_key: normalizedAccessKey,
-        secret_key: normalizedSecretKey
+        accessKeyId: normalizedAccessKeyId,
+        secretAccessKey: normalizedSecretAccessKey,
+        projectName: normalizedProjectName
       })
-      showAlert('验证通过：ListAssetGroups 返回 200', { type: 'success' })
+      showAlert(
+        `验证通过：ProjectName=${normalizedProjectName}，当前使用官方地址 ${OFFICIAL_ARK_OPENAPI_BASE_URL}`,
+        { type: 'success' }
+      )
     } catch (error) {
       showAlert(
         `验证失败：${error instanceof Error ? error.message : '未知错误'}`,
@@ -209,18 +200,9 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
   }
 
   const getDisplayName = (
-    config: AssetLibraryConfig,
+    _config: AssetLibraryConfig,
     index: number
-  ): string => {
-    const rawAddress = config.address
-    if (!rawAddress) return `素材库 ${index + 1}`
-    try {
-      const url = new URL(rawAddress)
-      return url.hostname || `素材库 ${index + 1}`
-    } catch {
-      return rawAddress
-    }
-  }
+  ): string => `官方 Ark 素材库 ${index + 1}`
 
   return (
     <div className="space-y-3">
@@ -262,39 +244,42 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
           <div className="space-y-3">
             <div>
               <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                地址 *
+                accessKeyId *
               </label>
               <input
                 type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="如：https://example.com"
+                value={accessKeyId}
+                onChange={(e) => setAccessKeyId(e.target.value)}
+                placeholder="素材库 accessKeyId"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
               />
             </div>
             <div>
               <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                access_key *
-              </label>
-              <input
-                type="text"
-                value={accessKey}
-                onChange={(e) => setAccessKey(e.target.value)}
-                placeholder="素材库 access_key"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                secret_key *
+                secretAccessKey *
               </label>
               <input
                 type="password"
-                value={secretKey}
-                onChange={(e) => setSecretKey(e.target.value)}
-                placeholder="素材库 secret_key"
+                value={secretAccessKey}
+                onChange={(e) => setSecretAccessKey(e.target.value)}
+                placeholder="素材库 secretAccessKey"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
               />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
+                ProjectName
+              </label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="默认：default"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
+              />
+              <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+                留空会自动回退为 `default`，用于兼容旧配置
+              </p>
             </div>
             <div className="pt-2 flex justify-end gap-2">
               <button
@@ -344,14 +329,17 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                   </h4>
                 </div>
                 <p className="text-xs text-[var(--text-secondary)] font-mono truncate mb-2">
-                  {config.address || '未配置地址'}
+                  {OFFICIAL_ARK_OPENAPI_BASE_URL}
                 </p>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] text-[var(--text-tertiary)]">
-                    access_key: {maskAccessKey(config.access_key)}
+                    ProjectName: {config.projectName || 'default'}
                   </span>
                   <span className="text-[10px] text-[var(--text-tertiary)]">
-                    secret_key: {config.secret_key ? '已配置' : '未配置'}
+                    accessKeyId: {maskAccessKey(config.accessKeyId)}
+                  </span>
+                  <span className="text-[10px] text-[var(--text-tertiary)]">
+                    secretAccessKey: {config.secretAccessKey ? '已配置' : '未配置'}
                   </span>
                 </div>
               </div>
@@ -360,20 +348,19 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                 <button
                   onClick={() => handleVerify(config)}
                   disabled={
-                    !config.address ||
-                    !config.access_key ||
-                    !config.secret_key ||
+                    !config.accessKeyId ||
+                    !config.secretAccessKey ||
                     verifyingConfigId === config.id
                   }
                   className={`px-2 py-1 text-[10px] font-bold rounded flex items-center gap-1 transition-colors border ${
-                    !config.address || !config.access_key || !config.secret_key
+                    !config.accessKeyId || !config.secretAccessKey
                       ? 'bg-[var(--bg-hover)] text-[var(--text-muted)] border-transparent cursor-not-allowed opacity-60'
                       : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border-[var(--border-primary)] hover:border-[var(--border-secondary)]'
                   }`}
                   title={
-                    !config.address || !config.access_key || !config.secret_key
-                      ? '请先完整填写配置后再验证'
-                      : '验证配置'
+                    !config.accessKeyId || !config.secretAccessKey
+                      ? '请先完整填写 accessKeyId 和 secretAccessKey 后再验证'
+                      : '验证官方地址配置'
                   }
                 >
                   {verifyingConfigId === config.id ? (
@@ -421,37 +408,40 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
                 <div className="pt-4 space-y-3">
                   <div>
                     <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                      地址 *
+                      accessKeyId *
                     </label>
                     <input
                       type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="如：https://example.com"
+                      value={accessKeyId}
+                      onChange={(e) => setAccessKeyId(e.target.value)}
+                      placeholder="素材库 accessKeyId"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                      access_key *
+                      ProjectName
                     </label>
                     <input
                       type="text"
-                      value={accessKey}
-                      onChange={(e) => setAccessKey(e.target.value)}
-                      placeholder="素材库 access_key"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
+                      placeholder="默认：default"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
+                    <p className="mt-1 text-[10px] text-[var(--text-muted)]">
+                      留空会自动回退为 `default`，用于兼容旧配置
+                    </p>
                   </div>
                   <div>
                     <label className="text-[10px] text-[var(--text-tertiary)] block mb-1">
-                      secret_key *
+                      secretAccessKey *
                     </label>
                     <input
                       type="password"
-                      value={secretKey}
-                      onChange={(e) => setSecretKey(e.target.value)}
-                      placeholder="素材库 secret_key"
+                      value={secretAccessKey}
+                      onChange={(e) => setSecretAccessKey(e.target.value)}
+                      placeholder="素材库 secretAccessKey"
                       className="w-full bg-[var(--bg-hover)] border border-[var(--border-secondary)] rounded px-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] font-mono"
                     />
                   </div>
@@ -489,7 +479,8 @@ const AssetLibrarySettings: React.FC<AssetLibrarySettingsProps> = ({
       </div>
 
       <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
-        管理素材库 API 地址和访问凭证
+        素材库地址已固定为官方 Ark OpenAPI，仅需管理访问凭证和
+        `ProjectName`；`ProjectName` 留空时自动回退为 `default`
       </p>
     </div>
   )

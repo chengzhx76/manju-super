@@ -173,14 +173,9 @@ export interface ModelProvider {
  */
 export interface AssetLibraryConfig {
   id: string // 唯一标识
-  address: string // 兼容旧素材库地址字段
-  access_key: string // 兼容旧素材库 access_key
-  secret_key: string // 兼容旧素材库 secret_key
-  region?: string
-  bucketName?: string
-  host?: string
-  accessKeyId?: string
-  secretAccessKey?: string
+  projectName: string // ProjectName；旧配置缺失时回退为 default
+  accessKeyId: string
+  secretAccessKey: string
   isDefault: boolean // 是否为当前使用配置
 }
 

@@ -43,6 +43,7 @@ import {
   deleteAssetFromLibrary,
   exportIndexedDBData
 } from '../services/storageService'
+import { deleteRemoteAssetGroup } from '../services/assetRelayService'
 import { useAlert } from './GlobalAlert'
 import { useTheme } from '../contexts/ThemeContext'
 import { useNavigate } from 'react-router-dom'
@@ -138,9 +139,29 @@ const Dashboard: React.FC<Props> = ({
     e.stopPropagation()
     const proj = projects.find((p) => p.id === id)
     const projectName = proj?.title || '未命名项目'
+    let remoteDeleteWarning = ''
     try {
+      if (proj?.assetGroupId) {
+        try {
+          await deleteRemoteAssetGroup(proj.assetGroupId)
+        } catch (error) {
+          remoteDeleteWarning = `远端素材组删除失败：${
+            error instanceof Error ? error.message : '未知错误'
+          }`
+          console.warn('[dashboard] delete remote asset group failed', {
+            projectId: proj.id,
+            assetGroupId: proj.assetGroupId,
+            error: remoteDeleteWarning
+          })
+        }
+      }
       await deleteSeriesProject(id)
       await loadProjects()
+      if (remoteDeleteWarning) {
+        showAlert(`${projectName} 已删除；${remoteDeleteWarning}`, {
+          type: 'warning'
+        })
+      }
       console.log(`Project "${projectName}" deleted`)
     } catch (error) {
       showAlert(
