@@ -111,8 +111,23 @@ export const resolveRequestModel = (
   return resolved?.apiModel || resolved?.id || compatModelId || ''
 }
 
+/** API key with lookup metadata for debugging. */
+interface ApiKeyWithMetadata {
+  key: string
+  source: 'model' | 'provider' | 'registry' | 'runtime'
+  modelId?: string
+  providerId?: string
+  keyPreview: string
+}
+
+const maskApiKey = (key: string | null | undefined): string => {
+  const s = String(key || '')
+  if (s.length <= 8) return s ? `${s.slice(0, 4)}***` : ''
+  return `${s.slice(0, 8)}...${s.slice(-4)}`
+}
+
 /**
- * Resolve API key for a specific model/type.
+ * Resolve API key + lookup metadata for a specific model/type.
  * Order:
  * 1) model-level key
  * 2) registry global key
@@ -122,6 +137,17 @@ export const checkApiKey = (
   type: 'chat' | 'image' | 'video' | 'audio' = 'chat',
   modelId?: string
 ): string => {
+  const meta = getApiKeyWithMetadata(type, modelId)
+  return meta.key
+}
+
+/**
+ * Resolve API key + full lookup metadata for debugging.
+ */
+export const getApiKeyWithMetadata = (
+  type: 'chat' | 'image' | 'video' | 'audio' = 'chat',
+  modelId?: string
+): ApiKeyWithMetadata => {
   const resolvedModel = resolveModel(type, modelId)
   console.log(
     '[checkApiKey] type/model/resolved:',
@@ -141,7 +167,29 @@ export const checkApiKey = (
       const modelLevelKey = resolvedModel.apiKey?.trim()
       const providerLevelKey = provider?.apiKey?.trim()
       const dedicatedKey = modelLevelKey || providerLevelKey
-      if (dedicatedKey) return dedicatedKey
+
+      if (modelLevelKey) {
+        console.log('[checkApiKey] Using model-level Volcengine key')
+        return {
+          key: modelLevelKey,
+          source: 'model',
+          modelId: resolvedModel.id,
+          providerId: resolvedModel.providerId,
+          keyPreview: maskApiKey(modelLevelKey)
+        }
+      }
+
+      if (providerLevelKey) {
+        console.log('[checkApiKey] Using provider-level Volcengine key')
+        return {
+          key: providerLevelKey,
+          source: 'provider',
+          modelId: resolvedModel.id,
+          providerId: resolvedModel.providerId,
+          keyPreview: maskApiKey(providerLevelKey)
+        }
+      }
+
       console.error('[checkApiKey] Volcengine dedicated key missing', {
         type,
         requestedModelId: modelId || null,
@@ -158,11 +206,27 @@ export const checkApiKey = (
     }
 
     const modelApiKey = getApiKeyForModel(resolvedModel.id)
-    if (modelApiKey) return modelApiKey
+    if (modelApiKey) {
+      console.log('[checkApiKey] Using model-level key')
+      return {
+        key: modelApiKey,
+        source: 'model',
+        modelId: resolvedModel.id,
+        providerId: resolvedModel.providerId,
+        keyPreview: maskApiKey(modelApiKey)
+      }
+    }
   }
 
   const registryKey = getRegistryApiKey()
-  if (registryKey) return registryKey
+  if (registryKey) {
+    console.log('[checkApiKey] Using registry global key')
+    return {
+      key: registryKey,
+      source: 'registry',
+      keyPreview: maskApiKey(registryKey)
+    }
+  }
 
   if (!runtimeApiKey) {
     throw new ApiKeyError(
@@ -170,7 +234,12 @@ export const checkApiKey = (
     )
   }
 
-  return runtimeApiKey
+  console.log('[checkApiKey] Using runtime fallback key')
+  return {
+    key: runtimeApiKey,
+    source: 'runtime',
+    keyPreview: maskApiKey(runtimeApiKey)
+  }
 }
 
 /** Get API base URL for model/type */

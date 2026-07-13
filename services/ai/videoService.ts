@@ -12,7 +12,8 @@ import {
   resolveRequestModel,
   parseHttpError,
   resizeImageToSize,
-  convertVideoUrlToBase64
+  convertVideoUrlToBase64,
+  getApiKeyWithMetadata
 } from './apiCore'
 import { toFriendlyModerationMessage } from '../errorMessageService'
 import { addRenderLogWithTokens } from '../renderLogService'
@@ -163,6 +164,69 @@ const resolveVideoSizeByResolution = (
   return sizeMap[aspectRatio][normalizedResolution]
 }
 
+const resolveBrowserProxiedVideoRequestUrl = (absoluteUrl: string): string => {
+  if (typeof window === 'undefined') return absoluteUrl
+
+  try {
+    const target = new URL(absoluteUrl, window.location.origin)
+    if (target.origin === window.location.origin) {
+      return target.toString()
+    }
+
+    const hostname = window.location.hostname.toLowerCase()
+    const isLocalDevHost =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === '0.0.0.0'
+    const isVolcengineHost = target.hostname.toLowerCase().endsWith('volces.com')
+
+    if (isLocalDevHost && isVolcengineHost) {
+      return `/api/image-proxy?url=${encodeURIComponent(target.toString())}`
+    }
+
+    return target.toString()
+  } catch {
+    return absoluteUrl
+  }
+}
+
+const getBrowserEnvForLog = (): Record<string, unknown> => {
+  if (typeof window === 'undefined') return {}
+  return {
+    locationHref: window.location.href,
+    locationOrigin: window.location.origin,
+    locationHostname: window.location.hostname,
+    userAgent: window.navigator.userAgent?.slice(0, 200) || ''
+  }
+}
+
+const getResponsePreview = async (response: Response): Promise<string> => {
+  const contentType = response.headers.get('content-type') || ''
+  const isJson = contentType.includes('application/json')
+  const isText = contentType.includes('text/')
+
+  try {
+    // Clone response because stream can only be read once
+    const cloned = response.clone()
+
+    if (isJson) {
+      const json = await cloned.json()
+      const str = JSON.stringify(json).slice(0, 1000)
+      return str + (str.length >= 1000 ? '...(truncated)' : '')
+    }
+
+    if (isText) {
+      const text = await cloned.text()
+      return text.slice(0, 1000) + (text.length >= 1000 ? '...(truncated)' : '')
+    }
+
+    // Fallback: just return status
+    return `content-type=${contentType}`
+  } catch (e) {
+    return `failed-to-read-response: ${getErrorMessage(e)}`
+  }
+}
+
 const normalizeDurationSec = (value: unknown): number | undefined => {
   const num = Number(value)
   if (!Number.isFinite(num) || num <= 0) return undefined
@@ -233,6 +297,7 @@ const generateVideoAsync = async (
   console.log(`📐 视频尺寸: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}`)
 
   const apiBase = getApiBase('video', resolvedModelName)
+  const keyMeta = getApiKeyWithMetadata('video', resolvedModelName)
   logVideoDebug(traceId, 'async:init', {
     model: resolvedModelName,
     aspectRatio,
@@ -243,7 +308,11 @@ const generateVideoAsync = async (
     referenceCount: references.length,
     hasStartFrame: !!startImageBase64,
     hasEndFrame: !!endImageBase64,
-    useReferenceArray
+    useReferenceArray,
+    apiKeySource: keyMeta.source,
+    apiKeyModelId: keyMeta.modelId,
+    apiKeyProviderId: keyMeta.providerId,
+    apiKeyPreview: keyMeta.keyPreview
   })
 
   // Step 1: 创建视频任务
@@ -647,6 +716,7 @@ const generateVideoVolcengineTask = async (
     endpoint,
     VOLCENGINE_TASK_DEFAULT_ENDPOINT
   )
+  const keyMeta = getApiKeyWithMetadata('video', modelName)
 
   if (endImageBase64) {
     console.warn(
@@ -706,35 +776,82 @@ const generateVideoVolcengineTask = async (
     hasEndFrame: !!endImageBase64
   })
 
+  const createTaskUrl = `${apiBase}${taskEndpoint}`
+  const createTaskRequestUrl =
+    resolveBrowserProxiedVideoRequestUrl(createTaskUrl)
   logVideoDebug(traceId, 'volcengine:create-task:request', {
-    endpoint: `${apiBase}${taskEndpoint}`,
+    endpoint: createTaskUrl,
+    requestUrl: createTaskRequestUrl,
+    usedProxy: createTaskRequestUrl !== createTaskUrl,
     model: modelName || VOLCENGINE_DEFAULT_MODEL,
     ratio,
     duration,
-    resolution
+    resolution,
+    apiKeySource: keyMeta.source,
+    apiKeyModelId: keyMeta.modelId,
+    apiKeyProviderId: keyMeta.providerId,
+    apiKeyPreview: keyMeta.keyPreview
   })
-  const createResponse = await fetch(`${apiBase}${taskEndpoint}`, {
-  // const createResponse = await fetch(`https://www.trae.ai/account-setting#subscription`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: modelName || VOLCENGINE_DEFAULT_MODEL,
-      content,
-      ratio,
-      duration,
-      resolution,
-      watermark: false
+  let createResponse: Response
+  try {
+    logVideoDebug(traceId, 'volcengine:create-task:fetch-start', {
+      endpoint: createTaskUrl,
+      requestUrl: createTaskRequestUrl,
+      usedProxy: createTaskRequestUrl !== createTaskUrl,
+      ...getBrowserEnvForLog()
     })
-  })
+    createResponse = await fetch(createTaskRequestUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: modelName || VOLCENGINE_DEFAULT_MODEL,
+        content,
+        ratio,
+        duration,
+        resolution,
+        watermark: false
+      })
+    })
+  } catch (error) {
+    logVideoError(traceId, 'volcengine:create-task:network-failed', error, {
+      endpoint: createTaskUrl,
+      requestUrl: createTaskRequestUrl,
+      usedProxy: createTaskRequestUrl !== createTaskUrl,
+      apiKeySource: keyMeta.source,
+      apiKeyModelId: keyMeta.modelId,
+      apiKeyProviderId: keyMeta.providerId,
+      apiKeyPreview: keyMeta.keyPreview,
+      ...getBrowserEnvForLog()
+    })
+    throw error
+  }
+
+  const responsePreview = await getResponsePreview(createResponse)
+  const responseHeaders = {
+    'content-type': createResponse.headers.get('content-type'),
+    'content-length': createResponse.headers.get('content-length'),
+    'x-request-id': createResponse.headers.get('x-request-id') || ''
+  }
+
   logVideoDebug(traceId, 'volcengine:create-task:response', {
     ok: createResponse.ok,
-    status: createResponse.status
+    status: createResponse.status,
+    statusText: createResponse.statusText,
+    headers: responseHeaders,
+    preview: responsePreview
   })
 
   if (!createResponse.ok) {
+    logVideoWarn(traceId, 'volcengine:create-task:error-response', {
+      status: createResponse.status,
+      statusText: createResponse.statusText,
+      headers: responseHeaders,
+      preview: responsePreview
+    })
+
     if (createResponse.status === 400) {
       throw new Error('提示词或输入图片不符合要求，请调整后重试。')
     }
@@ -771,19 +888,47 @@ const generateVideoVolcengineTask = async (
   while (Date.now() - startTime < maxPollingTime) {
     await new Promise((resolve) => setTimeout(resolve, pollingInterval))
 
-    const statusResponse = await fetch(`${apiBase}${taskEndpoint}/${taskId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      }
-    })
+    const statusUrl = `${apiBase}${taskEndpoint}/${taskId}`
+    const statusRequestUrl = resolveBrowserProxiedVideoRequestUrl(statusUrl)
+    let statusResponse: Response
+    try {
+      statusResponse = await fetch(statusRequestUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        }
+      })
+    } catch (error) {
+      logVideoWarn(traceId, 'volcengine:task-status:network-failed', {
+        taskId,
+        endpoint: statusUrl,
+        requestUrl: statusRequestUrl,
+        usedProxy: statusRequestUrl !== statusUrl,
+        apiKeySource: keyMeta.source,
+        apiKeyModelId: keyMeta.modelId,
+        apiKeyProviderId: keyMeta.providerId,
+        apiKeyPreview: keyMeta.keyPreview,
+        message: getErrorMessage(error),
+        ...getBrowserEnvForLog()
+      })
+      continue
+    }
 
     if (!statusResponse.ok) {
+      const statusPreview = await getResponsePreview(statusResponse)
+      const statusHeaders = {
+        'content-type': statusResponse.headers.get('content-type'),
+        'content-length': statusResponse.headers.get('content-length'),
+        'x-request-id': statusResponse.headers.get('x-request-id') || ''
+      }
       console.warn('⚠️ Volcengine 任务查询失败，继续轮询...')
       logVideoWarn(traceId, 'volcengine:task-status:request-failed', {
         taskId,
-        status: statusResponse.status
+        status: statusResponse.status,
+        statusText: statusResponse.statusText,
+        headers: statusHeaders,
+        preview: statusPreview
       })
       continue
     }
@@ -862,7 +1007,8 @@ export const generateVideo = async (
   const resolvedVideoModel = resolveModel('video', model)
   const resolvedVideoModelId = resolvedVideoModel?.id || model
   const requestModel = resolveRequestModel('video', model) || ''
-  const apiKey = checkApiKey('video', model)
+  const keyMeta = getApiKeyWithMetadata('video', model)
+  const apiKey = keyMeta.key
   const apiBase = getApiBase('video', model)
   const resolvedEndpoint = resolvedVideoModel?.endpoint || ''
   const normalizedRequestModel = (
@@ -901,7 +1047,11 @@ export const generateVideo = async (
     hasEndFrame: !!endImageBase64,
     promptLength: promptText.length,
     resourceId,
-    resourceName
+    resourceName,
+    apiKeySource: keyMeta.source,
+    apiKeyModelId: keyMeta.modelId,
+    apiKeyProviderId: keyMeta.providerId,
+    apiKeyPreview: keyMeta.keyPreview
   })
 
   try {
