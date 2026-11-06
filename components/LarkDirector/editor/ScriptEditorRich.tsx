@@ -231,20 +231,29 @@ const CustomMention = Mention.extend({
               ]
             : colorSpan
 
-    // 音频/视频固定显示图标；其余类型优先显示缩略图
-    const shouldUseMediaIcon = item?.type === 'audio' || item?.type === 'video'
-    const mentionImageUrl = shouldUseMediaIcon
-      ? ''
-      : String(item?.image || item?.url || '').trim()
-    const imgOrColor = mentionImageUrl
+    const mentionImageUrl = String(item?.image || '').trim()
+    const mentionVideoUrl =
+      item?.type === 'video' ? String(item?.url || '').trim() : ''
+    const imgOrColor = mentionVideoUrl
       ? [
-          'img',
+          'video',
           {
-            src: mentionImageUrl,
-            class: 'w-4 h-4 rounded-full object-cover shrink-0'
+            src: mentionVideoUrl,
+            class: 'w-4 h-4 rounded-full object-cover shrink-0',
+            muted: '',
+            playsinline: '',
+            preload: 'metadata'
           }
         ]
-      : mediaIcon
+      : mentionImageUrl
+        ? [
+            'img',
+            {
+              src: mentionImageUrl,
+              class: 'w-4 h-4 rounded-full object-cover shrink-0'
+            }
+          ]
+        : mediaIcon
 
     const suffix =
       item?.type === 'character'

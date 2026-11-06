@@ -3,6 +3,7 @@ import tippy, { Instance } from 'tippy.js'
 import 'tippy.js/dist/tippy.css'
 import MentionList from './MentionList'
 import { resolveTosPublicUrlFromAssetId } from '../../../services/assetRelayService'
+import { appendVideoDebugLog } from '../../../services/videoDebugLogService'
 import type {
   Character,
   CharacterVariation,
@@ -87,8 +88,13 @@ const dedupeMentionItems = (items: MentionItem[]): MentionItem[] => {
   })
 }
 
-const filterMentionItemsWithImage = (items: MentionItem[]): MentionItem[] => {
-  return items.filter((item) => String(item?.image || '').trim().length > 0)
+const filterMentionItemsWithResource = (items: MentionItem[]): MentionItem[] => {
+  return items.filter((item) => {
+    if (item.type === 'video' || item.type === 'audio') {
+      return String(item.url || '').trim().length > 0
+    }
+    return String(item.image || '').trim().length > 0
+  })
 }
 
 const toCharacterVariants = (character: Character): MentionItem['variants'] => {
@@ -154,7 +160,7 @@ export function buildProjectLibraryMentionItems(
       image: p.referenceImage
     }))
   ]
-  const resourcesWithImage = filterMentionItemsWithImage(resources)
+  const resourcesWithImage = filterMentionItemsWithResource(resources)
 
   const normalizedQuery = (query || '').trim().toLowerCase()
   if (!normalizedQuery) {
@@ -218,7 +224,10 @@ export function buildMentionItems(
       }
     })
   ]
-  const resourcesWithImage = filterMentionItemsWithImage(resources)
+  const resourcesWithImage = filterMentionItemsWithResource(resources)
+  // #region debug-point A-D:mention-resource-filter-post-fix
+  appendVideoDebugLog({ traceId: 'mention-video-missing', source: 'LarkDirector/editor/suggestion', stage: 'build-mention-items', details: { sessionId: 'mention-video-missing', runId: 'post-fix', hypothesisId: 'A,B,C,D', location: 'suggestion.ts:buildMentionItems', visibleMedia: resourcesWithImage.filter((item) => item.type === 'image' || item.type === 'video' || item.type === 'audio').map((item) => ({ id: item.id, name: item.name, type: item.type, hasImage: Boolean(item.image), hasUrl: Boolean(item.url) })) } })
+  // #endregion
 
   const normalizedQuery = (query || '').trim().toLowerCase()
   if (!normalizedQuery) {

@@ -220,7 +220,15 @@ const MentionList = forwardRef<MentionListRef, MentionListProps>((props, ref) =>
               onClick={() => selectItem(index)}
             >
               <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center border border-gray-200">
-                {item.image ? (
+                {item.type === 'video' && item.url ? (
+                  <video
+                    src={item.url}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : item.image ? (
                   <img
                     src={item.image}
                     alt={item.name || ''}
